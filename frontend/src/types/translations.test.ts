@@ -4,7 +4,14 @@
 import { expectTypeOf, test } from 'vitest'
 
 import type { components } from '@/types/generated/api'
-import type { AnyEditOp, Edge, LevelSpec, SetWandering, SubtreeChange, WanderingSpec } from '@/types'
+import type {
+  AnyEditOp,
+  Edge,
+  LevelSpec,
+  SetWandering,
+  SubtreeChange,
+  WanderingSpec,
+} from '@/types'
 
 type EncounterEntry = components['schemas']['EncounterTableRow']['entry']
 

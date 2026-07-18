@@ -1,10 +1,18 @@
-import { StatusCard } from '@/components/status-card'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+
+import { HomeScreen } from '@/components/home-screen'
+import { ProjectScreen } from '@/components/project-screen'
+import { Toaster } from '@/components/ui/sonner'
 
 function App() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <StatusCard />
-    </main>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomeScreen />} />
+        <Route path="/projects/:id" element={<ProjectScreen />} />
+      </Routes>
+      <Toaster />
+    </BrowserRouter>
   )
 }
 
