@@ -84,6 +84,13 @@ include = ["src", "tests", "scripts"]
 typeCheckingMode = "standard"
 strict = ["src"]
 
+# Tests import sibling helper modules bare (osrlib's pattern: `from test_documents
+# import ...` in generator scripts); pytest and direct script runs both put tests/
+# on sys.path, so pyright mirrors that here.
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["tests"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
