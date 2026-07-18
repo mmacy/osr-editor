@@ -178,3 +178,6 @@ Consolidated from the work items:
 ## Amendments
 
 Recorded during implementation, per the phase loop's plan-and-code-never-diverge rule.
+
+- **FastAPI request-validation errors join the envelope.** The plan mapped only the typed osr-editor and osrlib errors, leaving a malformed request body (a relative path typed into the open dialog) to FastAPI's default `{"detail": [...]}` shape — the one 4xx the frontend could not render generically, against the spec's one-envelope convention. A `RequestValidationError` handler now maps to 422 `request_invalid` carrying the same `details.errors` list shape as `payload_invalid`. Path absoluteness is enforced by validators on the request models (`CreateProjectRequest`, `OpenProjectRequest`, `ExportRequest`), so it surfaces through this mapping.
+- **Dungeon-scope addresses navigate to the dungeon's first level.** The diagnostics-panel work item named targets for `town`, `monsters`, adventure scope, and level/area addresses but was silent on the bare `dungeon:<id>` form (`entrance_missing`). The frontend navigates it to that dungeon's first level — the nearest form phase 1 has; an id that resolves to no dungeon stays unnavigable, per the no-guessing rule.
