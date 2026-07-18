@@ -12,24 +12,18 @@ osr-editor is a local GUI application for creating and modifying adventure modul
 
 ## The phase loop
 
-Each roadmap phase in `docs/spec.md` ships as two PRs — a plan, then an implementation — and both follow the same create → rubber-duck → revise-until-solid → PR loop. "Work up a plan for phase N" or "implement the plan for phase N" means run this loop end to end, unprompted. The workflow mirrors osrlib-python's `AGENTS.md`; keep parity with it unless this file says otherwise.
+Each roadmap phase in `docs/spec.md` ships as one PR on branch `phase-N`, and "implement phase N" means running the whole loop end to end, unprompted: research, plan, implement, rubber-duck, revise until SOLID, open the PR. The workflow deliberately deviates from osrlib-python's `AGENTS.md` in one way — there is no separate plan PR; the implementing agent works up the plan when picking up the phase. Everything else keeps parity.
 
-### Planning a phase
-
-1. Research first: the phase's roadmap entry and every contract it touches in `docs/spec.md`, the prior phase plans in `docs/`, the existing code, and the osrlib and osr-forge surfaces the phase consumes. Hazards found during research (model validators, forge normalization rules, frozen-model rebuild patterns) belong in the plan so the implementer doesn't rediscover them.
-2. Write `docs/phase-N-plan.md` following the structure of the prior plans: intro with the spec milestone, scope (in and out, naming the phase that picks up each deferral), work items, sequencing, definition of done. Plans are decision-complete: every choice an implementer would otherwise guess at is pinned with a rationale.
-3. Branch `phase-N-plan`; commit the draft as `add phase N implementation plan (pre-review draft)`.
-4. Rubber-duck it (below), revise until SOLID, open the PR.
-
-### Implementing a phase
-
-The same loop on branch `phase-N-impl`: implement to the plan with tests green, commit, rubber-duck the result, and address findings as `address rubber-duck review findings`. The plan is the contract — when implementation reveals the plan was wrong or silent, amend the plan document on the same branch (`amend phase N plan: ...`) so plan and code never diverge.
+1. **Research first:** the phase's roadmap entry and every contract it touches in `docs/spec.md`, the prior phase plans in `docs/`, the existing code, and the osrlib and osr-forge surfaces the phase consumes. Hazards found during research (model validators, forge normalization rules, frozen-model rebuild patterns) belong in the plan so they're pinned before implementation, not rediscovered during it.
+2. **Plan:** write `docs/phase-N-plan.md`, structured like the sibling projects' phase plans — intro with the spec milestone, scope (in and out, naming the phase that picks up each deferral), work items, sequencing, definition of done. Plans are decision-complete: every choice the implementation would otherwise guess at is pinned with a rationale. Commit it first (`add phase N implementation plan`) so the plan-then-code story stays legible in history.
+3. **Implement to the plan** with tests green. The plan is the contract — when implementation reveals the plan was wrong or silent, amend the plan on the same branch (`amend phase N plan: ...`) so plan and code never diverge.
+4. **Rubber-duck the result** (below) — the implementation against the plan, and the plan against the spec — revise until SOLID, then open the PR.
 
 ### The rubber-duck loop
 
 - Spawn a fresh subagent as a skeptical senior reviewer. Give it an ordered reading list — the spec, prior plans, this file, the artifact under review, the relevant code, and the osrlib or osr-forge models and docs the work touches — and require evidence: every finding must quote the spec, the code, or the artifact, be ranked blocking vs non-blocking, and the review must end in a verdict (SOLID or NEEDS REVISION) plus a verified-good list of claims it actively checked.
 - The reviewer's mandate covers design hygiene, not just spec fidelity: it must hunt for the greenfield anti-patterns below (back-compat shims, dual import paths, deprecation scaffolding, dead accommodation code) and flag any it finds.
-- Judge findings on the merits. Verify disputed claims against the spec, osrlib, osr-forge, or the code yourself; push back on findings that are wrong instead of deferring to the duck. Address what survives and commit as `revise phase N plan per rubber-duck review` (or the address-findings message above).
+- Judge findings on the merits. Verify disputed claims against the spec, osrlib, osr-forge, or the code yourself; push back on findings that are wrong instead of deferring to the duck. Address what survives and commit as `address rubber-duck review findings` (plan corrections as `amend phase N plan: ...`).
 - Send the revision back to the same reviewer, context intact, for re-verification of each fix. Loop until SOLID. Fold in any sign-off notes.
 - Commits tell the honest story — draft, revision(s), sign-off tweaks — and the PR description summarizes the notable decisions plus the review provenance (what the duck found, what changed).
 
