@@ -30,22 +30,231 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Projects
+         * @description Report the probed recents list and the CLI's launch path.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The recents, most recent first, each probed for existence; plus the
+         *         `PATH` the CLI was launched with, for the frontend to act on once per
+         *         page load.
+         */
+        get: operations["list_projects_api_projects_get"];
+        put?: never;
+        /**
+         * Create Project
+         * @description Create a native project and open it.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         body: The absolute destination directory and the adventure name.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The new project's full state.
+         */
+        post: operations["create_project_api_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Project By Path
+         * @description Open a project by path.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         body: The absolute project directory path.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The project's full state — the same project id for the same resolved
+         *         path, however many tabs open it.
+         */
+        post: operations["open_project_by_path_api_projects_open_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project
+         * @description Report one open project's full state.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The project's full state.
+         */
+        get: operations["get_project_api_projects__project_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/ops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Ops
+         * @description Apply one atomic op batch at a named revision.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         batch: The ops and the revision they were computed against.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The new revision, the coalesced changed-subtree delta, and refreshed
+         *         diagnostics.
+         */
+        post: operations["post_ops_api_projects__project_id__ops_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Undo
+         * @description Revert the latest commit.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The result, carrying the whole-document delta.
+         */
+        post: operations["post_undo_api_projects__project_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Redo
+         * @description Re-apply the latest undone commit.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The result, carrying the whole-document delta.
+         */
+        post: operations["post_redo_api_projects__project_id__redo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Project
+         * @description Write the current document's stamped bytes to a user-chosen path.
+         *
+         *     Export never gates on validation — that gate belongs to publish (phase 3);
+         *     export is "write the stamped JSON anywhere". Overwriting an existing file is
+         *     an explicit, user-invoked act on a user-chosen destination — the licensing
+         *     rule's named exception. The write is direct rather than through the
+         *     `ProjectStore` because the destination is an arbitrary user filesystem path
+         *     outside any project, which is not what the store seam abstracts; a hosted
+         *     future replaces this one handler with a download response.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The absolute destination file path.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The written path.
+         */
+        post: operations["export_project_api_projects__project_id__export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /**
-         * StatusResponse
-         * @description The editor's identity and the engine it is running against.
-         */
-        StatusResponse: {
-            /** Editor Version */
-            editor_version: string;
-            /** Engine Version */
-            engine_version: string;
-            /** Schema Version */
-            schema_version: number;
-        };
         /**
          * AcAlternate
          * @description An alternate armour class with its printed condition (`9 [10] in human form`).
@@ -115,37 +324,7 @@ export interface components {
         AlignmentSpec: {
             /** Options */
             options: components["schemas"]["Alignment"][];
-            /** @default null */
-            usual: components["schemas"]["Alignment"] | null;
-        };
-        /**
-         * ApiError
-         * @description The error envelope every API error response carries.
-         */
-        ApiError: {
-            error: components["schemas"]["ApiErrorDetail"];
-        };
-        /**
-         * ApiErrorDetail
-         * @description The structured error payload: code, message, and optional remedy and details.
-         */
-        ApiErrorDetail: {
-            /** Code */
-            code: string;
-            /** Message */
-            message: string;
-            /**
-             * Remedy
-             * @default null
-             */
-            remedy: string | null;
-            /**
-             * Details
-             * @default null
-             */
-            details: {
-                [key: string]: unknown;
-            } | null;
+            usual?: components["schemas"]["Alignment"] | null;
         };
         /**
          * AreaSpec
@@ -173,17 +352,14 @@ export interface components {
                 number,
                 number
             ][];
-            /** @default null */
-            encounter: components["schemas"]["KeyedEncounter"] | null;
+            encounter?: components["schemas"]["KeyedEncounter"] | null;
             /**
              * Features
              * @default []
              */
             features: components["schemas"]["FeatureSpec"][];
-            /** @default null */
-            trap: components["schemas"]["TrapSpec"] | null;
-            /** @default null */
-            treasure: components["schemas"]["AreaTreasureSpec"] | null;
+            trap?: components["schemas"]["TrapSpec"] | null;
+            treasure?: components["schemas"]["AreaTreasureSpec"] | null;
         };
         /**
          * AreaTreasureSpec
@@ -260,6 +436,16 @@ export interface components {
          * @enum {string}
          */
         Condition: "paralysed" | "asleep" | "blind" | "charmed" | "petrified" | "diseased" | "exhausted" | "lycanthropy_incubation" | "averted_eyes" | "poisoned" | "dead" | "silenced" | "entangled" | "afraid" | "feebleminded" | "invisible" | "turned" | "confused" | "weakened";
+        /**
+         * CreateProjectRequest
+         * @description A new native project: where to put it and what to call the adventure.
+         */
+        CreateProjectRequest: {
+            /** Path */
+            path: string;
+            /** Name */
+            name: string;
+        };
         /**
          * DamageKey
          * @description The damage-source keys a `harmed_only_by` gate or reduction can name.
@@ -407,8 +593,7 @@ export interface components {
          */
         Edge: {
             kind: components["schemas"]["EdgeKind"];
-            /** @default null */
-            door: components["schemas"]["DoorSpec"] | null;
+            door?: components["schemas"]["DoorSpec"] | null;
         };
         /**
          * EdgeKind
@@ -416,20 +601,6 @@ export interface components {
          * @enum {string}
          */
         EdgeKind: "open" | "wall" | "door";
-        /**
-         * EditOp
-         * @description The frozen base every edit operation extends.
-         *
-         *     `op` is the discriminator: a stable snake_case code naming the domain action,
-         *     e.g. `set_adventure_field`. Concrete operations are frozen subclasses that
-         *     narrow `op` to a `Literal`, joined into a discriminated `AnyEditOp` union
-         *     exactly as osrlib builds `AnyCommand`; the vocabulary grows additively and
-         *     the first concrete ops land with the document service in phase 1.
-         */
-        EditOp: {
-            /** Op */
-            op: string;
-        };
         /**
          * Element
          * @description Energy elements that appear in monster attacks, breath weapons, and defenses.
@@ -450,11 +621,8 @@ export interface components {
             label: string;
             /** Min Level */
             min_level: number;
-            /**
-             * Max Level
-             * @default null
-             */
-            max_level: number | null;
+            /** Max Level */
+            max_level?: number | null;
             /** Rows */
             rows: components["schemas"]["EncounterTableRow"][];
             /**
@@ -479,16 +647,10 @@ export interface components {
             name: string;
             /** Entry */
             entry: components["schemas"]["MonsterEncounterEntry"] | components["schemas"]["NpcPartyEncounterEntry"];
-            /**
-             * Count Dice
-             * @default null
-             */
-            count_dice: string | null;
-            /**
-             * Count Fixed
-             * @default null
-             */
-            count_fixed: number | null;
+            /** Count Dice */
+            count_dice?: string | null;
+            /** Count Fixed */
+            count_fixed?: number | null;
         };
         /**
          * EnergyDefense
@@ -511,6 +673,22 @@ export interface components {
              * @default false
              */
             auto_save_magical: boolean;
+        };
+        /**
+         * ExportRequest
+         * @description An export destination: an absolute file path of the user's choosing.
+         */
+        ExportRequest: {
+            /** Path */
+            path: string;
+        };
+        /**
+         * ExportResult
+         * @description Where the stamped document was written.
+         */
+        ExportResult: {
+            /** Path */
+            path: string;
         };
         /**
          * FeatureSpec
@@ -537,11 +715,8 @@ export interface components {
              * @default
              */
             description: string;
-            /**
-             * Cell
-             * @default null
-             */
-            cell: [
+            /** Cell */
+            cell?: [
                 number,
                 number
             ] | null;
@@ -565,17 +740,17 @@ export interface components {
              * @default []
              */
             valuables: components["schemas"]["ValuableSpec"][];
-            /** @default null */
-            trap: components["schemas"]["TrapSpec"] | null;
+            trap?: components["schemas"]["TrapSpec"] | null;
         };
         /**
          * Finding
          * @description One diagnostic finding: its source tier, a stable code, and a location.
          *
-         *     `address` is the click-to-navigate location (area/cell/edge addressing). Its
-         *     grammar is pinned by the first producers — phase 1 for validation, phase 2
-         *     for lint — as content within this locked shape; forge's `AreaAddress` form
-         *     and osrlib's `cell_ref`/`edge_ref` are the precedents they draw on.
+         *     `address` is the click-to-navigate location. Its grammar is pinned by the
+         *     first producers as content within this locked shape — phase 1's validation
+         *     tier pins `/`-joined `kind:value` segments with percent-encoded values (see
+         *     [`osreditor.diagnostics`][osreditor.diagnostics]); phase 2's lint extends it
+         *     with `cell:` and `edge:` segments.
          */
         Finding: {
             /**
@@ -587,11 +762,13 @@ export interface components {
             code: string;
             /** Message */
             message: string;
-            /**
-             * Address
-             * @default null
-             */
-            address: string | null;
+            /** Address */
+            address?: string | null;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
         /**
          * KeyedEncounter
@@ -604,15 +781,13 @@ export interface components {
         KeyedEncounter: {
             /** Monsters */
             monsters: components["schemas"]["KeyedMonster"][];
-            /** @default null */
-            alignment: components["schemas"]["Alignment"] | null;
+            alignment?: components["schemas"]["Alignment"] | null;
             /**
              * Aware
              * @default false
              */
             aware: boolean;
-            /** @default null */
-            stance: components["schemas"]["ReactionResult"] | null;
+            stance?: components["schemas"]["ReactionResult"] | null;
         };
         /**
          * KeyedMonster
@@ -626,16 +801,10 @@ export interface components {
         KeyedMonster: {
             /** Template Id */
             template_id: string;
-            /**
-             * Count Dice
-             * @default null
-             */
-            count_dice: string | null;
-            /**
-             * Count Fixed
-             * @default null
-             */
-            count_fixed: number | null;
+            /** Count Dice */
+            count_dice?: string | null;
+            /** Count Fixed */
+            count_fixed?: number | null;
         };
         /**
          * LevelSpec
@@ -677,16 +846,12 @@ export interface components {
             /**
              * @default {
              *       "chance_in_six": 1,
-             *       "interval_turns": 2,
-             *       "table": null
+             *       "interval_turns": 2
              *     }
              */
             wandering: components["schemas"]["WanderingSpec"];
-            /**
-             * Entrance
-             * @default null
-             */
-            entrance: [
+            /** Entrance */
+            entrance?: [
                 number,
                 number
             ] | null;
@@ -739,16 +904,10 @@ export interface components {
             count: number;
             /** Name */
             name: string;
-            /**
-             * Damage
-             * @default null
-             */
-            damage: string | null;
-            /**
-             * Fixed Damage
-             * @default null
-             */
-            fixed_damage: number | null;
+            /** Damage */
+            damage?: string | null;
+            /** Fixed Damage */
+            fixed_damage?: number | null;
             /**
              * Fixed Damage Options
              * @default []
@@ -794,11 +953,8 @@ export interface components {
             kind: "monster";
             /** Monster Ids */
             monster_ids: string[];
-            /**
-             * Variant Dice
-             * @default null
-             */
-            variant_dice: string | null;
+            /** Variant Dice */
+            variant_dice?: string | null;
         };
         /**
          * MonsterHitDice
@@ -831,16 +987,10 @@ export interface components {
              * @default 0
              */
             asterisks: number;
-            /**
-             * Average Hp
-             * @default null
-             */
-            average_hp: number | null;
-            /**
-             * Fixed Hp
-             * @default null
-             */
-            fixed_hp: number | null;
+            /** Average Hp */
+            average_hp?: number | null;
+            /** Fixed Hp */
+            fixed_hp?: number | null;
         };
         /**
          * MonsterSaves
@@ -875,16 +1025,10 @@ export interface components {
              * @default
              */
             intro: string;
-            /**
-             * Ac
-             * @default null
-             */
-            ac: number | null;
-            /**
-             * Ac Ascending
-             * @default null
-             */
-            ac_ascending: number | null;
+            /** Ac */
+            ac?: number | null;
+            /** Ac Ascending */
+            ac_ascending?: number | null;
             /**
              * Ac Alternates
              * @default []
@@ -908,11 +1052,8 @@ export interface components {
             /** Movement */
             movement: components["schemas"]["MovementMode"][];
             saves: components["schemas"]["MonsterSaves"];
-            /**
-             * Morale
-             * @default null
-             */
-            morale: number | null;
+            /** Morale */
+            morale?: number | null;
             /**
              * Morale Alternates
              * @default []
@@ -985,11 +1126,8 @@ export interface components {
             rate_feet: number;
             /** Encounter Rate Feet */
             encounter_rate_feet: number;
-            /**
-             * Descriptor
-             * @default null
-             */
-            descriptor: string | null;
+            /** Descriptor */
+            descriptor?: string | null;
         };
         /**
          * NpcPartyEncounterEntry
@@ -1023,16 +1161,10 @@ export interface components {
          * @description One number-appearing value: dice, a fixed count, and `see below` semantics.
          */
         NumberAppearingValue: {
-            /**
-             * Dice
-             * @default null
-             */
-            dice: string | null;
-            /**
-             * Fixed
-             * @default null
-             */
-            fixed: number | null;
+            /** Dice */
+            dice?: string | null;
+            /** Fixed */
+            fixed?: number | null;
             /**
              * See Below
              * @default false
@@ -1054,22 +1186,71 @@ export interface components {
             /** Revision */
             revision: string;
             /** Ops */
-            ops: components["schemas"]["EditOp"][];
+            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["SetWandering"])[];
         };
         /**
          * OpBatchResult
-         * @description A committed batch's answer: the new revision and refreshed diagnostics.
+         * @description A committed batch's answer: the new revision, the delta, and refreshed diagnostics.
          *
          *     `revision` is an opaque server-issued string — the envelope locks the type
-         *     and the opacity, not the representation, which is the phase 1 issuer's
-         *     decision. The spec's changed-subtree delta field is deliberately absent: its
-         *     encoding is the document service's central design problem, and the
-         *     envelope's additive-growth rule lets phase 1 add it.
+         *     and the opacity, not the representation, which is the issuer's decision.
+         *     `delta` entries apply in order and are coalesced so no entry's path is a
+         *     descendant of another's; undo and redo answer with the degenerate
+         *     whole-document delta (`path=""`). `can_undo`/`can_redo` track the stacks so
+         *     the frontend's buttons never need a second request.
          */
         OpBatchResult: {
             /** Revision */
             revision: string;
             diagnostics: components["schemas"]["Diagnostics"];
+            /** Delta */
+            delta: components["schemas"]["SubtreeChange"][];
+            /** Can Undo */
+            can_undo: boolean;
+            /** Can Redo */
+            can_redo: boolean;
+        };
+        /**
+         * OpenProjectRequest
+         * @description An open-by-path request.
+         */
+        OpenProjectRequest: {
+            /** Path */
+            path: string;
+        };
+        /**
+         * ProjectListResponse
+         * @description The home screen's data: probed recents plus the CLI's launch path.
+         */
+        ProjectListResponse: {
+            /** Recents */
+            recents: components["schemas"]["RecentProject"][];
+            /** Open At Launch */
+            open_at_launch: string | null;
+        };
+        /**
+         * ProjectState
+         * @description One open project's full state: the document, revision, and diagnostics.
+         *
+         *     The full document rides on open/get only; batches answer with deltas.
+         */
+        ProjectState: {
+            /** Id */
+            id: string;
+            /** Path */
+            path: string;
+            /** Type */
+            type: string;
+            document: components["schemas"]["Adventure"];
+            /** Revision */
+            revision: string;
+            diagnostics: components["schemas"]["Diagnostics"];
+            /** Dropped Fields */
+            dropped_fields: string[];
+            /** Can Undo */
+            can_undo: boolean;
+            /** Can Redo */
+            can_redo: boolean;
         };
         /**
          * ReactionResult
@@ -1080,6 +1261,25 @@ export interface components {
          * @enum {string}
          */
         ReactionResult: "attacks" | "hostile" | "uncertain" | "indifferent" | "friendly";
+        /**
+         * RecentProject
+         * @description One recents entry, probed at read time.
+         *
+         *     `missing` marks an entry whose path has vanished rather than silently
+         *     dropping it — the user deleted or moved the directory; say so.
+         */
+        RecentProject: {
+            /** Path */
+            path: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Last Opened At */
+            last_opened_at: string;
+            /** Missing */
+            missing: boolean;
+        };
         /**
          * SaveCategory
          * @description The five saving throw categories.
@@ -1123,6 +1323,99 @@ export interface components {
             breath: number;
             /** Spells */
             spells: number;
+        };
+        /**
+         * SetAdventureField
+         * @description Set one adventure-scope metadata field.
+         *
+         *     `hooks` takes the whole tuple (list editors commit the full value); `name`
+         *     and `description` take a string.
+         */
+        SetAdventureField: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_adventure_field";
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "name" | "description" | "hooks";
+            /** Value */
+            value: string | string[];
+        };
+        /**
+         * SetTownField
+         * @description Set one town field.
+         *
+         *     `services` takes the whole tuple, `travel_turns` the whole mapping, `name`
+         *     and `description` a string. Travel-turn values are guarded `>= 0` here —
+         *     osrlib's `dict[str, int]` has no lower bound and would happily persist a
+         *     negative travel cost.
+         */
+        SetTownField: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_town_field";
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "name" | "description" | "services" | "travel_turns";
+            /** Value */
+            value: string | string[] | {
+                [key: string]: number;
+            };
+        };
+        /**
+         * SetWandering
+         * @description Replace one level's wandering-monster parameters.
+         *
+         *     The op carries the full [`WanderingSpec`][osrlib.crawl.dungeon.WanderingSpec],
+         *     inline `table` included, so the vocabulary is data-complete even though the
+         *     phase 1 form authors only `chance_in_six` and `interval_turns` — the d20
+         *     table form belongs with phase 3's pickers.
+         */
+        SetWandering: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_wandering";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            wandering: components["schemas"]["WanderingSpec"];
+        };
+        /**
+         * StatusResponse
+         * @description The editor's identity and the engine it is running against.
+         */
+        StatusResponse: {
+            /** Editor Version */
+            editor_version: string;
+            /** Engine Version */
+            engine_version: string;
+            /** Schema Version */
+            schema_version: number;
+        };
+        /**
+         * SubtreeChange
+         * @description One changed subtree: where it is and what it now holds.
+         *
+         *     `path` is an RFC 6901 JSON Pointer into the adventure payload; `""` means
+         *     the whole document. `value` is the replacement subtree in serialization-mode
+         *     JSON — loose by design, since it can be any node of the document.
+         */
+        SubtreeChange: {
+            /** Path */
+            path: string;
+            /** Value */
+            value?: unknown;
         };
         /**
          * TimeUnit
@@ -1200,49 +1493,27 @@ export interface components {
          *     drops the victim elsewhere (slides). `manual` keeps prose for the rest.
          */
         TrapEffect: {
-            /**
-             * Damage Dice
-             * @default null
-             */
-            damage_dice: string | null;
-            /**
-             * Volley Dice
-             * @default null
-             */
-            volley_dice: string | null;
-            /** @default null */
-            save: components["schemas"]["SaveSpec"] | null;
+            /** Damage Dice */
+            damage_dice?: string | null;
+            /** Volley Dice */
+            volley_dice?: string | null;
+            save?: components["schemas"]["SaveSpec"] | null;
             /**
              * Kills
              * @default false
              */
             kills: boolean;
-            /** @default null */
-            condition: components["schemas"]["Condition"] | null;
-            /**
-             * Condition Duration Dice
-             * @default null
-             */
-            condition_duration_dice: string | null;
-            /**
-             * Condition Duration Amount
-             * @default null
-             */
-            condition_duration_amount: number | null;
-            /** @default null */
-            condition_duration_unit: components["schemas"]["TimeUnit"] | null;
-            /**
-             * Fall Feet
-             * @default null
-             */
-            fall_feet: number | null;
-            /** @default null */
-            transition: components["schemas"]["TransitionSpec"] | null;
-            /**
-             * Manual
-             * @default null
-             */
-            manual: string | null;
+            condition?: components["schemas"]["Condition"] | null;
+            /** Condition Duration Dice */
+            condition_duration_dice?: string | null;
+            /** Condition Duration Amount */
+            condition_duration_amount?: number | null;
+            condition_duration_unit?: components["schemas"]["TimeUnit"] | null;
+            /** Fall Feet */
+            fall_feet?: number | null;
+            transition?: components["schemas"]["TransitionSpec"] | null;
+            /** Manual */
+            manual?: string | null;
         };
         /**
          * TrapSpec
@@ -1311,6 +1582,19 @@ export interface components {
              */
             see_below: boolean;
         };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
+        };
         /**
          * ValuableSpec
          * @description An authored named valuable in a cache — instantiated on take.
@@ -1357,8 +1641,7 @@ export interface components {
              * @default 2
              */
             interval_turns: number;
-            /** @default null */
-            table: components["schemas"]["EncounterTable"] | null;
+            table?: components["schemas"]["EncounterTable"] | null;
         };
         /**
          * XpNote
@@ -1369,6 +1652,35 @@ export interface components {
             role: string;
             /** Xp */
             xp: number;
+        };
+        /**
+         * ApiError
+         * @description The error envelope every API error response carries.
+         */
+        ApiError: {
+            error: components["schemas"]["ApiErrorDetail"];
+        };
+        /**
+         * ApiErrorDetail
+         * @description The structured error payload: code, message, and optional remedy and details.
+         */
+        ApiErrorDetail: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /**
+             * Remedy
+             * @default null
+             */
+            remedy: string | null;
+            /**
+             * Details
+             * @default null
+             */
+            details: {
+                [key: string]: unknown;
+            } | null;
         };
     };
     responses: never;
@@ -1395,6 +1707,255 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+        };
+    };
+    list_projects_api_projects_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectListResponse"];
+                };
+            };
+        };
+    };
+    create_project_api_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_project_by_path_api_projects_open_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_api_projects__project_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_ops_api_projects__project_id__ops_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_undo_api_projects__project_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_redo_api_projects__project_id__redo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_project_api_projects__project_id__export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

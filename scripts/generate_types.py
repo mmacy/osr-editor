@@ -14,31 +14,26 @@ import sys
 import tempfile
 from pathlib import Path
 
-from osrlib.crawl.adventure import Adventure
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
 
 from osreditor.app import ApiError, create_app
-from osreditor.ops import Diagnostics, EditOp, Finding, OpBatch, OpBatchResult
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = REPO_ROOT / "frontend"
 OUTPUT_PATH = FRONTEND_DIR / "src" / "types" / "generated" / "api.ts"
 
-# The models no phase-0 route references yet. Adventure statically pulls the
-# entire content tree (MonsterTemplate subtree included); the rest are the
-# locked envelope models. When a route begins referencing a model it comes
-# along free and must leave this list — the collision check below enforces it.
-# Injection uses serialization-mode schemas: the frontend consumes these shapes
-# as server output, and serialization mode marks always-emitted fields required,
-# which is the truth about documents the backend dumps.
+# The models no route references yet. Nearly every phase 0 injection became
+# route-referenced in phase 1 (Adventure via ProjectState, the envelope models
+# via the ops routes) and left per the list's own rule — the collision check
+# below enforces it. ApiError stays: it is produced only by exception handlers,
+# which never enter app.openapi(), and no route declares error response models
+# (per-route `responses={...}` ceremony buys nothing while the frontend parses
+# one envelope generically). Injection uses serialization-mode schemas: the
+# frontend consumes these shapes as server output, and serialization mode marks
+# always-emitted fields required, which is the truth about documents the
+# backend dumps.
 INJECTED_MODELS: list[type[BaseModel]] = [
-    Adventure,
-    EditOp,
-    OpBatch,
-    OpBatchResult,
-    Diagnostics,
-    Finding,
     ApiError,
 ]
 
