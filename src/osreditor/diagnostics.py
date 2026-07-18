@@ -120,13 +120,19 @@ def _classify_owner_scoped(line: str, adventure: Adventure) -> Finding | None:
         if confirmed is None:
             continue
         dungeon_id, level_number = confirmed
-        address: str | None = f"dungeon:{_encode(dungeon_id)}/level:{level_number}"
+        address = f"dungeon:{_encode(dungeon_id)}/level:{level_number}"
         if area_prefix is not None:
             level = next(d for d in adventure.dungeons if d.id == dungeon_id).level(level_number)
             area_id = _confirm_area(level, line[len(f"{dungeon_id} level {level_number}: ") :], area_prefix)
-            # The level is confirmed; an unconfirmable area costs only the
-            # finer segment, honestly.
-            address = f"{address}/area:{_encode(area_id)}" if area_id is not None else address
+            if area_id is None:
+                # An area-naming shape whose area cannot be confirmed is a
+                # forged or ambiguous line, never an honest one — the true
+                # shape's area always renders its own line. Refuse the shape
+                # rather than guess coarser: a cross-shape forgery (a dungeon
+                # id embedding another owner's rendered prefix) falls through
+                # here to its true shape.
+                continue
+            address = f"{address}/area:{_encode(area_id)}"
         return Finding(source="validation", code=code, message=line, address=address)
     return None
 

@@ -295,6 +295,22 @@ def test_a_newline_id_degrades_to_unclassified_fragments() -> None:
     assert all(finding.address is None for finding in findings)
 
 
+def test_a_cross_shape_forgery_classifies_by_the_true_shape() -> None:
+    # A dungeon id embedding another dungeon's full rendered owner prefix plus
+    # an area-shape opening ("d level 1: area 'evil'") makes the earlier
+    # area-cell shape's tail match under the wrong owner — but its area cannot
+    # be confirmed, the shape refuses, and the line falls through to its true
+    # shape with the true owner.
+    hostile = "d level 1: area 'evil'"
+    fixture = adventure(
+        DungeonSpec(id="d", levels=(level(),)),
+        DungeonSpec(id=hostile, levels=(level(number=2, features=(feature("f", cell=(9, 9)),)),)),
+    )
+    finding = sole_finding(fixture)
+    assert finding.code == "feature_cell_out_of_bounds"
+    assert finding.address == f"dungeon:{quote(hostile, safe='')}/level:2"
+
+
 def test_a_hostile_id_faking_a_static_shape_still_classifies_by_its_owner() -> None:
     # A dungeon id opening with a static shape's text ("town travel names
     # unknown dungeon '…") would fool a first-match static pattern; the
