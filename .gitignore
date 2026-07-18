@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Built frontend (produced by the Vite build; shipped in the wheel from phase 9)
+src/osreditor/static/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# Scratch projects
+*.osr/
+*.forge/
