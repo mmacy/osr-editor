@@ -79,5 +79,18 @@ def test_written_artifact_gets_the_default_file_mode(tmp_path: Path) -> None:
     assert (tmp_path / "adventure.json").stat().st_mode & 0o777 == 0o666 & ~umask
 
 
+def test_project_exists_distinguishes_missing_from_empty(tmp_path: Path) -> None:
+    store = LocalProjectStore()
+    assert store.project_exists(str(tmp_path))
+    assert not store.project_exists(str(tmp_path / "never-created"))
+    assert store.list_artifacts(str(tmp_path)) == []
+
+
+def test_project_exists_refuses_relative_paths() -> None:
+    store = LocalProjectStore()
+    with pytest.raises(ValueError, match="absolute"):
+        store.project_exists("relative/project")
+
+
 def test_local_store_satisfies_the_protocol() -> None:
     assert isinstance(LocalProjectStore(), ProjectStore)

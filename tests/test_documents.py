@@ -20,7 +20,7 @@ from osrlib.data import load_equipment, load_monsters
 from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION
 
-from osreditor.documents import canonical_json_bytes, dump_adventure, load_adventure
+from osreditor.documents import canonical_json_bytes, dropped_pointers, dump_adventure, load_adventure
 
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "golden_adventure.json"
 
@@ -120,3 +120,41 @@ def test_wrong_kind_raises_content_validation_error() -> None:
     data = _doctored_document(kind="save")
     with pytest.raises(ContentValidationError):
         load_adventure(data)
+
+
+def _doctored_payload(mutate) -> tuple[str, ...]:
+    """Doctor the golden payload, load it, and return the fidelity diff."""
+    document = json.loads(GOLDEN_PATH.read_bytes())
+    mutate(document["payload"])
+    data = canonical_json_bytes(document)
+    adventure = load_adventure(data)
+    return dropped_pointers(document["payload"], adventure.model_dump(mode="json"))
+
+
+def test_fidelity_reports_an_extra_scalar() -> None:
+    assert _doctored_payload(lambda payload: payload.update(weather="grim")) == ("/weather",)
+
+
+def test_fidelity_reports_an_extra_nested_key() -> None:
+    assert _doctored_payload(lambda payload: payload["town"].update(mood="wary")) == ("/town/mood",)
+
+
+def test_fidelity_reports_an_extra_list_element() -> None:
+    # No pinned phase 1 model drops list elements on parse, so the sequence arm
+    # is proven on the pure walk: a source list longer than its re-serialization.
+    assert dropped_pointers({"hooks": ["a", "b", "c"]}, {"hooks": ["a", "b"]}) == ("/hooks/2",)
+
+
+def test_fidelity_reports_nothing_for_an_older_defaults_document() -> None:
+    # A field the source omits and the pinned models default is normalization,
+    # not loss — the reverse direction never warns.
+    def strip_description(payload: dict) -> None:
+        del payload["town"]["description"]
+
+    assert _doctored_payload(strip_description) == ()
+
+
+def test_fidelity_is_clean_on_the_golden_document() -> None:
+    document = json.loads(GOLDEN_PATH.read_bytes())
+    adventure = load_adventure(GOLDEN_PATH.read_bytes())
+    assert dropped_pointers(document["payload"], adventure.model_dump(mode="json")) == ()

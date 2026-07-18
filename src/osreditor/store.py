@@ -24,12 +24,61 @@ from osreditor.errors import ArtifactNotFoundError
 __all__ = [
     "LocalProjectStore",
     "ProjectStore",
+    "atomic_write_bytes",
 ]
+
+
+def atomic_write_bytes(path: Path, data: bytes, umask: int | None = None) -> None:
+    """Write bytes atomically: temp file beside the target, then `os.replace`.
+
+    Readers see either the old file or the new, complete one — never a torn
+    write. Parent directories are created as needed. The one non-store caller is
+    export, which writes to an arbitrary user-chosen destination the store seam
+    deliberately does not abstract.
+
+    Args:
+        path: The destination file path.
+        data: The full contents.
+        umask: The process umask, when the caller has it cached; `None` reads it
+            with the momentary `os.umask(0)` dance, acceptable for one-off
+            writes like export but not for concurrent artifact traffic.
+    """
+    if umask is None:
+        umask = os.umask(0)
+        os.umask(umask)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(handle, "wb") as temp_file:
+            temp_file.write(data)
+        # mkstemp creates 0600; without this, os.replace would clamp every
+        # written file to owner-only instead of the default file mode.
+        os.chmod(temp_name, 0o666 & ~umask)
+        os.replace(temp_name, path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(temp_name)
+        raise
 
 
 @runtime_checkable
 class ProjectStore(Protocol):
     """Artifact persistence for projects, keyed by an opaque project id."""
+
+    def project_exists(self, project_id: str) -> bool:
+        """Report whether a project exists at all.
+
+        `list_artifacts` returning `[]` cannot distinguish a typo'd path from an
+        empty project; the open flow needs that distinction to answer "no such
+        directory" versus "not a project".
+
+        Args:
+            project_id: The project to probe.
+
+        Returns:
+            True when the project exists, even if it holds no artifacts.
+        """
+        ...
 
     def list_artifacts(self, project_id: str) -> list[str]:
         """List a project's artifact names.
@@ -80,6 +129,30 @@ class LocalProjectStore:
     `os.replace`) because an always-saved editor rewrites `adventure.json`
     constantly and must never tear it.
     """
+
+    def __init__(self) -> None:
+        """Cache the process umask once, before any request concurrency exists.
+
+        Reading it later requires the momentary `os.umask(0)` dance, which is
+        not raceless once concurrent requests write through this store.
+        """
+        umask = os.umask(0)
+        os.umask(umask)
+        self._umask = umask
+
+    def project_exists(self, project_id: str) -> bool:
+        """Report whether the project directory exists.
+
+        Args:
+            project_id: The absolute project directory path.
+
+        Returns:
+            True when the directory exists.
+        """
+        root = Path(project_id)
+        if not root.is_absolute():
+            raise ValueError(f"project id must be an absolute directory path, got {project_id!r}")
+        return root.is_dir()
 
     def _artifact_path(self, project_id: str, name: str) -> Path:
         """Resolve an artifact name inside the project directory, refusing escape.
@@ -159,19 +232,4 @@ class LocalProjectStore:
             name: The artifact name, a POSIX-style relative path.
             data: The artifact's full contents.
         """
-        path = self._artifact_path(project_id, name)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        handle, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-        try:
-            with os.fdopen(handle, "wb") as temp_file:
-                temp_file.write(data)
-            # mkstemp creates 0600; without this, os.replace would clamp every
-            # rewritten artifact to owner-only instead of the default file mode.
-            umask = os.umask(0)
-            os.umask(umask)
-            os.chmod(temp_name, 0o666 & ~umask)
-            os.replace(temp_name, path)
-        except BaseException:
-            with contextlib.suppress(FileNotFoundError):
-                os.unlink(temp_name)
-            raise
+        atomic_write_bytes(self._artifact_path(project_id, name), data, self._umask)

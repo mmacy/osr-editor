@@ -33,6 +33,7 @@ dependencies = [
     "pydantic>=2",
     "fastapi>=0.139",
     "uvicorn>=0.51",
+    "platformdirs>=4",
 ]
 
 [project.scripts]
