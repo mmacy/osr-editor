@@ -106,7 +106,7 @@ class LocalProjectStore:
         # POSIX-style names only: on Windows a backslash or drive-colon part
         # would be reinterpreted as a separator or root reset by joinpath.
         if any("\\" in part or ":" in part for part in relative.parts):
-            raise ValueError(f"artifact name {name!r} is not a POSIX-style relative path")
+            raise ValueError(f"artifact name {name!r} is not a valid artifact name")
         return root.joinpath(*relative.parts)
 
     def list_artifacts(self, project_id: str) -> list[str]:

@@ -59,6 +59,7 @@ npm run build
 uv run scripts/generate_types.py
 
 # end to end (from frontend/, after npm run build)
+npx tsc -p ../tests/e2e
 npx playwright test
 ```
 
