@@ -12,18 +12,24 @@ osr-editor is a local GUI application for creating and modifying adventure modul
 
 ## The phase loop
 
-Each roadmap phase in `docs/spec.md` ships as one PR on branch `phase-N`, and "implement phase N" means running the whole loop end to end, unprompted: research, plan, implement, rubber-duck, revise until SOLID, open the PR. The workflow deliberately deviates from osrlib-python's `AGENTS.md` in one way — there is no separate plan PR; the implementing agent works up the plan when picking up the phase. Everything else keeps parity.
+Each roadmap phase in `docs/spec.md` ships as two PRs — a plan, then an implementation — and both follow the same create → rubber-duck → revise-until-solid → PR loop. "Work up a plan for phase N" or "implement the plan for phase N" means run this loop end to end, unprompted. The workflow mirrors osrlib-python's `AGENTS.md`; keep parity with it unless this file says otherwise.
 
-1. **Research first:** the phase's roadmap entry and every contract it touches in `docs/spec.md`, the prior phase plans in `docs/`, the existing code, and the osrlib and osr-forge surfaces the phase consumes. Hazards found during research (model validators, forge normalization rules, frozen-model rebuild patterns) belong in the plan so they're pinned before implementation, not rediscovered during it.
-2. **Plan:** write `docs/phase-N-plan.md`, structured like the sibling projects' phase plans — intro with the spec milestone, scope (in and out, naming the phase that picks up each deferral), work items, sequencing, definition of done. Plans are decision-complete: every choice the implementation would otherwise guess at is pinned with a rationale. Commit it first (`add phase N implementation plan`) so the plan-then-code story stays legible in history.
-3. **Implement to the plan** with tests green. The plan is the contract — when implementation reveals the plan was wrong or silent, amend the plan on the same branch (`amend phase N plan: ...`) so plan and code never diverge.
-4. **Rubber-duck the result** (below) — the implementation against the plan, and the plan against the spec — revise until SOLID, then open the PR.
+### Planning a phase
+
+1. Research first: the phase's roadmap entry and every contract it touches in `docs/spec.md`, the prior phase plans in `docs/`, the existing code, and the osrlib and osr-forge surfaces the phase consumes. Hazards found during research (model validators, forge normalization rules, frozen-model rebuild patterns) belong in the plan so the implementer doesn't rediscover them.
+2. Write `docs/phase-N-plan.md`, structured like the sibling projects' phase plans: intro with the spec milestone, scope (in and out, naming the phase that picks up each deferral), work items, sequencing, definition of done. Plans are decision-complete: every choice an implementer would otherwise guess at is pinned with a rationale.
+3. Branch `phase-N-plan`; commit the draft as `add phase N implementation plan (pre-review draft)`.
+4. Rubber-duck it (below), revise until SOLID, open the PR.
+
+### Implementing a phase
+
+The same loop on branch `phase-N-impl`: implement to the plan with tests green, commit, rubber-duck the result, and address findings as `address rubber-duck review findings`. The plan is the contract — when implementation reveals the plan was wrong or silent, amend the plan document on the same branch (`amend phase N plan: ...`) so plan and code never diverge.
 
 ### The rubber-duck loop
 
 - Spawn a fresh subagent as a skeptical senior reviewer. Give it an ordered reading list — the spec, prior plans, this file, the artifact under review, the relevant code, and the osrlib or osr-forge models and docs the work touches — and require evidence: every finding must quote the spec, the code, or the artifact, be ranked blocking vs non-blocking, and the review must end in a verdict (SOLID or NEEDS REVISION) plus a verified-good list of claims it actively checked.
 - The reviewer's mandate covers design hygiene, not just spec fidelity: it must hunt for the greenfield anti-patterns below (back-compat shims, dual import paths, deprecation scaffolding, dead accommodation code) and flag any it finds.
-- Judge findings on the merits. Verify disputed claims against the spec, osrlib, osr-forge, or the code yourself; push back on findings that are wrong instead of deferring to the duck. Address what survives and commit as `address rubber-duck review findings` (plan corrections as `amend phase N plan: ...`).
+- Judge findings on the merits. Verify disputed claims against the spec, osrlib, osr-forge, or the code yourself; push back on findings that are wrong instead of deferring to the duck. Address what survives and commit as `revise phase N plan per rubber-duck review` (or the address-findings message above).
 - Send the revision back to the same reviewer, context intact, for re-verification of each fix. Loop until SOLID. Fold in any sign-off notes.
 - Commits tell the honest story — draft, revision(s), sign-off tweaks — and the PR description summarizes the notable decisions plus the review provenance (what the duck found, what changed).
 
@@ -47,9 +53,9 @@ These are contracts, not suggestions — see the corresponding spec sections bef
 
 - **The backend is authoritative.** The frontend renders state and sends edit operations; it never re-implements rules, validation, or serialization.
 - **Ops in, state and diagnostics out.** Edit batches apply atomically, form one undo step each, and carry revision tokens; a stale revision is a 409, never a silent overwrite.
-- **Always-saved, canonically serialized.** A committed op persists immediately; a no-op session produces a byte-identical document.
+- **Always-saved, canonically serialized.** A committed op persists immediately; a no-op session over a document the editor wrote produces a byte-identical file (foreign documents normalize on first write).
 - **Validity tiers.** Model validity is enforced by construction; dangling references are diagnostics, legal while editing; `validate_adventure` cleanliness gates publish, not editing.
-- **Forge output stays reproducible.** In a forge-backed project the editor writes `overrides.yaml` and re-runs `assemble` — it never writes `adventure.json`, `report.json`, or previews in a workdir. Assembly purity is forge's core invariant and the editor honors it absolutely.
+- **Forge output stays reproducible.** In a forge-backed project the editor writes `overrides.yaml` and re-runs `assemble` — it never writes `adventure.json`, `report.json`, or previews in a workdir. Its own `editor.json` sidecar is the one editor file a workdir carries. Assembly purity is forge's core invariant and the editor honors it absolutely.
 - **Seams stay honest.** Auth goes through the single auth dependency, persistence through `ProjectStore`, external map formats through `GeometryImporter` entry points, model access through forge's `ModelProvider`. No code outside a seam may assume single-user, local filesystem, a map format, or a vendor.
 - **No secrets on disk.** Provider credentials come from the environment; editor config never stores them.
 - **No network in tests.** Conversion and LLM paths test against forge's `FixtureProvider` recordings; live model calls never run in CI.
@@ -66,4 +72,4 @@ Release engineering lands in phase 9 and mirrors the siblings: version in `pypro
 
 ## Licensing
 
-Package code is MIT. osr-editor ships no game content — osrlib carries the OGL data. Modules users author or convert are theirs and stay in their project directories; no editor feature may persist module content outside the user's project or workdir.
+Package code is MIT. osr-editor ships no game content — osrlib carries the OGL data. Modules users author or convert are theirs and stay in their project directories; no editor feature may persist module content outside the user's project or workdir, except explicit user-invoked publish and export to destinations the user chooses.
