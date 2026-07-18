@@ -109,7 +109,7 @@ New module `diagnostics.py`, the tier-2 producer:
 
 ### 8. Type generation
 
-- Nearly every phase 0 injected model becomes route-referenced this phase — `Adventure` via `ProjectState`, the envelope models via the ops routes — and each leaves `INJECTED_MODELS` per the script's own rule. **`ApiError` stays injected**: it is produced only by exception handlers, which never enter `app.openapi()` — that is precisely why phase 0 injected it, and no phase 1 route declares error response models (per-route `responses={...}` ceremony buys nothing while the frontend parses one envelope generically). The list shrinks to exactly `[ApiError]`; the mechanism and collision check stay for future phases. `EditOp` drops out of the wire surface entirely: `OpBatch` now carries `AnyEditOp`, and the abstract base serializes nowhere.
+- Nearly every phase 0 injected model becomes route-referenced this phase — `Adventure` via `ProjectState`, the envelope models via the ops routes — and each leaves `INJECTED_MODELS` per the script's own rule. **`ApiError` stays injected**: it is produced only by exception handlers, which never enter `app.openapi()` — that is precisely why phase 0 injected it, and no phase 1 route declares error response models (per-route `responses={...}` ceremony buys nothing while the frontend parses one envelope generically). The list shrinks to exactly `[ApiError]`; the mechanism and collision check stay for future phases. `EditOp` drops out of the wire surface entirely: `OpBatch` now carries `AnyEditOp`, and the abstract base serializes nowhere — its alias leaves `frontend/src/types/index.ts` with it, a loud `tsc` break that is expected, not discovered.
 - `frontend/src/types/index.ts` grows aliases for the new shapes (`ProjectState`, `RecentProject`, `SubtreeChange`, the ops, `AnyEditOp` as the union member type of `OpBatch["ops"]`); the vitest type-level suite extends: the `AnyEditOp` union discriminates on `op`, `SetWandering` carries a full `WanderingSpec`, `SubtreeChange.value` is loose JSON by design.
 - The drift gate is unchanged and stays proven: regenerate, commit, CI fails on any diff.
 
@@ -157,7 +157,7 @@ Consolidated from the work items:
 ## Sequencing
 
 1. Store growth (`project_exists`, cached umask) and `config.py`, with tests — the foundations both flows stand on.
-2. `projects.py` detection/create/open/sidecar/recents as module-level logic with tests — no routes yet; `ProjectState` needs the service's revision and diagnostics, so exposing these flows waits for step 5.
+2. `projects.py` detection/create/open/sidecar/recents as module-level logic with tests — no routes yet; `ProjectState` needs the service's revision and diagnostics, so exposing these flows waits for step 5. (The idempotent-open assertion in the projects suite joins at step 3, when the registry it exercises exists.)
 3. `ops.py` growth (concrete ops, union, delta, result fields), then the `documents.py` service (registry, locks, apply, undo/redo, persistence, fidelity) with the backbone test suites.
 4. `diagnostics.py` runner, parser, and address grammar with its fixture suite; wire into the service.
 5. All routes and error mappings (projects, ops, undo/redo, export); CLI `PATH`; full backend suite green.
