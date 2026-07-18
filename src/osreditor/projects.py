@@ -18,7 +18,7 @@ from pathlib import Path
 from osrlib.crawl.adventure import Adventure, TownSpec
 from osrlib.crawl.dungeon import DungeonSpec, LevelSpec
 from osrlib.versioning import engine_version
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from osreditor.documents import (
     ADVENTURE_ARTIFACT,
@@ -28,9 +28,11 @@ from osreditor.documents import (
     canonical_json_bytes,
     dropped_pointers,
     dump_adventure,
+    json_pointer,
     load_adventure,
 )
 from osreditor.errors import (
+    DocumentPayloadInvalidError,
     InvalidProjectError,
     ProjectExistsError,
     ProjectPathNotFoundError,
@@ -51,6 +53,7 @@ __all__ = [
 
 SIDECAR_ARTIFACT = "editor.json"
 SIDECAR_SCHEMA_VERSION = 1
+_MAX_REPORTED_LOCATIONS = 10
 
 
 class SidecarProvenance(BaseModel):
@@ -197,7 +200,8 @@ def open_project(service: DocumentService, path: Path) -> OpenProject:
             the installed osrlib understands.
         osrlib.errors.ContentValidationError: If the document envelope is
             malformed.
-        pydantic.ValidationError: If the document payload fails validation.
+        DocumentPayloadInvalidError: If the document payload fails model
+            validation, with the first offending locations attached.
     """
     resolved = path.resolve()
 
@@ -212,7 +216,16 @@ def open_project(service: DocumentService, path: Path) -> OpenProject:
         if project_type == "forge":
             raise ProjectTypeUnsupportedError(f"{resolved} is an osr-forge workdir")
         data = store.read_artifact(store_key, ADVENTURE_ARTIFACT)
-        adventure = load_adventure(data)
+        try:
+            adventure = load_adventure(data)
+        except ValidationError as error:
+            reported = [
+                {"path": json_pointer(detail["loc"]), "message": detail["msg"]}
+                for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
+            ]
+            raise DocumentPayloadInvalidError(
+                f"the document at {resolved} does not match the installed osrlib's models", errors=reported
+            ) from error
         source_payload = json.loads(data)["payload"]
         dropped = dropped_pointers(source_payload, adventure.model_dump(mode="json"))
         return adventure, project_type, dropped

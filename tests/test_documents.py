@@ -145,6 +145,13 @@ def test_fidelity_reports_an_extra_list_element() -> None:
     assert dropped_pointers({"hooks": ["a", "b", "c"]}, {"hooks": ["a", "b"]}) == ("/hooks/2",)
 
 
+def test_fidelity_reports_children_of_a_shape_changed_node() -> None:
+    # A container the pinned models re-serialize as something else entirely
+    # loses every child — the walk names them instead of falling silent.
+    assert dropped_pointers({"a": {"x": 1, "y": 2}}, {"a": 3}) == ("/a/x", "/a/y")
+    assert dropped_pointers({"a": [1, 2]}, {"a": {"kind": "coerced"}}) == ("/a/0", "/a/1")
+
+
 def test_fidelity_reports_nothing_for_an_older_defaults_document() -> None:
     # A field the source omits and the pinned models default is normalization,
     # not loss — the reverse direction never warns.

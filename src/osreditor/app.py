@@ -30,11 +30,12 @@ from fastapi.staticfiles import StaticFiles
 from osrlib.crawl.adventure import Adventure
 from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION, engine_version
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from osreditor.config import RecentEntry, load_config, record_recent, save_config
 from osreditor.documents import DocumentService, OpenProject, dump_adventure, json_pointer
 from osreditor.errors import (
+    DocumentPayloadInvalidError,
     InvalidProjectError,
     OpRejectedError,
     OpTargetNotFoundError,
@@ -455,12 +456,8 @@ _MAX_REPORTED_LOCATIONS = 10
 
 
 def _details_payload_invalid(error: Exception) -> dict[str, object] | None:
-    assert isinstance(error, ValidationError)
-    reported = [
-        {"path": json_pointer(detail["loc"]), "message": detail["msg"]}
-        for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
-    ]
-    return {"errors": reported}
+    assert isinstance(error, DocumentPayloadInvalidError)
+    return {"errors": error.errors}
 
 
 _UPGRADE_REMEDY = "This document was written by a newer osrlib. Upgrade osrlib, then reopen it."
@@ -495,7 +492,13 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
     OpRejectedError: (422, "op_rejected", None, _details_op_rejected),
     OpTargetNotFoundError: (422, "op_target_not_found", None, _details_none),
     ContentValidationError: (422, "document_invalid", None, _details_none),
-    ValidationError: (422, "payload_invalid", _UPGRADE_REMEDY, _details_payload_invalid),
+    DocumentPayloadInvalidError: (
+        422,
+        "payload_invalid",
+        "The document may have been written by a newer osrlib or edited by hand. "
+        "Upgrade osrlib or repair the document, then reopen it.",
+        _details_payload_invalid,
+    ),
 }
 
 

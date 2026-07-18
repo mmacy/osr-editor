@@ -7,6 +7,8 @@ that defeat extraction degrading the address to `None`, unrecognizable lines
 landing as `validation_unclassified`, never dropped and never a wrong address.
 """
 
+from urllib.parse import quote
+
 import pytest
 from osrlib.core.alignment import Alignment
 from osrlib.core.tables import EncounterTable, EncounterTableRow, MonsterEncounterEntry
@@ -231,31 +233,76 @@ def test_addresses_percent_encode_hostile_ids() -> None:
     assert finding.address == "dungeon:deep%20caves/level:1"
 
 
-def test_id_containing_level_still_resolves_via_the_greedy_split() -> None:
-    # The owner prefix always ends with the true ` level <n>`, so the greedy
-    # split recovers even an id that embeds " level " — and the resolution
-    # check proves it against the document rather than trusting the regex.
+def test_id_containing_level_still_resolves() -> None:
+    # An id embedding " level " cannot defeat the enumeration resolver: the
+    # document's own (dungeon, level) pairs are rendered as osrlib renders
+    # them, and only the true pair reproduces the line.
     finding = sole_finding(adventure(DungeonSpec(id="x level 9", levels=(level(entrance=(9, 9)),))))
     assert finding.code == "entrance_out_of_bounds"
     assert finding.address == "dungeon:x%20level%209/level:1"
 
 
-def test_id_that_defeats_extraction_degrades_the_address_to_none() -> None:
-    # An empty dungeon id makes osrlib's unquoted owner prefix unparseable; the
-    # finding keeps its code and the address honestly degrades to None.
+def test_empty_dungeon_id_resolves_honestly() -> None:
+    # Even an empty dungeon id confirms by enumeration — the address carries
+    # the empty encoded value rather than degrading.
     finding = sole_finding(adventure(DungeonSpec(id="", levels=(level(entrance=(9, 9)),))))
     assert finding.code == "entrance_out_of_bounds"
-    assert finding.address is None
+    assert finding.address == "dungeon:/level:1"
 
 
-def test_id_whose_repr_defeats_the_pattern_lands_unclassified() -> None:
+def test_quoted_area_id_resolves_via_its_repr() -> None:
     # An area id with an embedded quote repr-renders with double quotes; the
-    # single-quote pattern refuses it and the line degrades to unclassified —
-    # a less navigable finding, never a wrong address.
+    # resolver renders candidates exactly as osrlib reprs them, so it still
+    # confirms and addresses the true area.
     areas = (AreaSpec(id="it's 7", cells=((9, 9),)),)
     finding = sole_finding(adventure(DungeonSpec(id="d", levels=(level(areas=areas),))))
-    assert finding.code == "validation_unclassified"
-    assert finding.address is None
+    assert finding.code == "area_cell_out_of_bounds"
+    assert finding.address == "dungeon:d/level:1/area:it%27s%207"
+
+
+def test_a_planted_decoy_area_never_steals_the_address() -> None:
+    # The double-planted counterexample: a monster id embedding the message's
+    # own separator text, plus a decoy area whose id matches a naive greedy
+    # regex split. The repr-rendered candidate check pins the true area; the
+    # decoy's repr (quote-flipped by its embedded quote) can never render the
+    # line.
+    decoy_id = "1' references unknown monster \"m"
+    areas = (
+        AreaSpec(
+            id="1",
+            cells=((0, 0),),
+            encounter=KeyedEncounter(
+                monsters=(KeyedMonster(template_id="m' references unknown monster 'x", count_fixed=1),)
+            ),
+        ),
+        AreaSpec(id=decoy_id, cells=((1, 1),)),
+    )
+    finding = sole_finding(adventure(DungeonSpec(id="d", levels=(level(areas=areas),))))
+    assert finding.code == "encounter_unknown_monster"
+    assert finding.address == "dungeon:d/level:1/area:1"
+
+
+def test_a_newline_id_degrades_to_unclassified_fragments() -> None:
+    # An id embedding a newline splits its own message line; neither fragment
+    # confirms against the document, so both degrade to unclassified — a less
+    # navigable finding, never a wrong code or address.
+    fixture = adventure(DungeonSpec(id="bad\nid", levels=(level(entrance=(9, 9)),)))
+    with pytest.raises(ContentValidationError) as excinfo:
+        validate_adventure(fixture, load_monsters(), load_equipment())
+    findings = parse_validation_error(str(excinfo.value), fixture)
+    assert len(findings) == 2
+    assert all(finding.code == "validation_unclassified" for finding in findings)
+    assert all(finding.address is None for finding in findings)
+
+
+def test_a_hostile_id_faking_a_static_shape_still_classifies_by_its_owner() -> None:
+    # A dungeon id opening with a static shape's text ("town travel names
+    # unknown dungeon '…") would fool a first-match static pattern; the
+    # owner-confirmed shapes run first and claim the line by enumeration.
+    hostile = "town travel names unknown dungeon 'evil"
+    finding = sole_finding(adventure(DungeonSpec(id=hostile, levels=(level(entrance=(9, 9)),))))
+    assert finding.code == "entrance_out_of_bounds"
+    assert finding.address == f"dungeon:{quote(hostile, safe='')}/level:1"
 
 
 def test_unrecognized_line_is_never_dropped() -> None:

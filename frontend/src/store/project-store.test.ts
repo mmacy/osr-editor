@@ -71,6 +71,55 @@ test('commits post strictly sequentially, each carrying the previous revision', 
   expect(store.getState().project?.revision).toBe('r3')
 })
 
+test('a queued ops builder sees the document the previous commit produced', async () => {
+  // Whole-value payloads (a hooks tuple) must be built at dequeue time: a
+  // payload built at gesture time would silently revert the in-flight commit,
+  // and the fresh revision would make the server accept it.
+  const bodies: AnyEditOp[][] = []
+  const pending: ((value: OpBatchResult) => void)[] = []
+  const client = makeClient({
+    postOps: (_id, _revision, ops) => {
+      bodies.push(ops)
+      return new Promise<OpBatchResult>((resolve) => pending.push(resolve))
+    },
+  })
+  const store = createProjectStore(client)
+  store.getState().setProject(makeProjectState())
+  const baseHooks = makeProjectState().document.hooks
+
+  const first = store
+    .getState()
+    .commit((document) => [
+      { op: 'set_adventure_field', field: 'hooks', value: [...document.hooks, 'first'] },
+    ])
+  const second = store
+    .getState()
+    .commit((document) => [
+      { op: 'set_adventure_field', field: 'hooks', value: [...document.hooks, 'second'] },
+    ])
+  await flush()
+  expect(bodies).toHaveLength(1)
+  expect(bodies[0][0]).toMatchObject({ value: [...baseHooks, 'first'] })
+
+  pending[0](result('r2', { delta: [{ path: '/hooks', value: [...baseHooks, 'first'] }] }))
+  await first
+  await flush()
+  expect(bodies).toHaveLength(2)
+  expect(bodies[1][0]).toMatchObject({ value: [...baseHooks, 'first', 'second'] })
+  pending[1](result('r3'))
+  await second
+})
+
+test('a builder returning no ops skips the batch', async () => {
+  const client = makeClient({
+    postOps: () => Promise.reject(new Error('must not post')),
+  })
+  const store = createProjectStore(client)
+  store.getState().setProject(makeProjectState())
+  expect(await store.getState().commit(() => [])).toBe(false)
+  expect(store.getState().project?.revision).toBe('r1')
+})
+
 test('a committed result applies the delta and the stack flags', async () => {
   const client = makeClient({
     postOps: () => Promise.resolve(result('r2', { delta: [{ path: '/name', value: 'Renamed' }] })),

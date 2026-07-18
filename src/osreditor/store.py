@@ -28,7 +28,18 @@ __all__ = [
 ]
 
 
-def atomic_write_bytes(path: Path, data: bytes, umask: int | None = None) -> None:
+def _read_umask() -> int:
+    umask = os.umask(0)
+    os.umask(umask)
+    return umask
+
+
+# Read once at import, before any request concurrency exists: the momentary
+# os.umask(0) dance is not raceless once threads write concurrently.
+_PROCESS_UMASK = _read_umask()
+
+
+def atomic_write_bytes(path: Path, data: bytes, umask: int = _PROCESS_UMASK) -> None:
     """Write bytes atomically: temp file beside the target, then `os.replace`.
 
     Readers see either the old file or the new, complete one — never a torn
@@ -39,13 +50,8 @@ def atomic_write_bytes(path: Path, data: bytes, umask: int | None = None) -> Non
     Args:
         path: The destination file path.
         data: The full contents.
-        umask: The process umask, when the caller has it cached; `None` reads it
-            with the momentary `os.umask(0)` dance, acceptable for one-off
-            writes like export but not for concurrent artifact traffic.
+        umask: The process umask; defaults to the value cached at import.
     """
-    if umask is None:
-        umask = os.umask(0)
-        os.umask(umask)
     path.parent.mkdir(parents=True, exist_ok=True)
     handle, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
@@ -131,14 +137,8 @@ class LocalProjectStore:
     """
 
     def __init__(self) -> None:
-        """Cache the process umask once, before any request concurrency exists.
-
-        Reading it later requires the momentary `os.umask(0)` dance, which is
-        not raceless once concurrent requests write through this store.
-        """
-        umask = os.umask(0)
-        os.umask(umask)
-        self._umask = umask
+        """Cache the process umask at construction (from the import-time read)."""
+        self._umask = _PROCESS_UMASK
 
     def project_exists(self, project_id: str) -> bool:
         """Report whether the project directory exists.

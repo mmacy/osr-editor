@@ -11,7 +11,15 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 
 import { api, ApiRequestError, type ApiClient } from '@/lib/api'
 import { applyDelta } from '@/lib/apply-delta'
-import type { AnyEditOp, OpBatchResult, ProjectState } from '@/types'
+import type { Adventure, AnyEditOp, OpBatchResult, ProjectState } from '@/types'
+
+// Ops whose payload depends on the document (a whole hooks tuple, a spread
+// wandering spec) must be BUILT at dequeue time against the document the
+// carried revision names — a payload built at gesture time could be stale by
+// the time its turn in the queue comes, and the fresh revision would make the
+// server accept it, silently reverting the commit in between. A builder
+// returning no ops skips the batch (its target vanished underneath).
+export type OpsInput = AnyEditOp[] | ((document: Adventure) => AnyEditOp[])
 
 export interface ProjectStoreState {
   project: ProjectState | null
@@ -22,7 +30,7 @@ export interface ProjectStoreState {
   clear: () => void
   acknowledgeFidelity: () => void
   setLastExportPath: (path: string) => void
-  commit: (ops: AnyEditOp[]) => Promise<boolean>
+  commit: (ops: OpsInput) => Promise<boolean>
   undo: () => Promise<void>
   redo: () => Promise<void>
   refresh: () => Promise<void>
@@ -99,8 +107,10 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
         enqueue(async () => {
           const { project } = get()
           if (!project) return false
+          const built = typeof ops === 'function' ? ops(project.document) : ops
+          if (built.length === 0) return false
           try {
-            applyResult(await client.postOps(project.id, project.revision, ops))
+            applyResult(await client.postOps(project.id, project.revision, built))
             return true
           } catch (error) {
             handleError(error)

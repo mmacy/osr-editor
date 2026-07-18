@@ -9,30 +9,27 @@ import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
 // Travel turns is the deliberate dangling-reference surface: free rows —
 // dungeon id as text, turns as a number — not a picker over existing
 // dungeons. Cross-reference problems are legal while editing; typing a wrong
-// id is exactly how validation is watched reacting live.
+// id is exactly how validation is watched reacting live. Gestures hand the
+// parent an updater over the current committed mapping (keyed by dungeon id),
+// so the commit queue applies them to the document the posted revision names.
 export function TravelTurnsEditor({
   travelTurns,
   onCommit,
 }: {
   travelTurns: Record<string, number>
-  onCommit: (travelTurns: Record<string, number>) => void
+  onCommit: (update: (current: Record<string, number>) => Record<string, number>) => void
 }) {
   const entries = Object.entries(travelTurns)
   const [draftId, setDraftId] = useState('')
   const [draftTurns, setDraftTurns] = useState('')
 
-  const commitEntries = (next: [string, number][]) => {
-    onCommit(Object.fromEntries(next))
-  }
   const add = () => {
+    const id = draftId
     const turns = Number(draftTurns)
-    if (!draftId || !Number.isFinite(turns) || turns < 0) return
-    commitEntries([...entries, [draftId, turns]])
+    if (!id || !Number.isInteger(turns) || turns < 0) return
+    onCommit((current) => ({ ...current, [id]: turns }))
     setDraftId('')
     setDraftTurns('')
-  }
-  const remove = (index: number) => {
-    commitEntries(entries.filter((_, at) => at !== index))
   }
 
   return (
@@ -42,18 +39,30 @@ export function TravelTurnsEditor({
         Turns from town to each dungeon's entrance, by dungeon id. A wrong id shows up in
         diagnostics until it names a real dungeon.
       </p>
-      {entries.map(([dungeonId, turns], index) => (
+      {entries.map(([dungeonId, turns]) => (
         <TravelRow
-          key={`${index}-${dungeonId}`}
+          key={dungeonId}
           dungeonId={dungeonId}
           turns={turns}
           onEditId={(value) =>
-            commitEntries(entries.map((entry, at) => (at === index ? [value, entry[1]] : entry)))
+            onCommit((current) =>
+              Object.fromEntries(
+                Object.entries(current).map(([id, cost]) =>
+                  id === dungeonId ? [value, cost] : [id, cost],
+                ),
+              ),
+            )
           }
           onEditTurns={(value) =>
-            commitEntries(entries.map((entry, at) => (at === index ? [entry[0], value] : entry)))
+            onCommit((current) =>
+              dungeonId in current ? { ...current, [dungeonId]: value } : current,
+            )
           }
-          onRemove={() => remove(index)}
+          onRemove={() =>
+            onCommit((current) =>
+              Object.fromEntries(Object.entries(current).filter(([id]) => id !== dungeonId)),
+            )
+          }
         />
       ))}
       <div className="flex gap-2">

@@ -8,7 +8,10 @@ import { useCommittedField } from '@/hooks/use-committed-field'
 import { cn } from '@/lib/utils'
 
 // An ordered list editor: add, remove, edit, reorder. Every gesture commits
-// the whole tuple as one batch — one undo step by construction.
+// the whole tuple as one batch — one undo step by construction. Gestures hand
+// the parent an updater over the current committed list rather than a
+// prebuilt value, so the commit queue can apply it to the document the posted
+// revision actually names.
 export function ListEditor({
   label,
   items,
@@ -18,30 +21,16 @@ export function ListEditor({
 }: {
   label: string
   items: readonly string[]
-  onCommit: (items: string[]) => void
+  onCommit: (update: (current: string[]) => string[]) => void
   serif?: boolean
   placeholder?: string
 }) {
   const [draft, setDraft] = useState('')
   const add = () => {
     if (!draft) return
-    onCommit([...items, draft])
+    onCommit((current) => [...current, draft])
     setDraft('')
   }
-  const remove = (index: number) => {
-    onCommit(items.filter((_, at) => at !== index))
-  }
-  const move = (index: number, delta: -1 | 1) => {
-    const target = index + delta
-    if (target < 0 || target >= items.length) return
-    const next = [...items]
-    ;[next[index], next[target]] = [next[target], next[index]]
-    onCommit(next)
-  }
-  const edit = (index: number, value: string) => {
-    onCommit(items.map((item, at) => (at === index ? value : item)))
-  }
-
   return (
     <div className="flex flex-col gap-2">
       <Label>{label}</Label>
@@ -51,10 +40,30 @@ export function ListEditor({
           key={`${index}-${item}`}
           item={item}
           serif={serif}
-          onEdit={(value) => edit(index, value)}
-          onRemove={() => remove(index)}
-          onMoveUp={index > 0 ? () => move(index, -1) : undefined}
-          onMoveDown={index < items.length - 1 ? () => move(index, 1) : undefined}
+          onEdit={(value) =>
+            onCommit((current) => current.map((entry, at) => (at === index ? value : entry)))
+          }
+          onRemove={() => onCommit((current) => current.filter((_, at) => at !== index))}
+          onMoveUp={
+            index > 0
+              ? () =>
+                  onCommit((current) => {
+                    const next = [...current]
+                    ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
+                    return next
+                  })
+              : undefined
+          }
+          onMoveDown={
+            index < items.length - 1
+              ? () =>
+                  onCommit((current) => {
+                    const next = [...current]
+                    ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
+                    return next
+                  })
+              : undefined
+          }
         />
       ))}
       <div className="flex gap-2">

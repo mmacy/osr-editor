@@ -8,26 +8,54 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
 import { projectStore } from '@/store/project-store'
-import type { Adventure, SetAdventureField, SetTownField } from '@/types'
+import type { Adventure, WanderingSpec } from '@/types'
 
 // Every form commits through the store's single-flight queue: one committed
-// field, one op batch, one undo step.
+// field, one op batch, one undo step. Scalar sets carry their value directly;
+// anything whose payload derives from the document (a whole tuple or mapping,
+// a spread wandering spec) commits a BUILDER the queue evaluates against the
+// document current at post time — see OpsInput in the store.
 
-function commitAdventureField(field: SetAdventureField['field'], value: string | string[]): void {
+function commitScalar(field: 'name' | 'description', value: string): void {
   void projectStore.getState().commit([{ op: 'set_adventure_field', field, value }])
 }
 
-function commitTownField(
-  field: SetTownField['field'],
-  value: string | string[] | Record<string, number>,
-): void {
+function commitTownScalar(field: 'name' | 'description', value: string): void {
   void projectStore.getState().commit([{ op: 'set_town_field', field, value }])
 }
 
+function commitHooks(update: (current: string[]) => string[]): void {
+  void projectStore
+    .getState()
+    .commit((document) => [
+      { op: 'set_adventure_field', field: 'hooks', value: update([...document.hooks]) },
+    ])
+}
+
+function commitServices(update: (current: string[]) => string[]): void {
+  void projectStore
+    .getState()
+    .commit((document) => [
+      { op: 'set_town_field', field: 'services', value: update([...document.town.services]) },
+    ])
+}
+
+function commitTravelTurns(
+  update: (current: Record<string, number>) => Record<string, number>,
+): void {
+  void projectStore.getState().commit((document) => [
+    {
+      op: 'set_town_field',
+      field: 'travel_turns',
+      value: update({ ...document.town.travel_turns }),
+    },
+  ])
+}
+
 export function AdventureForm({ document }: { document: Adventure }) {
-  const name = useCommittedField(document.name, (value) => commitAdventureField('name', value))
+  const name = useCommittedField(document.name, (value) => commitScalar('name', value))
   const description = useCommittedField(document.description, (value) =>
-    commitAdventureField('description', value),
+    commitScalar('description', value),
   )
   return (
     <section aria-label="Adventure" className="flex max-w-2xl flex-col gap-6">
@@ -51,16 +79,16 @@ export function AdventureForm({ document }: { document: Adventure }) {
         serif
         items={document.hooks}
         placeholder="A rumor, a debt, a missing miller…"
-        onCommit={(hooks) => commitAdventureField('hooks', hooks)}
+        onCommit={commitHooks}
       />
     </section>
   )
 }
 
 export function TownForm({ document }: { document: Adventure }) {
-  const name = useCommittedField(document.town.name, (value) => commitTownField('name', value))
+  const name = useCommittedField(document.town.name, (value) => commitTownScalar('name', value))
   const description = useCommittedField(document.town.description, (value) =>
-    commitTownField('description', value),
+    commitTownScalar('description', value),
   )
   return (
     <section aria-label="Town" className="flex max-w-2xl flex-col gap-6">
@@ -83,12 +111,9 @@ export function TownForm({ document }: { document: Adventure }) {
         label="Services"
         items={document.town.services}
         placeholder="Inn, temple, trading post…"
-        onCommit={(services) => commitTownField('services', services)}
+        onCommit={commitServices}
       />
-      <TravelTurnsEditor
-        travelTurns={document.town.travel_turns}
-        onCommit={(travelTurns) => commitTownField('travel_turns', travelTurns)}
-      />
+      <TravelTurnsEditor travelTurns={document.town.travel_turns} onCommit={commitTravelTurns} />
     </section>
   )
 }
@@ -109,18 +134,26 @@ export function LevelForm({
   }
   const wandering = level.wandering
 
-  const commitWandering = (chanceInSix: number, intervalTurns: number) => {
-    void projectStore.getState().commit([
-      {
-        op: 'set_wandering',
-        dungeon_id: dungeonId,
-        level_number: levelNumber,
-        // The form authors only the chance and interval; an inline table on an
-        // opened document rides through unchanged — phase 1 must never destroy
-        // a table it can't author.
-        wandering: { ...wandering, chance_in_six: chanceInSix, interval_turns: intervalTurns },
-      },
-    ])
+  // Each field commits only its own change; the rest of the spec — the other
+  // field and the inline table phase 1 must never destroy — is read from the
+  // post-time document inside the builder.
+  const commitWanderingPatch = (
+    patch: Partial<Pick<WanderingSpec, 'chance_in_six' | 'interval_turns'>>,
+  ) => {
+    void projectStore.getState().commit((current) => {
+      const target = current.dungeons
+        .find((candidate) => candidate.id === dungeonId)
+        ?.levels.find((candidate) => candidate.number === levelNumber)
+      if (!target) return []
+      return [
+        {
+          op: 'set_wandering',
+          dungeon_id: dungeonId,
+          level_number: levelNumber,
+          wandering: { ...target.wandering, ...patch },
+        },
+      ]
+    })
   }
 
   return (
@@ -145,14 +178,14 @@ export function LevelForm({
             value={wandering.chance_in_six}
             min={0}
             max={6}
-            onCommit={(value) => commitWandering(value, wandering.interval_turns)}
+            onCommit={(value) => commitWanderingPatch({ chance_in_six: value })}
           />
           <WanderingNumberField
             id="wandering-interval"
             label="Check interval (turns)"
             value={wandering.interval_turns}
             min={1}
-            onCommit={(value) => commitWandering(wandering.chance_in_six, value)}
+            onCommit={(value) => commitWanderingPatch({ interval_turns: value })}
           />
         </div>
         {wandering.table && (

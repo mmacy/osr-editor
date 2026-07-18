@@ -8,6 +8,7 @@ their members under [`OsrEditorError`][osreditor.errors.OsrEditorError].
 
 __all__ = [
     "ArtifactNotFoundError",
+    "DocumentPayloadInvalidError",
     "InvalidProjectError",
     "OpRejectedError",
     "OpTargetNotFoundError",
@@ -97,3 +98,26 @@ class OpRejectedError(OsrEditorError):
 
 class OpTargetNotFoundError(OsrEditorError):
     """An op named a dungeon or level the document does not contain."""
+
+
+class DocumentPayloadInvalidError(OsrEditorError):
+    """A document's payload failed model validation at load time.
+
+    Typed at the load site rather than mapping `pydantic.ValidationError`
+    app-wide, so an internal validation bug in some future route can never
+    masquerade as a document problem.
+
+    Attributes:
+        errors: One `{"path", "message"}` entry per offending location, the
+            path an RFC 6901 JSON Pointer into the payload.
+    """
+
+    def __init__(self, message: str, *, errors: list[dict[str, str]]) -> None:
+        """Build the error.
+
+        Args:
+            message: What went wrong.
+            errors: One `{"path", "message"}` entry per offending location.
+        """
+        super().__init__(message)
+        self.errors = errors

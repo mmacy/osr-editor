@@ -180,29 +180,33 @@ def dropped_pointers(source: object, reserialized: object, prefix: str = "") -> 
         The dropped fields as RFC 6901 JSON Pointers, in source order.
     """
     dropped: list[str] = []
-    if isinstance(source, Mapping) and isinstance(reserialized, Mapping):
+    if isinstance(source, Mapping):
         source_map = cast(Mapping[str, object], source)
-        reserialized_map = cast(Mapping[str, object], reserialized)
-        for key, value in source_map.items():
-            pointer = f"{prefix}/{_escape_pointer_token(key)}"
-            if key not in reserialized_map:
-                dropped.append(pointer)
-            else:
-                dropped.extend(dropped_pointers(value, reserialized_map[key], pointer))
-    elif (
-        isinstance(source, Sequence)
-        and not isinstance(source, str | bytes)
-        and isinstance(reserialized, Sequence)
-        and not isinstance(reserialized, str | bytes)
-    ):
+        if isinstance(reserialized, Mapping):
+            reserialized_map = cast(Mapping[str, object], reserialized)
+            for key, value in source_map.items():
+                pointer = f"{prefix}/{_escape_pointer_token(key)}"
+                if key not in reserialized_map:
+                    dropped.append(pointer)
+                else:
+                    dropped.extend(dropped_pointers(value, reserialized_map[key], pointer))
+        else:
+            # The node changed shape entirely — every source key under it is
+            # gone from the re-serialization, which is exactly the loss the
+            # guard exists to name.
+            dropped.extend(f"{prefix}/{_escape_pointer_token(key)}" for key in source_map)
+    elif isinstance(source, Sequence) and not isinstance(source, str | bytes):
         source_seq = cast(Sequence[object], source)
-        reserialized_seq = cast(Sequence[object], reserialized)
-        for index, value in enumerate(source_seq):
-            pointer = f"{prefix}/{index}"
-            if index >= len(reserialized_seq):
-                dropped.append(pointer)
-            else:
-                dropped.extend(dropped_pointers(value, reserialized_seq[index], pointer))
+        if isinstance(reserialized, Sequence) and not isinstance(reserialized, str | bytes):
+            reserialized_seq = cast(Sequence[object], reserialized)
+            for index, value in enumerate(source_seq):
+                pointer = f"{prefix}/{index}"
+                if index >= len(reserialized_seq):
+                    dropped.append(pointer)
+                else:
+                    dropped.extend(dropped_pointers(value, reserialized_seq[index], pointer))
+        else:
+            dropped.extend(f"{prefix}/{index}" for index in range(len(source_seq)))
     return tuple(dropped)
 
 
@@ -363,11 +367,12 @@ class DocumentService:
                         {"path": json_pointer(detail["loc"]), "message": detail["msg"]} for detail in error.errors()
                     ],
                 ) from error
-            project.undo_stack.append(project.adventure)
+            previous = project.adventure
+            self._commit(project, validated)
+            project.undo_stack.append(previous)
             if len(project.undo_stack) > MAX_UNDO_DEPTH:
                 project.undo_stack.pop(0)
             project.redo_stack.clear()
-            self._commit(project, validated)
             payload = validated.model_dump(mode="json")
             delta = _coalesce_delta(payload, touched)
             return self._result(project, delta)
@@ -393,8 +398,10 @@ class DocumentService:
         with project.lock:
             if not project.undo_stack:
                 raise UndoStackEmptyError("there is nothing to undo")
-            project.redo_stack.append(project.adventure)
-            self._commit(project, project.undo_stack.pop())
+            previous = project.adventure
+            self._commit(project, project.undo_stack[-1])
+            project.undo_stack.pop()
+            project.redo_stack.append(previous)
             return self._result(project, _whole_document_delta(project.adventure))
 
     def redo(self, project: OpenProject) -> OpBatchResult:
@@ -412,19 +419,24 @@ class DocumentService:
         with project.lock:
             if not project.redo_stack:
                 raise RedoStackEmptyError("there is nothing to redo")
-            project.undo_stack.append(project.adventure)
-            self._commit(project, project.redo_stack.pop())
+            previous = project.adventure
+            self._commit(project, project.redo_stack[-1])
+            project.redo_stack.pop()
+            project.undo_stack.append(previous)
             return self._result(project, _whole_document_delta(project.adventure))
 
     def _commit(self, project: OpenProject, document: Adventure) -> None:
-        """Install a document: bump the revision, persist, recompute diagnostics.
+        """Persist a document, then install it: revision bump, diagnostics refresh.
 
         Always-saved: every commit, undo, and redo rewrites `adventure.json`
-        through the store atomically. No dirty state, no save button.
+        through the store atomically. The write comes first, so a failed write
+        (disk full) raises with the in-memory document, revision, and — because
+        callers mutate them only after this returns — the history stacks all
+        exactly as they were.
         """
+        self.store.write_artifact(str(project.path), ADVENTURE_ARTIFACT, dump_adventure(document))
         project.adventure = document
         project.revision_number += 1
-        self.store.write_artifact(str(project.path), ADVENTURE_ARTIFACT, dump_adventure(document))
         project.diagnostics = compute_diagnostics(document)
 
     def _result(self, project: OpenProject, delta: tuple[SubtreeChange, ...]) -> OpBatchResult:
