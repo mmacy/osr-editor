@@ -1,12 +1,5 @@
-// The thin typed client over the backend API. Placeholder response types live
-// here only until the generated types land (work item 7 retrofits this module
-// onto frontend/src/types/generated/).
-
-export interface StatusResponse {
-  editor_version: string
-  engine_version: string
-  schema_version: number
-}
+// The thin typed client over the backend API, typed by the generated types.
+import type { StatusResponse } from '@/types'
 
 export async function fetchStatus(): Promise<StatusResponse> {
   const response = await fetch('/api/status')

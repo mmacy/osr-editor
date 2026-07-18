@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { fetchStatus, type StatusResponse } from '@/lib/api'
+import { fetchStatus } from '@/lib/api'
+import type { StatusResponse } from '@/types'
 
 export function StatusCard() {
   const [status, setStatus] = useState<StatusResponse | null>(null)
