@@ -48,7 +48,7 @@ dev = [
     "pytest>=8",
     "ruff>=0.11",
     "pyright>=1.1",
-    "httpx>=0.28",
+    "httpx2>=2.7.0",
 ]
 
 [build-system]
