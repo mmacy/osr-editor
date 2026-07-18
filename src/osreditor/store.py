@@ -103,6 +103,10 @@ class LocalProjectStore:
             raise ValueError("artifact name must be non-empty")
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError(f"artifact name {name!r} escapes the project directory")
+        # POSIX-style names only: on Windows a backslash or drive-colon part
+        # would be reinterpreted as a separator or root reset by joinpath.
+        if any("\\" in part or ":" in part for part in relative.parts):
+            raise ValueError(f"artifact name {name!r} is not a POSIX-style relative path")
         return root.joinpath(*relative.parts)
 
     def list_artifacts(self, project_id: str) -> list[str]:
@@ -161,6 +165,11 @@ class LocalProjectStore:
         try:
             with os.fdopen(handle, "wb") as temp_file:
                 temp_file.write(data)
+            # mkstemp creates 0600; without this, os.replace would clamp every
+            # rewritten artifact to owner-only instead of the default file mode.
+            umask = os.umask(0)
+            os.umask(umask)
+            os.chmod(temp_name, 0o666 & ~umask)
             os.replace(temp_name, path)
         except BaseException:
             with contextlib.suppress(FileNotFoundError):

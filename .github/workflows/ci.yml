@@ -139,6 +139,10 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: frontend
 
+      - name: Type check the specs
+        run: npx tsc -p ../tests/e2e
+        working-directory: frontend
+
       - name: Run the smoke
         run: npx playwright test
         working-directory: frontend
