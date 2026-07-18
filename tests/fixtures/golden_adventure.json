@@ -1,0 +1,122 @@
+{
+  "kind": "adventure",
+  "schema_version": 2,
+  "engine_version": "1.2.0",
+  "payload": {
+    "name": "The mill on the moor",
+    "description": "A ruined mill hides the entrance to the caves its miller dug too deep.",
+    "hooks": [
+      "The miller of Dusthollow vanished a fortnight ago; his creditors offer 50 gp for the deed to his mill."
+    ],
+    "town": {
+      "name": "Dusthollow",
+      "description": "A wind-scoured crossroads hamlet of a dozen households.",
+      "services": [],
+      "travel_turns": {
+        "mill-caves": 2
+      }
+    },
+    "dungeons": [
+      {
+        "id": "mill-caves",
+        "name": "The caves under the mill",
+        "levels": [
+          {
+            "number": 1,
+            "width": 3,
+            "height": 2,
+            "edges": {
+              "1,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "2,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "1,1:north": {
+                "kind": "door",
+                "door": {
+                  "kind": "normal",
+                  "stuck": false,
+                  "locked": true,
+                  "starts_open": false
+                }
+              },
+              "2,1:west": {
+                "kind": "open",
+                "door": null
+              }
+            },
+            "areas": [
+              {
+                "id": "1",
+                "name": "Guard post",
+                "description": "Two rough cots, a brazier of cold ash, and a table scattered with knucklebones.",
+                "cells": [
+                  [
+                    1,
+                    0
+                  ],
+                  [
+                    2,
+                    0
+                  ]
+                ],
+                "encounter": {
+                  "monsters": [
+                    {
+                      "template_id": "orc",
+                      "count_dice": "1d4",
+                      "count_fixed": null
+                    }
+                  ],
+                  "alignment": null,
+                  "aware": false,
+                  "stance": null
+                },
+                "features": [],
+                "trap": null,
+                "treasure": null
+              },
+              {
+                "id": "2",
+                "name": "Flooded cellar",
+                "description": "Ankle-deep water over cracked flagstones; something glints below the surface.",
+                "cells": [
+                  [
+                    1,
+                    1
+                  ],
+                  [
+                    2,
+                    1
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": {
+                  "letters": [],
+                  "unguarded": true
+                }
+              }
+            ],
+            "features": [],
+            "transitions": [],
+            "wandering": {
+              "chance_in_six": 1,
+              "interval_turns": 2,
+              "table": null
+            },
+            "entrance": [
+              0,
+              0
+            ]
+          }
+        ]
+      }
+    ],
+    "monsters": []
+  }
+}

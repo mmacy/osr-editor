@@ -1,0 +1,96 @@
+[project]
+name = "osr-editor"
+version = "0.0.1"
+description = "Local GUI editor for creating and modifying osrlib adventure modules."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Marsh Macy" }]
+requires-python = ">=3.14"
+keywords = [
+    "bx",
+    "osr",
+    "ttrpg",
+    "adventure-module",
+    "dungeon",
+    "editor",
+    "osrlib",
+    "old-school-essentials",
+]
+# Python :: 3.14 only — the version CI tests (the family rule); no License ::
+# classifier beside the SPDX expression, per PEP 639.
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Games/Entertainment :: Role-Playing",
+    "Typing :: Typed",
+]
+dependencies = [
+    "osrlib>=1.2,<2",
+    "pydantic>=2",
+    "fastapi>=0.139",
+    "uvicorn>=0.51",
+]
+
+[project.scripts]
+osr-editor = "osreditor.app:main"
+
+[project.urls]
+Repository = "https://github.com/mmacy/osr-editor"
+Issues = "https://github.com/mmacy/osr-editor/issues"
+Changelog = "https://github.com/mmacy/osr-editor/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.11",
+    "pyright>=1.1",
+    "httpx2>=2.7.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.22,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "osreditor"
+
+[tool.ruff]
+line-length = 120
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "D", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "D105", # missing docstring in magic method — __str__ and friends are self-evident
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+"scripts/**" = ["D"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["osreditor"]
+
+[tool.pyright]
+pythonVersion = "3.14"
+include = ["src", "tests", "scripts"]
+typeCheckingMode = "standard"
+strict = ["src"]
+
+# Tests import sibling helper modules bare (osrlib's pattern: `from test_documents
+# import ...` in generator scripts); pytest and direct script runs both put tests/
+# on sys.path, so pyright mirrors that here.
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
