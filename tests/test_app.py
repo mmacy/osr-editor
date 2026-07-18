@@ -45,7 +45,10 @@ def test_every_api_route_resolves_the_auth_dependency() -> None:
         assert _resolves_current_user(context.dependant), f"{context.path} does not resolve get_current_user"
 
 
-def test_mapped_osrlib_error_answers_in_the_envelope() -> None:
+def test_mapped_osrlib_error_answers_in_the_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Without this, a locally built frontend mounts at "/" and shadows routes
+    # registered after create_app().
+    monkeypatch.setattr(osreditor.app, "_STATIC_DIR", tmp_path / "no-static")
     app = create_app()
 
     # No shipped phase 0 route loads documents, so a throwaway route drives the

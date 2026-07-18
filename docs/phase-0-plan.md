@@ -164,3 +164,14 @@ Consolidated from the work items, the phase 0 suite:
 - The typegen drift gate was demonstrated red on a deliberate local edit before merging, and `frontend/src/types/generated/api.ts` is committed and current.
 - PyPI availability of `osr-editor` is verified and recorded in this plan's amendments.
 - Every phase 0 item in the spec's roadmap entry is traceable to code and tests here, or explicitly deferred above with its phase named.
+
+## Amendments
+
+Recorded during implementation, per the phase loop's plan-and-code-never-diverge rule.
+
+- **PyPI re-verification (2026-07-18, PR time):** `https://pypi.org/pypi/osr-editor/json` returns 404 — `osr-editor` remains available; the primary name stands.
+- **`httpx2`, not `httpx`, in the dev group.** starlette 1.3 deprecates `httpx` under its `TestClient` in favor of `httpx2`; the plan's stated reason (the `TestClient` transport) is unchanged, the package name moved.
+- **TypeScript pinned to the 5.9 line.** The Vite template scaffolds TypeScript 6, but the pinned openapi-typescript (7.13.0) declares a `typescript ^5.x` peer dependency. The typegen tool choice is the load-bearing decision, so TypeScript holds at the latest 5.x until openapi-typescript supports 6.
+- **`tsc -b` is the type-check command.** The Vite template uses solution-style project references (`tsconfig.json` is references-only), where a bare `tsc --noEmit` checks nothing. `tsc -b` (with `noEmit` set in each referenced config) is the same gate in the form project references require; CI runs `tsc -b --force`.
+- **`tests/e2e/tsconfig.json` exists to resolve imports.** Playwright specs in the spec-pinned `tests/e2e/` location sit outside `frontend/`, so node resolution cannot find `@playwright/test`; a minimal tsconfig with a `paths` mapping (a mechanism Playwright documents) points the import at `frontend/node_modules`. It is resolution plumbing, not a second toolchain.
+- **The auth introspection test walks `iter_route_contexts`.** FastAPI 0.139 includes routers lazily (`app.routes` shows an unexpanded `_IncludedRouter`), so the seam test flattens routes through `fastapi.routing.iter_route_contexts` — the same walk `app.openapi()` uses — to see every effective route.

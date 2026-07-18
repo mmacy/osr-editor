@@ -51,7 +51,7 @@ uv run pytest
 npm ci
 npx prettier --check .
 npx eslint .
-npx tsc --noEmit
+npx tsc -b
 npx vitest run
 npm run build
 
