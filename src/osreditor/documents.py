@@ -31,11 +31,12 @@ phase 0 chose an app factory and tests must not leak open projects across app
 instances.
 """
 
+import contextlib
 import json
 import re
 import secrets
 import threading
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
@@ -107,7 +108,7 @@ from osreditor.ops import (
     SetWandering,
     SubtreeChange,
 )
-from osreditor.overrides import serialize_overrides
+from osreditor.overrides import check_forge_ops, serialize_overrides, translate_batch
 from osreditor.serialize import canonical_json_bytes
 from osreditor.sidecar import EditorSidecar, write_sidecar
 from osreditor.store import ProjectStore
@@ -435,7 +436,11 @@ class DocumentService:
                 It also backstops every invariant the ops enforce ahead of it: a
                 bug in an op-level check surfaces as `op_rejected`, never a
                 committed invalid document.
+            OpUnsupportedForgeError: In a forge project, if an op has no override
+                kind — blocked in place with the detach offer.
         """
+        if project.forge is not None:
+            return self._apply_forge_batch(project, batch)
         with project.lock:
             if batch.revision != project.revision:
                 raise StaleRevisionError(
@@ -550,6 +555,43 @@ class DocumentService:
     # forge's own in-memory models. The commit is snapshot → write → assemble → on
     # failure restore, so forge's fail-before-write guarantee means a rejected
     # commit never leaves the workdir inconsistent.
+
+    def _apply_forge_batch(self, project: OpenProject, batch: OpBatch) -> OpBatchResult:
+        """Apply an op batch to a forge project: translate to overrides, then commit through the protocol.
+
+        The ops apply to the assembled document first (the same invariants and
+        rejections as native, with the growth rule relaxing the geometry bounds to
+        nonnegative), then translate to a merged, reasoned `Overrides` value. The
+        editor adopts the *re-assembled* document, never the candidate — the
+        round-trip theorem is why that is exact.
+        """
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            self._require_revision(project, batch.revision)
+            check_forge_ops(batch.ops)
+            candidate = project.adventure
+            with forge_apply_bounds():
+                for op in batch.ops:
+                    candidate, _ = _apply_op(candidate, op)
+            try:
+                validated = Adventure.model_validate(candidate.model_dump())
+            except ValidationError as error:
+                raise OpRejectedError(
+                    "the batch would produce an invalid document and was rejected whole",
+                    errors=[
+                        {"path": json_pointer(detail["loc"]), "message": detail["msg"]} for detail in error.errors()
+                    ],
+                ) from error
+            overrides, auto_reasons = translate_batch(
+                batch.ops,
+                project.adventure,
+                validated,
+                forge.overrides,
+                forge.report,
+                project.sidecar.auto_reasons,
+            )
+            return self._commit_forge_locked(project, overrides, auto_reasons)
 
     def commit_forge_overrides(
         self, project: OpenProject, revision: str, overrides: Overrides, auto_reasons: tuple[str, ...]
@@ -810,9 +852,41 @@ def canonical_edge_cells(key: str) -> tuple[Position, Position] | None:
     return (x, y), neighbour
 
 
+_forge_apply = threading.local()
+
+
+@contextlib.contextmanager
+def forge_apply_bounds() -> Generator[None]:
+    """Within this context, op bounds checks relax to forge's nonnegative-only guard — the growth rule.
+
+    A forge level's dimensions are the derived bounding box of its cells, and
+    `ResizeLevel` is blocked, so forge-mode geometry admits growth beyond the
+    current extent: the in-bounds invariants become nonnegative invariants
+    (forge's own guard). The candidate document legally carries cells beyond its
+    stale `width`/`height` for the instant before the assembled document's
+    recomputed bounding box is adopted.
+    """
+    _forge_apply.active = True
+    try:
+        yield
+    finally:
+        _forge_apply.active = False
+
+
+def _forge_bounds_active() -> bool:
+    return getattr(_forge_apply, "active", False)
+
+
+def _cell_ok(level: LevelSpec, cell: Position) -> bool:
+    """Judge a cell against the active bounds rule: nonnegative in forge mode, in-bounds otherwise."""
+    if _forge_bounds_active():
+        return cell[0] >= 0 and cell[1] >= 0
+    return level.in_bounds(cell)
+
+
 def _require_cells_in_bounds(level: LevelSpec, cells: Sequence[Position]) -> None:
     for cell in cells:
-        if not level.in_bounds(cell):
+        if not _cell_ok(level, cell):
             raise OpInvariantError(f"cell {cell} is out of bounds for the {level.width}x{level.height} grid")
 
 
@@ -835,7 +909,7 @@ def _apply_set_edges(adventure: Adventure, op: SetEdges) -> tuple[Adventure, str
                 f"edge key {key!r} is not canonical — the editor authors only 'x,y:north' and 'x,y:west' keys"
             )
         for cell in cells:
-            if not level.in_bounds(cell):
+            if not _cell_ok(level, cell):
                 raise OpInvariantError(f"edge key {key!r} references the out-of-bounds cell {cell}")
         if value.kind is EdgeKind.WALL:
             raise OpInvariantError(
@@ -1035,7 +1109,7 @@ def _apply_add_transition(adventure: Adventure, op: AddTransition) -> tuple[Adve
     dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
     level = adventure.dungeons[dungeon_index].levels[level_index]
     transition = op.transition
-    if not level.in_bounds(transition.position):
+    if not _cell_ok(level, transition.position):
         raise OpInvariantError(
             f"transition source {transition.position} is out of bounds for the {level.width}x{level.height} grid"
         )

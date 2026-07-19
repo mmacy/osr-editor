@@ -8,7 +8,7 @@ from osrforge.contracts.overrides import ModuleOverride, MonsterOverride, Overri
 from osrforge.contracts.run import Stage, StageStatus
 from osrforge.workdir import Workdir
 
-from osreditor.documents import ADVENTURE_ARTIFACT, DocumentService
+from osreditor.documents import ADVENTURE_ARTIFACT, DocumentService, OpenProject
 from osreditor.errors import (
     ForgeOverrideInvalidError,
     ForgeWorkdirIncompleteError,
@@ -27,6 +27,12 @@ def copy_workdir(tmp_path: Path) -> Path:
     workdir = tmp_path / "vault.forge"
     shutil.copytree(FIXTURE, workdir)
     return workdir
+
+
+def fstate(project: OpenProject):
+    """Return a forge project's working state, asserting it is a forge project."""
+    assert project.forge is not None
+    return project.forge
 
 
 def open_forge(tmp_path: Path):
@@ -52,11 +58,11 @@ def test_open_forge_workdir_assembles(tmp_path: Path) -> None:
     assert project.forge is not None
     assert project.adventure.name == "The Sunken Vault of Ashkar"
     # Four keyed areas across two levels.
-    assert len(project.forge.report.areas) == 4
+    assert len(fstate(project).report.areas) == 4
     # dropped_fields is () — the document arrives as forge's own in-memory models.
     assert project.dropped_fields == ()
     # The overrides start empty and the sidecar defaults (no provenance).
-    assert project.forge.overrides == Overrides()
+    assert fstate(project).overrides == Overrides()
     assert project.sidecar.provenance is None
 
 
