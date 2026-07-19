@@ -25,19 +25,24 @@ shrug.
 
 The address grammar, pinned by this first producer: `/`-joined `kind:value`
 segments, values percent-encoded (RFC 3986) so arbitrary osrlib ids can never
-make the grammar ambiguous. Segments: `town`, `monsters`, `dungeon:<id>`,
-`dungeon:<id>/level:<n>`, `dungeon:<id>/level:<n>/area:<id>`. Phase 2 extends
-with `cell:` and `edge:` segments.
+make the grammar ambiguous — the builders live in
+[`osreditor.addresses`][osreditor.addresses]. Segments: `town`, `monsters`,
+`dungeon:<id>`, `dungeon:<id>/level:<n>`, `dungeon:<id>/level:<n>/area:<id>`,
+plus the `cell:` and `edge:` geometry segments phase 2 added.
+
+Every validation finding carries `severity="error"` — `validate_adventure`
+output gates publish, which is what error means here.
 """
 
 import re
-from urllib.parse import quote
 
 from osrlib.crawl.adventure import Adventure, validate_adventure
 from osrlib.crawl.dungeon import LevelSpec
 from osrlib.data import load_equipment, load_monsters
 from osrlib.errors import ContentValidationError
 
+from osreditor.addresses import area_address, dungeon_address, level_address
+from osreditor.lint import lint_adventure
 from osreditor.ops import Diagnostics, Finding
 
 __all__ = [
@@ -75,11 +80,6 @@ _OWNER_SHAPES: tuple[tuple[str, re.Pattern[str], str | None], ...] = (
         None,
     ),
 )
-
-
-def _encode(value: str) -> str:
-    """Percent-encode an id for the address grammar (RFC 3986, everything reserved)."""
-    return quote(value, safe="")
 
 
 def _confirm_owner(adventure: Adventure, line: str, tail: re.Pattern[str]) -> tuple[str, int] | None:
@@ -120,7 +120,7 @@ def _classify_owner_scoped(line: str, adventure: Adventure) -> Finding | None:
         if confirmed is None:
             continue
         dungeon_id, level_number = confirmed
-        address = f"dungeon:{_encode(dungeon_id)}/level:{level_number}"
+        address = level_address(dungeon_id, level_number)
         if area_prefix is not None:
             level = next(d for d in adventure.dungeons if d.id == dungeon_id).level(level_number)
             area_id = _confirm_area(level, line[len(f"{dungeon_id} level {level_number}: ") :], area_prefix)
@@ -132,8 +132,8 @@ def _classify_owner_scoped(line: str, adventure: Adventure) -> Finding | None:
                 # id embedding another owner's rendered prefix) falls through
                 # here to its true shape.
                 continue
-            address = f"{address}/area:{_encode(area_id)}"
-        return Finding(source="validation", code=code, message=line, address=address)
+            address = area_address(dungeon_id, level_number, area_id)
+        return Finding(source="validation", code=code, severity="error", message=line, address=address)
     return None
 
 
@@ -146,8 +146,9 @@ def _classify_dungeon_scoped(line: str, adventure: Adventure) -> Finding | None:
     return Finding(
         source="validation",
         code="entrance_missing",
+        severity="error",
         message=line,
-        address=f"dungeon:{_encode(hits[0])}",
+        address=dungeon_address(hits[0]),
     )
 
 
@@ -166,10 +167,14 @@ def _classify(line: str, adventure: Adventure) -> Finding:
     if finding is not None:
         return finding
     if _BUNDLED_RE.match(line):
-        return Finding(source="validation", code="bundled_monster_collision", message=line, address="monsters")
+        return Finding(
+            source="validation", code="bundled_monster_collision", severity="error", message=line, address="monsters"
+        )
     if _TRAVEL_RE.match(line):
-        return Finding(source="validation", code="travel_unknown_dungeon", message=line, address="town")
-    return Finding(source="validation", code="validation_unclassified", message=line, address=None)
+        return Finding(
+            source="validation", code="travel_unknown_dungeon", severity="error", message=line, address="town"
+        )
+    return Finding(source="validation", code="validation_unclassified", severity="error", message=line, address=None)
 
 
 def parse_validation_error(message: str, adventure: Adventure) -> tuple[Finding, ...]:
@@ -193,20 +198,21 @@ def parse_validation_error(message: str, adventure: Adventure) -> tuple[Finding,
 
 
 def compute_diagnostics(adventure: Adventure) -> Diagnostics:
-    """Run the content-validation tier and parse its output.
+    """Run the content-validation and structural-lint tiers.
 
     The catalogs are `functools.cache`d module singletons in osrlib — cheap to
-    call, no editor-side caching needed. Tier-3 lint stays an empty tuple until
-    phase 2 lands `lint.py` with the map that makes its findings navigable.
+    call, no editor-side caching needed. The tiers are independent, so lint
+    runs even when validation fails.
 
     Args:
         adventure: The current working document.
 
     Returns:
-        The diagnostics: parsed validation findings, empty lint.
+        The diagnostics: parsed validation findings plus the structural lint.
     """
+    lint = lint_adventure(adventure)
     try:
         validate_adventure(adventure, load_monsters(), load_equipment())
     except ContentValidationError as error:
-        return Diagnostics(validation=parse_validation_error(str(error), adventure), lint=())
-    return Diagnostics()
+        return Diagnostics(validation=parse_validation_error(str(error), adventure), lint=lint)
+    return Diagnostics(lint=lint)

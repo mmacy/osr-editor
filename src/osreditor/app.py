@@ -36,7 +36,10 @@ from osreditor.config import RecentEntry, load_config, record_recent, save_confi
 from osreditor.documents import DocumentService, OpenProject, dump_adventure, json_pointer
 from osreditor.errors import (
     DocumentPayloadInvalidError,
+    ImporterNotFoundError,
+    ImportSourceInvalidError,
     InvalidProjectError,
+    OpInvariantError,
     OpRejectedError,
     OpTargetNotFoundError,
     ProjectExistsError,
@@ -452,6 +455,13 @@ def _details_op_rejected(error: Exception) -> dict[str, object] | None:
     return {"errors": error.errors}
 
 
+def _details_op_invariant(error: Exception) -> dict[str, object] | None:
+    assert isinstance(error, OpInvariantError)
+    if error.offenders is None:
+        return None
+    return {"offenders": error.offenders}
+
+
 _MAX_REPORTED_LOCATIONS = 10
 
 
@@ -491,6 +501,9 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
     RedoStackEmptyError: (409, "nothing_to_redo", None, _details_none),
     OpRejectedError: (422, "op_rejected", None, _details_op_rejected),
     OpTargetNotFoundError: (422, "op_target_not_found", None, _details_none),
+    OpInvariantError: (422, "op_invariant", None, _details_op_invariant),
+    ImporterNotFoundError: (404, "importer_not_found", None, _details_none),
+    ImportSourceInvalidError: (422, "import_source_invalid", None, _details_none),
     ContentValidationError: (422, "document_invalid", None, _details_none),
     DocumentPayloadInvalidError: (
         422,

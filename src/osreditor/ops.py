@@ -8,26 +8,52 @@ changed-subtree delta, and refreshed [`Diagnostics`][osreditor.ops.Diagnostics].
 A stale revision is rejected with 409 and the structured `stale_revision` error,
 never a silent overwrite.
 
-The envelope grows additively. The first concrete ops and the `AnyEditOp` union
-land here with phase 1's document service, built exactly as osrlib builds
-`AnyCommand`; geometry and dungeon/level-management ops arrive with the map
-editor in phase 2, and the `forge` diagnostics tier with forge-backed projects
-in phase 5.
+The envelope grows additively. The phase 1 ops and the `AnyEditOp` union landed
+here with the document service, built exactly as osrlib builds `AnyCommand`;
+phase 2 adds the geometry and dungeon/level-management vocabulary. The `forge`
+diagnostics tier arrives with forge-backed projects in phase 5.
+
+The op-level philosophy, continuing phase 1's `travel_turns >= 0` guard:
+**reject what is never intentional and is not a transient editing state**
+(malformed edge keys, out-of-bounds cells, duplicate ids); **admit what a
+workflow legitimately passes through** (dangling transition targets, missing
+entrances) and let diagnostics guide the fix. The models here carry only shape
+constraints (types, bounds on scalars, minimum lengths); the editor-enforced
+semantic invariants are checked against the document at apply time and raise
+[`OpInvariantError`][osreditor.errors.OpInvariantError] — see each op's
+docstring for its pinned invariants.
 """
 
 from typing import Annotated, Literal
 
-from osrlib.crawl.dungeon import WanderingSpec
+from osrlib.crawl.dungeon import Edge, Position, TransitionSpec, WanderingSpec
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 __all__ = [
+    "AddDungeon",
+    "AddLevel",
+    "AddTransition",
     "AnyEditOp",
+    "CreateArea",
     "Diagnostics",
     "EditOp",
     "Finding",
+    "LevelOp",
     "OpBatch",
     "OpBatchResult",
+    "RemoveArea",
+    "RemoveDungeon",
+    "RemoveLevel",
+    "RemoveTransition",
+    "RenameDungeon",
+    "RenumberLevel",
+    "ResizeLevel",
     "SetAdventureField",
+    "SetAreaCells",
+    "SetAreaField",
+    "SetDungeonField",
+    "SetEdges",
+    "SetEntrance",
     "SetTownField",
     "SetWandering",
     "SubtreeChange",
@@ -100,7 +126,18 @@ class SetTownField(EditOp):
         return self
 
 
-class SetWandering(EditOp):
+class LevelOp(EditOp):
+    """Shared targeting for ops scoped to one level: `dungeon_id` + `level_number`.
+
+    A miss on either raises
+    [`OpTargetNotFoundError`][osreditor.errors.OpTargetNotFoundError] at apply.
+    """
+
+    dungeon_id: str
+    level_number: int = Field(ge=1)
+
+
+class SetWandering(LevelOp):
     """Replace one level's wandering-monster parameters.
 
     The op carries the full [`WanderingSpec`][osrlib.crawl.dungeon.WanderingSpec],
@@ -110,13 +147,267 @@ class SetWandering(EditOp):
     """
 
     op: Literal["set_wandering"] = "set_wandering"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
-    dungeon_id: str
-    level_number: int = Field(ge=1)
     wandering: WanderingSpec
 
 
+class SetEdges(LevelOp):
+    """Apply a batch of edge-key → assignment entries; `None` deletes (wall).
+
+    Invariants at apply: a non-`None` assignment requires a key in the
+    canonical grammar (`x,y:north|west`, non-negative, no leading zeros — the
+    editor authors storage form, never the aliases osrlib silently ignores)
+    with both incident cells in bounds, and rejects an explicit
+    `Edge(kind="wall")` value — deletion is the one way to say wall, so
+    editor-written documents keep a single representation. A `None` assignment
+    instead accepts any key string exactly matching an existing entry (and
+    rejects a key matching nothing): deletion authors no key, so the malformed
+    and non-canonical keys a foreign document legally carries stay deletable —
+    the `edge_invalid` remediation path and replace-mode import depend on
+    exactly this.
+    """
+
+    op: Literal["set_edges"] = "set_edges"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    edges: dict[str, Edge | None] = Field(min_length=1)
+
+
+class SetEntrance(LevelOp):
+    """Place or clear the level's entrance.
+
+    A position must be in bounds (apply-time invariant); `None` clears, and the
+    resulting `entrance_missing` finding is the legal, navigable consequence.
+    """
+
+    op: Literal["set_entrance"] = "set_entrance"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    entrance: Position | None
+
+
+class CreateArea(LevelOp):
+    """Create a keyed area over a cell cluster.
+
+    Invariants at apply: `area_id` non-empty and not already present on the
+    level (a duplicate is never intentional — the model can't see it and
+    `validate_adventure` would only flag it later); every cell in bounds. Cells
+    may overlap another area's — that is `area_overlap` lint's territory, legal
+    by the model and sometimes transiently useful mid-edit.
+    """
+
+    op: Literal["create_area"] = "create_area"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    area_id: str
+    cells: tuple[Position, ...] = Field(min_length=1)
+    name: str = ""
+    description: str = ""
+
+
+class SetAreaCells(LevelOp):
+    """Replace an area's cell cluster wholesale — the paint/lasso tool's op.
+
+    Invariant at apply: every cell in bounds.
+    """
+
+    op: Literal["set_area_cells"] = "set_area_cells"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    area_id: str
+    cells: tuple[Position, ...] = Field(min_length=1)
+
+
+class SetAreaField(LevelOp):
+    """Set one area identity field; every field in the literal takes a string.
+
+    `id` is the re-key affordance (key numbers render on the map, so re-keying
+    is a map concern): apply rejects empty and duplicate ids like
+    [`CreateArea`][osreditor.ops.CreateArea]. Nothing references area ids in
+    the document, so re-keying cascades nowhere. Phase 3 does not grow this
+    literal — encounter, trap, and treasure have their own ops per the spec's
+    vocabulary.
+    """
+
+    op: Literal["set_area_field"] = "set_area_field"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    area_id: str
+    field: Literal["id", "name", "description"]
+    value: str
+
+
+class RemoveArea(LevelOp):
+    """Remove an area; its cells become corridor (osrlib's convention — cells in no area).
+
+    Removing an area discards any content it carries; the frontend confirms
+    when content exists (foreign documents), silently otherwise.
+    """
+
+    op: Literal["remove_area"] = "remove_area"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    area_id: str
+
+
+class AddTransition(LevelOp):
+    """Add a transition, carrying the full [`TransitionSpec`][osrlib.crawl.dungeon.TransitionSpec].
+
+    Invariants at apply: the source `position` in bounds and unoccupied —
+    osrlib's `transition_at` returns the first match, so a second transition on
+    one cell is dead data; editing a transition is a remove+add batch (one
+    gesture, one undo step). The target is deliberately unvalidated beyond the
+    model's own `to_level_number >= 1`: an unknown dungeon, missing level, or
+    out-of-bounds target cell is a validation finding, legal while editing —
+    an import may land stairs before their destination level exists.
+    """
+
+    op: Literal["add_transition"] = "add_transition"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    transition: TransitionSpec
+
+
+class RemoveTransition(LevelOp):
+    """Remove the first transition at a source position.
+
+    First-match is osrlib's own resolution order (`transition_at`) — a foreign
+    document can stack two transitions on one cell, and first-match keeps
+    "remove one per existing entry" sequences (the replace-mode import) correct
+    by construction. No transition at the position is a targeting miss.
+    """
+
+    op: Literal["remove_transition"] = "remove_transition"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    position: Position
+
+
+class AddDungeon(EditOp):
+    """Add a dungeon, scaffolding level 1 with an entrance at `(0, 0)`.
+
+    The scaffold is exactly `starter_adventure`'s, so a new dungeon validates
+    clean from birth and the entrance tool moves what exists rather than the
+    panel nagging about what doesn't. Invariant at apply: a duplicate dungeon
+    id is rejected.
+    """
+
+    op: Literal["add_dungeon"] = "add_dungeon"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    dungeon_id: str
+    name: str = ""
+    width: int = Field(ge=1)
+    height: int = Field(ge=1)
+
+
+class SetDungeonField(EditOp):
+    """Set one dungeon field — `name`, the one plain settable field.
+
+    The literal grows if `DungeonSpec` ever does.
+    """
+
+    op: Literal["set_dungeon_field"] = "set_dungeon_field"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    dungeon_id: str
+    field: Literal["name"]
+    value: str
+
+
+class RenameDungeon(EditOp):
+    """Rename a dungeon, cascading every reference to it.
+
+    A rename means "same thing, new name", so references follow, atomically, in
+    one undo step: the dungeon's `id`, the town's `travel_turns` key (order
+    preserved), and every `TransitionSpec.to_dungeon_id` naming it, across all
+    dungeons. Invariants at apply: `new_id` non-empty and not already taken.
+    Contrast [`RemoveDungeon`][osreditor.ops.RemoveDungeon], which deliberately
+    does not cascade.
+    """
+
+    op: Literal["rename_dungeon"] = "rename_dungeon"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    old_id: str
+    new_id: str
+
+
+class RemoveDungeon(EditOp):
+    """Remove a dungeon — never the last one, and never cascading.
+
+    A removed dungeon's dangling `travel_turns` entry and inbound transitions
+    are honest diagnostics (`travel_unknown_dungeon`,
+    `transition_target_unknown`) — removal never silently edits other subtrees.
+    """
+
+    op: Literal["remove_dungeon"] = "remove_dungeon"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    dungeon_id: str
+
+
+class AddLevel(EditOp):
+    """Add a level to a dungeon; no entrance (validation requires one per dungeon, not per level).
+
+    Invariant at apply: `number` unique in the dungeon. The new level is
+    *inserted* before the first existing level whose `number` exceeds it,
+    appended when none does — deterministic over any tuple,
+    ascending-preserving over an ascending one; no op ever reorders existing
+    levels. Stored order is rules-visible when more than one level bears an
+    entrance (`EnterDungeon` lands on the first entrance-bearing level in
+    stored order), so a re-sort could silently change where a foreign dungeon's
+    play begins; insertion is safe precisely because a new level carries no
+    entrance.
+    """
+
+    op: Literal["add_level"] = "add_level"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    dungeon_id: str
+    number: int = Field(ge=1)
+    width: int = Field(ge=1)
+    height: int = Field(ge=1)
+
+
+class RenumberLevel(EditOp):
+    """Renumber a level, cascading every transition in the document targeting it.
+
+    Same rename-vs-remove logic as dungeons; per the no-reorder rule the level
+    stays where it sits in the tuple (display order is sorted anyway, and
+    moving it could change the stored-order entrance semantics). Invariant at
+    apply: `new_number` not already taken in the dungeon.
+    """
+
+    op: Literal["renumber_level"] = "renumber_level"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    dungeon_id: str
+    old_number: int = Field(ge=1)
+    new_number: int = Field(ge=1)
+
+
+class ResizeLevel(LevelOp):
+    """Resize a level's grid.
+
+    Shrinking below existing content is rejected listing every offender —
+    areas with cells outside the new bounds, features with out-of-bounds cells,
+    transitions whose *source* leaves the grid, an entrance outside — as
+    `details.offenders`, each an address-grammar string plus a message.
+    (Transitions *elsewhere* that target now-out-of-bounds cells in this level
+    are not offenders; they become `transition_target_cell_out_of_bounds`
+    validation findings, the dangling-reference rule.) One pinned exception:
+    edge entries whose incident cells fall outside the new bounds are pruned by
+    the op — edges are spatial annotation, not content; osrlib treats an
+    out-of-bounds entry as nonexistent and `validate_adventure` never sees it,
+    so keeping it would strand invisible `edge_invalid` errors on keys the map
+    cannot even display, and rejecting on it would demand the user hand-erase
+    edges they cannot see. The prune is deterministic and inside the single
+    undo step.
+    """
+
+    op: Literal["resize_level"] = "resize_level"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    width: int = Field(ge=1)
+    height: int = Field(ge=1)
+
+
+class RemoveLevel(LevelOp):
+    """Remove a level — never a dungeon's last one. Inbound transitions dangle as diagnostics."""
+
+    op: Literal["remove_level"] = "remove_level"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+
+
 AnyEditOp = Annotated[
-    SetAdventureField | SetTownField | SetWandering,
+    SetAdventureField
+    | SetTownField
+    | SetWandering
+    | SetEdges
+    | SetEntrance
+    | CreateArea
+    | SetAreaCells
+    | SetAreaField
+    | RemoveArea
+    | AddTransition
+    | RemoveTransition
+    | AddDungeon
+    | SetDungeonField
+    | RenameDungeon
+    | RemoveDungeon
+    | AddLevel
+    | RenumberLevel
+    | ResizeLevel
+    | RemoveLevel,
     Field(discriminator="op"),
 ]
 """Any edit operation, discriminated by `op`."""
@@ -140,12 +431,19 @@ class OpBatch(BaseModel):
 
 
 class Finding(BaseModel):
-    """One diagnostic finding: its source tier, a stable code, and a location.
+    """One diagnostic finding: its source tier, a stable code, severity, and a location.
+
+    `severity` is a field with a producer-pinned table, not a function of the
+    code (forge's own contract decision, mirrored): the validation producer
+    sets `"error"` on every finding — `validate_adventure` output gates
+    publish, which is what error means here — and the lint producer pins each
+    check's severity in [`osreditor.lint`][osreditor.lint]. The design language
+    reserves red for errors; warnings use the pencil palette.
 
     `address` is the click-to-navigate location. Its grammar is pinned by the
     first producers as content within this locked shape — phase 1's validation
     tier pins `/`-joined `kind:value` segments with percent-encoded values (see
-    [`osreditor.diagnostics`][osreditor.diagnostics]); phase 2's lint extends it
+    [`osreditor.addresses`][osreditor.addresses]); phase 2's lint extends it
     with `cell:` and `edge:` segments.
     """
 
@@ -153,6 +451,7 @@ class Finding(BaseModel):
 
     source: Literal["validation", "lint", "forge"]
     code: str
+    severity: Literal["error", "warning"]
     message: str
     address: str | None = None
 

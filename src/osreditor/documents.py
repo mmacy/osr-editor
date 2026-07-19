@@ -32,6 +32,7 @@ instances.
 """
 
 import json
+import re
 import secrets
 import threading
 from collections.abc import Callable, Mapping, Sequence
@@ -39,11 +40,21 @@ from pathlib import Path
 from typing import Literal, cast
 
 from osrlib.crawl.adventure import Adventure
+from osrlib.crawl.dungeon import (
+    AreaSpec,
+    DungeonSpec,
+    EdgeKind,
+    LevelSpec,
+    Position,
+    TransitionSpec,
+)
 from osrlib.versioning import check_document, stamp_document
 from pydantic import ValidationError
 
+from osreditor.addresses import area_address, cell_address
 from osreditor.diagnostics import compute_diagnostics
 from osreditor.errors import (
+    OpInvariantError,
     OpRejectedError,
     OpTargetNotFoundError,
     ProjectNotFoundError,
@@ -52,12 +63,29 @@ from osreditor.errors import (
     UndoStackEmptyError,
 )
 from osreditor.ops import (
+    AddDungeon,
+    AddLevel,
+    AddTransition,
     AnyEditOp,
+    CreateArea,
     Diagnostics,
     OpBatch,
     OpBatchResult,
+    RemoveArea,
+    RemoveDungeon,
+    RemoveLevel,
+    RemoveTransition,
+    RenameDungeon,
+    RenumberLevel,
+    ResizeLevel,
     SetAdventureField,
+    SetAreaCells,
+    SetAreaField,
+    SetDungeonField,
+    SetEdges,
+    SetEntrance,
     SetTownField,
+    SetWandering,
     SubtreeChange,
 )
 from osreditor.store import ProjectStore
@@ -340,11 +368,17 @@ class DocumentService:
 
         Raises:
             StaleRevisionError: If the batch names any revision but the current one.
-            OpTargetNotFoundError: If an op names a dungeon or level the document
-                does not contain.
+            OpTargetNotFoundError: If an op's target — a dungeon, level, area,
+                or transition position — is not in the document.
+            OpInvariantError: If an op violates an editor-enforced semantic
+                invariant (a duplicate id, a non-canonical edge key, an
+                out-of-bounds cell, a stranding resize — see the op docstrings).
             OpRejectedError: If the batch would produce an invalid model — the
                 round-trip re-validation is the single enforcement point, because
                 `model_copy(update=...)` bypasses every validator in pydantic v2.
+                It also backstops every invariant the ops enforce ahead of it: a
+                bug in an op-level check surfaces as `op_rejected`, never a
+                committed invalid document.
         """
         with project.lock:
             if batch.revision != project.revision:
@@ -461,21 +495,439 @@ def _apply_op(adventure: Adventure, op: AnyEditOp) -> tuple[Adventure, str]:
     if isinstance(op, SetTownField):
         town = adventure.town.model_copy(update={op.field: op.value})
         return adventure.model_copy(update={"town": town}), "/town"
-    for dungeon_index, dungeon in enumerate(adventure.dungeons):
-        if dungeon.id != op.dungeon_id:
+    if isinstance(op, SetWandering):
+        return _apply_level_field(adventure, op, "wandering", op.wandering)
+    if isinstance(op, SetEdges):
+        return _apply_set_edges(adventure, op)
+    if isinstance(op, SetEntrance):
+        return _apply_set_entrance(adventure, op)
+    if isinstance(op, CreateArea):
+        return _apply_create_area(adventure, op)
+    if isinstance(op, SetAreaCells):
+        return _apply_set_area_cells(adventure, op)
+    if isinstance(op, SetAreaField):
+        return _apply_set_area_field(adventure, op)
+    if isinstance(op, RemoveArea):
+        return _apply_remove_area(adventure, op)
+    if isinstance(op, AddTransition):
+        return _apply_add_transition(adventure, op)
+    if isinstance(op, RemoveTransition):
+        return _apply_remove_transition(adventure, op)
+    if isinstance(op, AddDungeon):
+        return _apply_add_dungeon(adventure, op)
+    if isinstance(op, SetDungeonField):
+        return _apply_set_dungeon_field(adventure, op)
+    if isinstance(op, RenameDungeon):
+        return _apply_rename_dungeon(adventure, op)
+    if isinstance(op, RemoveDungeon):
+        return _apply_remove_dungeon(adventure, op)
+    if isinstance(op, AddLevel):
+        return _apply_add_level(adventure, op)
+    if isinstance(op, RenumberLevel):
+        return _apply_renumber_level(adventure, op)
+    if isinstance(op, ResizeLevel):
+        return _apply_resize_level(adventure, op)
+    return _apply_remove_level(adventure, op)
+
+
+def _resolve_dungeon(adventure: Adventure, dungeon_id: str) -> int:
+    """Return the index of the dungeon with `dungeon_id`, or raise the targeting miss."""
+    for index, dungeon in enumerate(adventure.dungeons):
+        if dungeon.id == dungeon_id:
+            return index
+    raise OpTargetNotFoundError(f"the document has no dungeon {dungeon_id!r}")
+
+
+def _resolve_level(adventure: Adventure, dungeon_id: str, level_number: int) -> tuple[int, int]:
+    """Return `(dungeon index, level index)` for a level target, or raise the targeting miss."""
+    dungeon_index = _resolve_dungeon(adventure, dungeon_id)
+    for level_index, level in enumerate(adventure.dungeons[dungeon_index].levels):
+        if level.number == level_number:
+            return dungeon_index, level_index
+    raise OpTargetNotFoundError(f"dungeon {dungeon_id!r} has no level {level_number}")
+
+
+def _resolve_area(level: LevelSpec, dungeon_id: str, area_id: str) -> int:
+    """Return the index of the first area with `area_id` (osrlib's own first-match order)."""
+    for index, area in enumerate(level.areas):
+        if area.id == area_id:
+            return index
+    raise OpTargetNotFoundError(f"dungeon {dungeon_id!r} level {level.number} has no area {area_id!r}")
+
+
+def _replace_dungeon(adventure: Adventure, dungeon_index: int, dungeon: DungeonSpec) -> Adventure:
+    """Rebuild the adventure with one dungeon replaced."""
+    dungeons = (*adventure.dungeons[:dungeon_index], dungeon, *adventure.dungeons[dungeon_index + 1 :])
+    return adventure.model_copy(update={"dungeons": dungeons})
+
+
+def _replace_level(adventure: Adventure, dungeon_index: int, level_index: int, level: LevelSpec) -> Adventure:
+    """Rebuild the adventure with one level replaced inside its dungeon."""
+    dungeon = adventure.dungeons[dungeon_index]
+    levels = (*dungeon.levels[:level_index], level, *dungeon.levels[level_index + 1 :])
+    return _replace_dungeon(adventure, dungeon_index, dungeon.model_copy(update={"levels": levels}))
+
+
+def _apply_level_field(
+    adventure: Adventure, op: SetWandering | SetEntrance, field: str, value: object
+) -> tuple[Adventure, str]:
+    """Replace one level field, answering the precise level-scoped pointer."""
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    new_level = level.model_copy(update={field: value})
+    pointer = f"/dungeons/{dungeon_index}/levels/{level_index}/{field}"
+    return _replace_level(adventure, dungeon_index, level_index, new_level), pointer
+
+
+_CANONICAL_EDGE_KEY = re.compile(r"^(0|[1-9][0-9]*),(0|[1-9][0-9]*):(north|west)$")
+"""The canonical edge-key grammar: north/west side only, non-negative, no leading zeros.
+
+Forge's aliasing guard, tightened to the canonical sides because the editor
+authors storage form, not override input — osrlib consults only this form and
+renders any other entry as wall without consulting it.
+"""
+
+
+def _canonical_edge_cells(key: str) -> tuple[Position, Position] | None:
+    """Return a canonical edge key's two incident cells, or `None` for any other string.
+
+    The incident cells are the key's own cell and its north or west neighbour —
+    the two cells osrlib's `LevelSpec.edge` joins through this entry.
+    """
+    match = _CANONICAL_EDGE_KEY.match(key)
+    if match is None:
+        return None
+    x, y = int(match.group(1)), int(match.group(2))
+    neighbour = (x, y - 1) if match.group(3) == "north" else (x - 1, y)
+    return (x, y), neighbour
+
+
+def _require_cells_in_bounds(level: LevelSpec, cells: Sequence[Position]) -> None:
+    for cell in cells:
+        if not level.in_bounds(cell):
+            raise OpInvariantError(f"cell {cell} is out of bounds for the {level.width}x{level.height} grid")
+
+
+def _apply_set_edges(adventure: Adventure, op: SetEdges) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    edges = dict(level.edges)
+    for key, value in op.edges.items():
+        if value is None:
+            # Deletion authors no key, so any existing entry — the malformed
+            # and non-canonical keys a foreign document legally carries
+            # included — stays deletable without weakening the write rule.
+            if key not in edges:
+                raise OpInvariantError(f"edge delete names no existing entry {key!r}")
+            del edges[key]
             continue
-        for level_index, level in enumerate(dungeon.levels):
-            if level.number != op.level_number:
-                continue
-            new_level = level.model_copy(update={"wandering": op.wandering})
-            new_dungeon = dungeon.model_copy(
-                update={"levels": (*dungeon.levels[:level_index], new_level, *dungeon.levels[level_index + 1 :])}
+        cells = _canonical_edge_cells(key)
+        if cells is None:
+            raise OpInvariantError(
+                f"edge key {key!r} is not canonical — the editor authors only 'x,y:north' and 'x,y:west' keys"
             )
-            new_dungeons = (*adventure.dungeons[:dungeon_index], new_dungeon, *adventure.dungeons[dungeon_index + 1 :])
-            pointer = f"/dungeons/{dungeon_index}/levels/{level_index}/wandering"
-            return adventure.model_copy(update={"dungeons": new_dungeons}), pointer
-        raise OpTargetNotFoundError(f"dungeon {op.dungeon_id!r} has no level {op.level_number}")
-    raise OpTargetNotFoundError(f"the document has no dungeon {op.dungeon_id!r}")
+        for cell in cells:
+            if not level.in_bounds(cell):
+                raise OpInvariantError(f"edge key {key!r} references the out-of-bounds cell {cell}")
+        if value.kind is EdgeKind.WALL:
+            raise OpInvariantError(
+                f"edge key {key!r} assigns an explicit wall — delete the entry instead; an absent edge is a wall"
+            )
+        edges[key] = value
+    new_level = level.model_copy(update={"edges": edges})
+    pointer = f"/dungeons/{dungeon_index}/levels/{level_index}/edges"
+    return _replace_level(adventure, dungeon_index, level_index, new_level), pointer
+
+
+def _apply_set_entrance(adventure: Adventure, op: SetEntrance) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    if op.entrance is not None:
+        _require_cells_in_bounds(level, (op.entrance,))
+    return _apply_level_field(adventure, op, "entrance", op.entrance)
+
+
+def _apply_create_area(adventure: Adventure, op: CreateArea) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    if not op.area_id:
+        raise OpInvariantError("area id must be non-empty")
+    if any(area.id == op.area_id for area in level.areas):
+        raise OpInvariantError(f"dungeon {op.dungeon_id!r} level {op.level_number} already has an area {op.area_id!r}")
+    _require_cells_in_bounds(level, op.cells)
+    area = AreaSpec(id=op.area_id, name=op.name, description=op.description, cells=op.cells)
+    new_level = level.model_copy(update={"areas": (*level.areas, area)})
+    pointer = f"/dungeons/{dungeon_index}/levels/{level_index}/areas"
+    return _replace_level(adventure, dungeon_index, level_index, new_level), pointer
+
+
+def _replace_area(
+    adventure: Adventure, dungeon_index: int, level_index: int, area_index: int, area: AreaSpec | None
+) -> tuple[Adventure, str]:
+    """Replace (or with `None`, remove) one area, answering the areas pointer."""
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    rest = level.areas[area_index + 1 :]
+    areas = (*level.areas[:area_index], area, *rest) if area is not None else (*level.areas[:area_index], *rest)
+    new_level = level.model_copy(update={"areas": areas})
+    pointer = f"/dungeons/{dungeon_index}/levels/{level_index}/areas"
+    return _replace_level(adventure, dungeon_index, level_index, new_level), pointer
+
+
+def _apply_set_area_cells(adventure: Adventure, op: SetAreaCells) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    area_index = _resolve_area(level, op.dungeon_id, op.area_id)
+    _require_cells_in_bounds(level, op.cells)
+    area = level.areas[area_index].model_copy(update={"cells": op.cells})
+    return _replace_area(adventure, dungeon_index, level_index, area_index, area)
+
+
+def _apply_set_area_field(adventure: Adventure, op: SetAreaField) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    area_index = _resolve_area(level, op.dungeon_id, op.area_id)
+    if op.field == "id":
+        if not op.value:
+            raise OpInvariantError("area id must be non-empty")
+        if any(other.id == op.value for index, other in enumerate(level.areas) if index != area_index):
+            raise OpInvariantError(
+                f"dungeon {op.dungeon_id!r} level {op.level_number} already has an area {op.value!r}"
+            )
+    area = level.areas[area_index].model_copy(update={op.field: op.value})
+    return _replace_area(adventure, dungeon_index, level_index, area_index, area)
+
+
+def _apply_remove_area(adventure: Adventure, op: RemoveArea) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    area_index = _resolve_area(level, op.dungeon_id, op.area_id)
+    return _replace_area(adventure, dungeon_index, level_index, area_index, None)
+
+
+def _apply_add_transition(adventure: Adventure, op: AddTransition) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    transition = op.transition
+    if not level.in_bounds(transition.position):
+        raise OpInvariantError(
+            f"transition source {transition.position} is out of bounds for the {level.width}x{level.height} grid"
+        )
+    if level.transition_at(transition.position) is not None:
+        raise OpInvariantError(
+            f"cell {transition.position} already has a transition — osrlib resolves the first match, "
+            "so a second entry would be dead data"
+        )
+    new_level = level.model_copy(update={"transitions": (*level.transitions, transition)})
+    pointer = f"/dungeons/{dungeon_index}/levels/{level_index}/transitions"
+    return _replace_level(adventure, dungeon_index, level_index, new_level), pointer
+
+
+def _apply_remove_transition(adventure: Adventure, op: RemoveTransition) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    for index, transition in enumerate(level.transitions):
+        if transition.position == op.position:
+            transitions = (*level.transitions[:index], *level.transitions[index + 1 :])
+            new_level = level.model_copy(update={"transitions": transitions})
+            pointer = f"/dungeons/{dungeon_index}/levels/{level_index}/transitions"
+            return _replace_level(adventure, dungeon_index, level_index, new_level), pointer
+    raise OpTargetNotFoundError(f"dungeon {op.dungeon_id!r} level {op.level_number} has no transition at {op.position}")
+
+
+def _apply_add_dungeon(adventure: Adventure, op: AddDungeon) -> tuple[Adventure, str]:
+    if any(dungeon.id == op.dungeon_id for dungeon in adventure.dungeons):
+        raise OpInvariantError(f"a dungeon {op.dungeon_id!r} already exists")
+    dungeon = DungeonSpec(
+        id=op.dungeon_id,
+        name=op.name,
+        levels=(LevelSpec(number=1, width=op.width, height=op.height, entrance=(0, 0)),),
+    )
+    return adventure.model_copy(update={"dungeons": (*adventure.dungeons, dungeon)}), "/dungeons"
+
+
+def _apply_set_dungeon_field(adventure: Adventure, op: SetDungeonField) -> tuple[Adventure, str]:
+    dungeon_index = _resolve_dungeon(adventure, op.dungeon_id)
+    dungeon = adventure.dungeons[dungeon_index].model_copy(update={op.field: op.value})
+    return _replace_dungeon(adventure, dungeon_index, dungeon), f"/dungeons/{dungeon_index}/{op.field}"
+
+
+def _retarget_transitions(
+    dungeon: DungeonSpec, matches: Callable[[TransitionSpec], bool], update: Mapping[str, object]
+) -> DungeonSpec:
+    """Rebuild a dungeon with every matching transition patched; the original when nothing matches.
+
+    Returning the original object on a miss lets cascade callers detect by
+    identity which dungeons a rename or renumber actually touched.
+    """
+    changed = False
+    levels: list[LevelSpec] = []
+    for level in dungeon.levels:
+        if any(matches(transition) for transition in level.transitions):
+            transitions = tuple(
+                transition.model_copy(update=dict(update)) if matches(transition) else transition
+                for transition in level.transitions
+            )
+            levels.append(level.model_copy(update={"transitions": transitions}))
+            changed = True
+        else:
+            levels.append(level)
+    if not changed:
+        return dungeon
+    return dungeon.model_copy(update={"levels": tuple(levels)})
+
+
+def _apply_rename_dungeon(adventure: Adventure, op: RenameDungeon) -> tuple[Adventure, str]:
+    dungeon_index = _resolve_dungeon(adventure, op.old_id)
+    if not op.new_id:
+        raise OpInvariantError("dungeon id must be non-empty")
+    if any(dungeon.id == op.new_id for dungeon in adventure.dungeons):
+        raise OpInvariantError(f"a dungeon {op.new_id!r} already exists")
+    dungeons: list[DungeonSpec] = []
+    for index, dungeon in enumerate(adventure.dungeons):
+        retargeted = _retarget_transitions(
+            dungeon, lambda t: t.to_dungeon_id == op.old_id, {"to_dungeon_id": op.new_id}
+        )
+        if index == dungeon_index:
+            retargeted = retargeted.model_copy(update={"id": op.new_id})
+        dungeons.append(retargeted)
+    town = adventure.town
+    if op.old_id in town.travel_turns:
+        # The key renames in place, order preserved. A dangling entry already
+        # named new_id (referencing no dungeon until now) is dropped — one
+        # dungeon, one entry, the renamed key's authored cost wins.
+        travel = {
+            (op.new_id if key == op.old_id else key): turns
+            for key, turns in town.travel_turns.items()
+            if key != op.new_id
+        }
+        town = town.model_copy(update={"travel_turns": travel})
+    # The cascade may touch the town and any dungeon's transitions — the delta
+    # is honestly whole-document.
+    return adventure.model_copy(update={"dungeons": tuple(dungeons), "town": town}), ""
+
+
+def _apply_remove_dungeon(adventure: Adventure, op: RemoveDungeon) -> tuple[Adventure, str]:
+    dungeon_index = _resolve_dungeon(adventure, op.dungeon_id)
+    if len(adventure.dungeons) == 1:
+        raise OpInvariantError("the last dungeon cannot be removed — an adventure needs at least one")
+    dungeons = (*adventure.dungeons[:dungeon_index], *adventure.dungeons[dungeon_index + 1 :])
+    return adventure.model_copy(update={"dungeons": dungeons}), "/dungeons"
+
+
+def _apply_add_level(adventure: Adventure, op: AddLevel) -> tuple[Adventure, str]:
+    dungeon_index = _resolve_dungeon(adventure, op.dungeon_id)
+    dungeon = adventure.dungeons[dungeon_index]
+    if any(level.number == op.number for level in dungeon.levels):
+        raise OpInvariantError(f"dungeon {op.dungeon_id!r} already has a level {op.number}")
+    new_level = LevelSpec(number=op.number, width=op.width, height=op.height)
+    # Inserted before the first level whose number exceeds it, appended when
+    # none does — deterministic over any tuple, ascending-preserving over an
+    # ascending one, and never a reorder of existing levels (stored order is
+    # rules-visible through the first-entrance-bearing-level rule).
+    insert_at = next(
+        (index for index, level in enumerate(dungeon.levels) if level.number > op.number), len(dungeon.levels)
+    )
+    levels = (*dungeon.levels[:insert_at], new_level, *dungeon.levels[insert_at:])
+    new_dungeon = dungeon.model_copy(update={"levels": levels})
+    return _replace_dungeon(adventure, dungeon_index, new_dungeon), f"/dungeons/{dungeon_index}"
+
+
+def _apply_renumber_level(adventure: Adventure, op: RenumberLevel) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.old_number)
+    dungeon = adventure.dungeons[dungeon_index]
+    if any(level.number == op.new_number for level in dungeon.levels):
+        raise OpInvariantError(f"dungeon {op.dungeon_id!r} already has a level {op.new_number}")
+    renumbered = dungeon.levels[level_index].model_copy(update={"number": op.new_number})
+    adventure = _replace_level(adventure, dungeon_index, level_index, renumbered)
+    dungeons: list[DungeonSpec] = []
+    touched_outside = False
+    for index, candidate in enumerate(adventure.dungeons):
+        retargeted = _retarget_transitions(
+            candidate,
+            lambda t: t.to_dungeon_id == op.dungeon_id and t.to_level_number == op.old_number,
+            {"to_level_number": op.new_number},
+        )
+        if retargeted is not candidate and index != dungeon_index:
+            touched_outside = True
+        dungeons.append(retargeted)
+    # The precise pointer holds while the cascade stays inside this dungeon; a
+    # cross-dungeon stairs retarget widens it honestly to the whole document.
+    pointer = "" if touched_outside else f"/dungeons/{dungeon_index}"
+    return adventure.model_copy(update={"dungeons": tuple(dungeons)}), pointer
+
+
+def _apply_resize_level(adventure: Adventure, op: ResizeLevel) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+
+    def in_new(cell: Position) -> bool:
+        return 0 <= cell[0] < op.width and 0 <= cell[1] < op.height
+
+    offenders: list[dict[str, str]] = []
+    for area in level.areas:
+        outside = [cell for cell in area.cells if not in_new(cell)]
+        if outside:
+            offenders.append(
+                {
+                    "address": area_address(op.dungeon_id, op.level_number, area.id),
+                    "message": f"area {area.id!r} has {len(outside)} cell(s) outside the new bounds, e.g. {outside[0]}",
+                }
+            )
+        for feature in area.features:
+            if feature.cell is not None and not in_new(feature.cell):
+                offenders.append(_feature_offender(op, feature.id, feature.cell))
+    for feature in level.features:
+        if feature.cell is not None and not in_new(feature.cell):
+            offenders.append(_feature_offender(op, feature.id, feature.cell))
+    for transition in level.transitions:
+        if not in_new(transition.position):
+            offenders.append(
+                {
+                    "address": cell_address(op.dungeon_id, op.level_number, transition.position),
+                    "message": f"{transition.kind} at {transition.position} is outside the new bounds",
+                }
+            )
+    if level.entrance is not None and not in_new(level.entrance):
+        offenders.append(
+            {
+                "address": cell_address(op.dungeon_id, op.level_number, level.entrance),
+                "message": f"the entrance at {level.entrance} is outside the new bounds",
+            }
+        )
+    if offenders:
+        raise OpInvariantError(f"resizing to {op.width}x{op.height} would strand existing content", offenders=offenders)
+    # Edge entries whose incident cells fall outside the new bounds are pruned:
+    # edges are spatial annotation, not content — osrlib treats an out-of-bounds
+    # entry as nonexistent, so keeping one would strand an invisible
+    # edge_invalid error on a key the map cannot even display. Foreign
+    # non-canonical keys have no computable cells and stay (still deletable,
+    # still flagged by lint).
+    edges = {
+        key: edge
+        for key, edge in level.edges.items()
+        if (cells := _canonical_edge_cells(key)) is None or all(in_new(cell) for cell in cells)
+    }
+    new_level = level.model_copy(update={"width": op.width, "height": op.height, "edges": edges})
+    return _replace_level(adventure, dungeon_index, level_index, new_level), f"/dungeons/{dungeon_index}"
+
+
+def _feature_offender(op: ResizeLevel, feature_id: str, cell: Position) -> dict[str, str]:
+    return {
+        "address": cell_address(op.dungeon_id, op.level_number, cell),
+        "message": f"feature {feature_id!r} sits at {cell}, outside the new bounds",
+    }
+
+
+def _apply_remove_level(adventure: Adventure, op: RemoveLevel) -> tuple[Adventure, str]:
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    dungeon = adventure.dungeons[dungeon_index]
+    if len(dungeon.levels) == 1:
+        raise OpInvariantError(
+            f"the last level of dungeon {op.dungeon_id!r} cannot be removed — a dungeon needs at least one"
+        )
+    levels = (*dungeon.levels[:level_index], *dungeon.levels[level_index + 1 :])
+    new_dungeon = dungeon.model_copy(update={"levels": levels})
+    return _replace_dungeon(adventure, dungeon_index, new_dungeon), f"/dungeons/{dungeon_index}"
 
 
 def _coalesce_delta(payload: Mapping[str, object], touched: Sequence[str]) -> tuple[SubtreeChange, ...]:

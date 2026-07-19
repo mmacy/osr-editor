@@ -18,10 +18,14 @@ from osreditor.ops import (
 FINDING = Finding(
     source="validation",
     code="encounter_unknown_monster",
+    severity="error",
     message="mill-caves level 1: area '1' references unknown monster 'orc-chief'",
     address="dungeon:mill-caves/level:1/area:1",
 )
-DIAGNOSTICS = Diagnostics(validation=(FINDING,), lint=(Finding(source="lint", code="area_unreachable", message="…"),))
+DIAGNOSTICS = Diagnostics(
+    validation=(FINDING,),
+    lint=(Finding(source="lint", code="area_unreachable", severity="error", message="…"),),
+)
 RESULT = OpBatchResult(
     revision="r2",
     diagnostics=DIAGNOSTICS,
@@ -41,7 +45,7 @@ RESULT = OpBatchResult(
         SetWandering(dungeon_id="mill-caves", level_number=1, wandering=WanderingSpec(chance_in_six=2)),
         OpBatch(revision="rev-1", ops=(SetAdventureField(field="description", value="…"),)),
         FINDING,
-        Finding(source="lint", code="orphan_cell", message="cell (2, 1) is in no area"),
+        Finding(source="lint", code="orphan_cell", severity="warning", message="cell (2, 1) is in no area"),
         DIAGNOSTICS,
         Diagnostics(),
         SubtreeChange(path="", value={"name": "whole document"}),
@@ -119,7 +123,12 @@ def test_op_batch_requires_at_least_one_op() -> None:
 
 def test_finding_rejects_unknown_source() -> None:
     with pytest.raises(ValidationError):
-        Finding(source="vibes", code="x", message="y")  # type: ignore[arg-type]
+        Finding(source="vibes", code="x", severity="error", message="y")  # type: ignore[arg-type]
+
+
+def test_finding_rejects_unknown_severity() -> None:
+    with pytest.raises(ValidationError):
+        Finding(source="lint", code="x", severity="fatal", message="y")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
