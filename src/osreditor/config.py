@@ -4,9 +4,9 @@ The config file is a convenience cache, not user data: reads tolerate absence
 (first run) and corruption (a malformed file logs a warning and resets to empty
 rather than failing boot). Writes are atomic — the same temp-file-and-replace
 pattern as the store — because the always-saved editor updates recents on every
-open. The schema is additive-only within its schema version; the spec's other
-config keys (osr-web checkout path, UI preferences) arrive with their consuming
-features.
+open. The schema is additive-only within its schema version; phase 3 added the
+osr-web checkout path, and the spec's remaining config keys (UI preferences)
+arrive with their consuming features.
 """
 
 import contextlib
@@ -46,12 +46,20 @@ class RecentEntry(BaseModel):
 
 
 class AppConfig(BaseModel):
-    """The persisted app config: schema version and the recents list, most recent first."""
+    """The persisted app config: schema version, the recents list, and the publish target.
+
+    `osr_web_checkout` is the osr-web checkout path publish writes into —
+    additive schema, absent until the first publish collects it. There is no
+    settings screen: the publish dialog collects the path when unconfigured,
+    and the backend saves it once its shape test passes (the no-dead-keys
+    rule — one route, no dead surface).
+    """
 
     model_config = ConfigDict(frozen=True)
 
     schema_version: int = CONFIG_SCHEMA_VERSION
     recents: tuple[RecentEntry, ...] = ()
+    osr_web_checkout: str | None = None
 
 
 def config_path() -> Path:

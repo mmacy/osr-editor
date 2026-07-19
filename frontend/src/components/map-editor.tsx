@@ -1,11 +1,12 @@
-// The map editor surface: dungeon switcher, level tabs, toolbar, the canvas,
-// the inspector, and the management dialogs — all driving one selection state
-// and committing through the store's single-flight queue, one batch per
-// completed gesture.
-import { useEffect, useState } from 'react'
+// The map editor surface: dungeon switcher, level tabs, toolbar, the canvas
+// with its stocking layer and context menu, the inspector, and the management
+// dialogs — all driving one selection state and committing through the
+// store's single-flight queue, one batch per completed gesture.
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowUpDownIcon,
   DoorOpenIcon,
+  EyeOffIcon,
   LogInIcon,
   MaximizeIcon,
   MousePointer2Icon,
@@ -16,6 +17,7 @@ import {
   ZoomOutIcon,
 } from 'lucide-react'
 
+import type { CardIntent } from '@/components/area-content-cards'
 import { ImportDialog } from '@/components/import-dialog'
 import { MapCanvas } from '@/components/map-canvas'
 import {
@@ -27,11 +29,20 @@ import {
   ResizeLevelDialog,
   TransitionDialog,
 } from '@/components/map-dialogs'
-import { areaHasContent, MapInspector } from '@/components/map-inspector'
+import { MapInspector } from '@/components/map-inspector'
 import { Button } from '@/components/ui/button'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { LevelFocus, NavTarget } from '@/lib/address'
+import { effectiveMonsterCatalog, loadMonsterCatalog, useCatalog } from '@/lib/catalogs'
+import { areaTrapOps, encounterOps, treasureOps } from '@/lib/content-builders'
+import { formatAreaContents } from '@/lib/notation'
 import { cn } from '@/lib/utils'
 import { parseEdgeKey } from '@/map/edge-key'
 import {
@@ -44,8 +55,15 @@ import {
   type Gesture,
   type Tool,
 } from '@/map/gestures'
-import type { HitTarget } from '@/map/hit-test'
+import { hitTest, type HitTarget } from '@/map/hit-test'
 import { DARK_THEME, LIGHT_THEME, markersFor, targetRef, type MapSelection } from '@/map/render'
+import {
+  areaAt,
+  isAreaStocked,
+  stockingMenuEntries,
+  walkAreas,
+  type StockingMenuEntry,
+} from '@/map/stocking'
 import { cellSizePx, fitView, resetView, zoomAt, type ViewTransform } from '@/map/view'
 import { projectStore } from '@/store/project-store'
 import type { Adventure, Diagnostics, LevelSpec, Position } from '@/types'
@@ -115,6 +133,10 @@ export function MapEditor({
   const [hover, setHover] = useState<HitTarget | null>(null)
   const [gesture, setGesture] = useState<Gesture | null>(null)
   const [transitionCell, setTransitionCell] = useState<Position | null>(null)
+  const [unstockedFilter, setUnstockedFilter] = useState(false)
+  const [cardIntent, setCardIntent] = useState<CardIntent | null>(null)
+  const [menuAreaId, setMenuAreaId] = useState<string | null>(null)
+  const intentToken = useRef(0)
   const [dialog, setDialog] = useState<
     | 'add-dungeon'
     | 'rename-dungeon'
@@ -127,6 +149,14 @@ export function MapEditor({
   >(null)
   const prefersDark = usePrefersDark()
   const theme = prefersDark ? DARK_THEME : LIGHT_THEME
+  // The hover line's monster names resolve through the effective catalog.
+  const shippedMonsters = useCatalog(loadMonsterCatalog)
+  const pickerMonsters = useMemo(
+    () => (shippedMonsters ? effectiveMonsterCatalog(shippedMonsters, document.monsters) : []),
+    [shippedMonsters, document.monsters],
+  )
+  const monsterNameFor = (templateId: string) =>
+    pickerMonsters.find((monster) => monster.id === templateId)?.name ?? templateId
 
   // A level switch resets the interaction state — the render-time adjustment
   // pattern, not an effect. The view derives fit-level-on-open below, so
@@ -139,6 +169,14 @@ export function MapEditor({
     setSelection(null)
     setGesture(null)
     setHover(null)
+    setCardIntent(null)
+  }
+
+  // A one-shot intent lives only while its area stays selected: the selection
+  // leaving the area drops it (render-time adjustment), and consumption nulls
+  // it — either way a reselect remounting the inspector never replays an add.
+  if (cardIntent && !(selection?.kind === 'area' && selection.areaId === cardIntent.areaId)) {
+    setCardIntent(null)
   }
 
   // Fit-level-on-open, derived: user interactions set the view state; until
@@ -198,8 +236,10 @@ export function MapEditor({
     if (selection.kind === 'area') {
       const area = level.areas.find((candidate) => candidate.id === selection.areaId)
       if (!area) return
+      // The stocked predicate guards the confirm — a described area never
+      // vanishes silently, content or not.
       if (
-        areaHasContent(area) &&
+        isAreaStocked(area) &&
         !window.confirm(`Remove area ${area.id} and the content it carries?`)
       ) {
         return
@@ -272,6 +312,15 @@ export function MapEditor({
       ) {
         return
       }
+      // Keys pressed inside an open popover, menu, or dialog belong to that
+      // surface — Escape closes the picker, it never clears the map selection.
+      if (
+        target?.closest(
+          '[data-slot="popover-content"], [data-slot="context-menu-content"], [role="dialog"]',
+        )
+      ) {
+        return
+      }
       if (dialog !== null || transitionCell !== null) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'Escape') {
@@ -285,6 +334,27 @@ export function MapEditor({
       }
       if (event.key === '0') {
         setView(resetView())
+        return
+      }
+      if (event.key.toLowerCase() === 'f') {
+        setUnstockedFilter((current) => !current)
+        return
+      }
+      if ((event.key === '[' || event.key === ']') && level) {
+        // The previous/next-area walk in key order; with the filter on it
+        // visits unstocked areas only — stocking a big dungeon is a walk.
+        const currentAreaId = selection?.kind === 'area' ? selection.areaId : null
+        const nextId = walkAreas(
+          level.areas,
+          currentAreaId,
+          event.key === ']' ? 1 : -1,
+          unstockedFilter,
+        )
+        if (nextId !== null) {
+          setSelection({ kind: 'area', areaId: nextId })
+          const first = level.areas.find((area) => area.id === nextId)?.cells[0]
+          if (first) ensureVisible(first)
+        }
         return
       }
       const shortcut = SHORTCUTS.get(event.key.toLowerCase())
@@ -383,6 +453,34 @@ export function MapEditor({
     }
     setTransitionCell(cell)
   }
+
+  // The stocking context menu: right-click on an area cell offers exactly
+  // what the area can hold; anywhere else does nothing this phase.
+  const menuArea = menuAreaId
+    ? (level.areas.find((candidate) => candidate.id === menuAreaId) ?? null)
+    : null
+  const applyMenuEntry = (areaId: string, entry: StockingMenuEntry) => {
+    setSelection({ kind: 'area', areaId })
+    const target = { dungeonId, levelNumber, areaId }
+    if (entry.action === 'remove') {
+      if (entry.card === 'encounter')
+        void projectStore.getState().commit(encounterOps(target, null))
+      else if (entry.card === 'treasure')
+        void projectStore.getState().commit(treasureOps(target, null))
+      else if (entry.card === 'trap') void projectStore.getState().commit(areaTrapOps(target, null))
+      return
+    }
+    intentToken.current += 1
+    setCardIntent({ areaId, card: entry.card, action: entry.action, token: intentToken.current })
+  }
+
+  // The hover line: the cell/edge ref plus the hovered area's one-line
+  // contents in module notation.
+  const hoverArea = hover?.kind === 'cell' ? areaAt(level, hover.cell) : null
+  const hoverContents = hoverArea ? formatAreaContents(hoverArea, monsterNameFor) : ''
+  const hoverLine = hoverArea
+    ? `${targetRef(hover)} · ${hoverArea.id}${hoverContents ? `: ${hoverContents}` : ''}`
+    : targetRef(hover)
 
   const markers = markersFor(
     [...diagnostics.validation, ...diagnostics.lint],
@@ -530,39 +628,100 @@ export function MapEditor({
         >
           <MaximizeIcon />
         </Button>
+        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={unstockedFilter ? 'secondary' : 'ghost'}
+              size="icon-sm"
+              aria-label="Unstocked filter"
+              aria-pressed={unstockedFilter}
+              onClick={() => setUnstockedFilter((current) => !current)}
+            >
+              <EyeOffIcon />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Dim stocked areas (F)</TooltipContent>
+        </Tooltip>
         <span className="ml-auto font-mono text-xs text-muted-foreground" data-testid="hover-ref">
-          {targetRef(hover)}
+          {hoverLine}
         </span>
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1">
-          <MapCanvas
-            level={level}
-            view={effectiveView}
-            onViewChange={setView}
-            onViewportSize={setViewport}
-            tool={tool}
-            gesture={gesture}
-            onGestureChange={setGesture}
-            onGestureComplete={completeGesture}
-            selection={selection}
-            hover={hover}
-            onHover={setHover}
-            onSelect={selectTarget}
-            onPlaceEntrance={placeEntrance}
-            onTransitionAt={transitionAt}
-            markers={markers}
-            theme={theme}
-          />
-        </div>
-        <aside className="w-64 shrink-0 overflow-y-auto border-l bg-card" aria-label="Inspector">
+        <ContextMenu>
+          <ContextMenuTrigger
+            asChild
+            onContextMenu={(event) => {
+              // The trigger only fires over an area cell; preventDefault
+              // suppresses both radix and the native menu everywhere else.
+              if (!effectiveView) {
+                event.preventDefault()
+                return
+              }
+              const rect = event.currentTarget.getBoundingClientRect()
+              const point = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+              const target = hitTest(point, level, effectiveView, 'cell')
+              const area = target?.kind === 'cell' ? areaAt(level, target.cell) : null
+              if (!area) {
+                event.preventDefault()
+                return
+              }
+              setMenuAreaId(area.id)
+            }}
+          >
+            <div className="relative min-w-0 flex-1">
+              <MapCanvas
+                level={level}
+                view={effectiveView}
+                onViewChange={setView}
+                onViewportSize={setViewport}
+                tool={tool}
+                gesture={gesture}
+                onGestureChange={setGesture}
+                onGestureComplete={completeGesture}
+                selection={selection}
+                hover={hover}
+                onHover={setHover}
+                onSelect={selectTarget}
+                onPlaceEntrance={placeEntrance}
+                onTransitionAt={transitionAt}
+                markers={markers}
+                theme={theme}
+                dimStocked={unstockedFilter}
+              />
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent aria-label={menuArea ? `Stock area ${menuArea.id}` : undefined}>
+            {menuArea &&
+              stockingMenuEntries(menuArea).map((entry) => (
+                <ContextMenuItem
+                  key={entry.id}
+                  variant={entry.action === 'remove' ? 'destructive' : 'default'}
+                  onSelect={() => applyMenuEntry(menuArea.id, entry)}
+                >
+                  {entry.label}
+                </ContextMenuItem>
+              ))}
+          </ContextMenuContent>
+        </ContextMenu>
+        <aside
+          className={cn(
+            'shrink-0 overflow-y-auto border-l bg-card',
+            // The deep content forms expand in place and need the room —
+            // still an aside, never a modal.
+            selection?.kind === 'area' ? 'w-96' : 'w-64',
+          )}
+          aria-label="Inspector"
+        >
           <MapInspector
             document={document}
             dungeonId={dungeonId}
             levelNumber={levelNumber}
             selection={selection}
             onSelectionChange={setSelection}
+            cardIntent={cardIntent}
+            onCardIntentConsumed={() => setCardIntent(null)}
           />
         </aside>
       </div>

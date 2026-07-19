@@ -26,6 +26,7 @@ export interface MapCanvasProps {
   onTransitionAt: (cell: Position) => void
   markers: readonly MapMarker[]
   theme: MapTheme
+  dimStocked?: boolean
 }
 
 // The cell tools always want the cell, however close to a border the pointer
@@ -96,6 +97,7 @@ export function MapCanvas(props: MapCanvasProps) {
       hover: props.hover,
       markers: props.markers,
       gesture: props.gesture,
+      dimStocked: props.dimStocked,
     })
   })
 
@@ -175,7 +177,9 @@ export function MapCanvas(props: MapCanvasProps) {
       onPointerUp={onPointerUp}
       onPointerLeave={() => props.onHover(null)}
       onWheel={onWheel}
-      onContextMenu={(event) => event.preventDefault()}
+      // contextmenu deliberately not handled here: the editor wraps this
+      // canvas in the stocking context-menu trigger, which owns the event —
+      // opening on area cells, preventing the native menu everywhere else.
     />
   )
 }

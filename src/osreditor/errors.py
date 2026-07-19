@@ -16,10 +16,14 @@ __all__ = [
     "OpRejectedError",
     "OpTargetNotFoundError",
     "OsrEditorError",
+    "OsrWebCheckoutInvalidError",
+    "OsrWebNotConfiguredError",
     "ProjectExistsError",
     "ProjectNotFoundError",
     "ProjectPathNotFoundError",
     "ProjectTypeUnsupportedError",
+    "PublishBlockedError",
+    "PublishDestinationExistsError",
     "RedoStackEmptyError",
     "StaleRevisionError",
     "UndoStackEmptyError",
@@ -132,6 +136,41 @@ class OpInvariantError(OsrEditorError):
         """
         super().__init__(message)
         self.offenders = offenders
+
+
+class OsrWebNotConfiguredError(OsrEditorError):
+    """Publish was requested with no osr-web checkout configured and none in the request."""
+
+
+class OsrWebCheckoutInvalidError(OsrEditorError):
+    """The checkout path fails the shape test: not a directory containing `adventures/`."""
+
+
+class PublishBlockedError(OsrEditorError):
+    """Publish was requested while the validation tier is non-empty.
+
+    Attributes:
+        findings: The blocking findings, serialized — the dialog renders them
+            with the diagnostics panel's own click-to-navigate rows.
+    """
+
+    def __init__(self, message: str, *, findings: list[dict[str, object]]) -> None:
+        """Build the error.
+
+        Args:
+            message: What went wrong.
+            findings: The blocking findings, serialized.
+        """
+        super().__init__(message)
+        self.findings = findings
+
+
+class PublishDestinationExistsError(OsrEditorError):
+    """The publish destination is occupied and the request did not set overwrite.
+
+    Also raised *with* overwrite when the occupant is a real (non-symlink)
+    directory: that is somebody's content, and the editor never removes it.
+    """
 
 
 class ImporterNotFoundError(OsrEditorError):

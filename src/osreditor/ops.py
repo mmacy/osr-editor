@@ -10,7 +10,8 @@ never a silent overwrite.
 
 The envelope grows additively. The phase 1 ops and the `AnyEditOp` union landed
 here with the document service, built exactly as osrlib builds `AnyCommand`;
-phase 2 adds the geometry and dungeon/level-management vocabulary. The `forge`
+phase 2 added the geometry and dungeon/level-management vocabulary; phase 3 adds
+the content vocabulary — encounters, traps, treasure, and features. The `forge`
 diagnostics tier arrives with forge-backed projects in phase 5.
 
 The op-level philosophy, continuing phase 1's `travel_turns >= 0` guard:
@@ -26,23 +27,36 @@ docstring for its pinned invariants.
 
 from typing import Annotated, Literal
 
-from osrlib.crawl.dungeon import Edge, Position, TransitionSpec, WanderingSpec
+from osrlib.crawl.dungeon import (
+    AreaTreasureSpec,
+    Edge,
+    FeatureSpec,
+    KeyedEncounter,
+    Position,
+    TransitionSpec,
+    TrapSpec,
+    WanderingSpec,
+)
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 __all__ = [
     "AddDungeon",
+    "AddFeature",
     "AddLevel",
     "AddTransition",
     "AnyEditOp",
+    "AreaOp",
     "CreateArea",
     "Diagnostics",
     "EditOp",
+    "FeatureContainerOp",
     "Finding",
     "LevelOp",
     "OpBatch",
     "OpBatchResult",
     "RemoveArea",
     "RemoveDungeon",
+    "RemoveFeature",
     "RemoveLevel",
     "RemoveTransition",
     "RenameDungeon",
@@ -53,8 +67,12 @@ __all__ = [
     "SetAreaField",
     "SetDungeonField",
     "SetEdges",
+    "SetEncounter",
     "SetEntrance",
+    "SetFeature",
     "SetTownField",
+    "SetTrap",
+    "SetTreasure",
     "SetWandering",
     "SubtreeChange",
 ]
@@ -237,6 +255,118 @@ class RemoveArea(LevelOp):
     area_id: str
 
 
+class AreaOp(LevelOp):
+    """Shared targeting for ops scoped to one area: a level target plus `area_id`.
+
+    An unknown area id raises
+    [`OpTargetNotFoundError`][osreditor.errors.OpTargetNotFoundError] at apply,
+    per the phase 2 rule that every targeting miss is `op_target_not_found`.
+    """
+
+    area_id: str
+
+
+class SetEncounter(AreaOp):
+    """Replace or clear an area's keyed encounter; `None` removes.
+
+    Whole-value grain, the `SetWandering` precedent: the encounter card commits
+    a complete [`KeyedEncounter`][osrlib.crawl.dungeon.KeyedEncounter], and
+    internal validity (at least one monster line, exactly one count form per
+    line) is the model's own, enforced at request parse. An unknown or
+    dangling `template_id` is deliberately *not* checked here — cross-reference
+    problems are diagnostics, legal while editing, and foreign documents
+    legally carry them.
+    """
+
+    op: Literal["set_encounter"] = "set_encounter"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    encounter: KeyedEncounter | None
+
+
+class SetTrap(AreaOp):
+    """Replace or clear an area's room trap; `None` removes.
+
+    The op does not inspect `kind`: the trap card authors `kind="room"` by
+    construction, and a mismatched kind is exactly what the whole-batch
+    re-validation backstop exists to catch — `op_rejected` carrying osrlib's
+    own "area {id!r} carries a non-room trap".
+    """
+
+    op: Literal["set_trap"] = "set_trap"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    trap: TrapSpec | None
+
+
+class SetTreasure(AreaOp):
+    """Replace or clear an area's generated-treasure declaration; `None` removes.
+
+    The letters-xor-unguarded rule is the model's own
+    ([`AreaTreasureSpec`][osrlib.crawl.dungeon.AreaTreasureSpec]), enforced at
+    request parse.
+    """
+
+    op: Literal["set_treasure"] = "set_treasure"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    treasure: AreaTreasureSpec | None
+
+
+class FeatureContainerOp(LevelOp):
+    """Shared targeting for feature ops: a level target plus the feature's container.
+
+    `area_id=None` addresses the level itself — `LevelSpec.features` is real,
+    and a vocabulary that cannot reach level-scope features would leave foreign
+    documents' level-feature findings permanently unfixable.
+    """
+
+    area_id: str | None
+
+
+class AddFeature(FeatureContainerOp):
+    """Add a feature to an area or (with `area_id=None`) the level itself.
+
+    Invariants at apply: the feature id non-empty; not already used anywhere on
+    the level — `validate_adventure`'s uniqueness scope spans the level's own
+    features and every area's, and a duplicate is never intentional (the
+    `CreateArea` reasoning); not the reserved id `"pile"` (colliding with the
+    runtime's drop-pile convention is never intentional either). A non-`None`
+    `cell` must be in bounds — the editor never authors out-of-bounds geometry.
+    `cell=None` is admitted at level scope: `feature_needs_cell` is a content
+    finding, legal while editing.
+    """
+
+    op: Literal["add_feature"] = "add_feature"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    feature: FeatureSpec
+
+
+class SetFeature(FeatureContainerOp):
+    """Replace one feature whole; a differing `feature.id` is a rename.
+
+    Whole-value replacement at the card's commit grain — this deliberately
+    implements the spec's `SetFeatureField` slot at whole-value grain (a
+    field-grained op over `FeatureSpec` would need an undiscriminable value
+    union; the vocabulary is explicitly representative). A rename falls under
+    [`AddFeature`][osreditor.ops.AddFeature]'s id rejections; nothing in the
+    document references feature ids, so a rename cascades nowhere. The
+    cell-bounds invariant applies to a *changed* cell only: a `cell` equal to
+    the targeted feature's current cell passes through untouched, so editing
+    any other field of a foreign feature with an out-of-bounds cell never
+    locks. Among foreign duplicate feature ids, the first match in authored
+    order is the target — osrlib's own resolution posture.
+    """
+
+    op: Literal["set_feature"] = "set_feature"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    feature_id: str
+    feature: FeatureSpec
+
+
+class RemoveFeature(FeatureContainerOp):
+    """Remove one feature; first-match among foreign duplicate ids.
+
+    Moving a feature between containers is a `RemoveFeature` + `AddFeature`
+    batch — one gesture, one undo step, the transition-edit precedent.
+    """
+
+    op: Literal["remove_feature"] = "remove_feature"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    feature_id: str
+
+
 class AddTransition(LevelOp):
     """Add a transition, carrying the full [`TransitionSpec`][osrlib.crawl.dungeon.TransitionSpec].
 
@@ -398,6 +528,12 @@ AnyEditOp = Annotated[
     | SetAreaCells
     | SetAreaField
     | RemoveArea
+    | SetEncounter
+    | SetTrap
+    | SetTreasure
+    | AddFeature
+    | SetFeature
+    | RemoveFeature
     | AddTransition
     | RemoveTransition
     | AddDungeon

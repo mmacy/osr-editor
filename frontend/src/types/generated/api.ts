@@ -251,6 +251,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Project
+         * @description Publish the current document into an osr-web checkout's `adventures/` directory.
+         *
+         *     Publish gates on validation and only validation: the tier is recomputed on
+         *     every commit, so the check reads fresh state, and lint never blocks
+         *     server-side — the frontend confirms when lint findings exist, because
+         *     secret-only access is sometimes the point. The checkout path is validated
+         *     and saved to config before the destination attempt, so a later collision
+         *     never costs the user their typed path. Honestly local, like export: a
+         *     symlink into a user checkout is the single-user posture, and a hosted
+         *     future replaces this one handler.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The mode, plus optional name, overwrite, and checkout path.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The published path and mode.
+         */
+        post: operations["publish_project_api_projects__project_id__publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalogs/monsters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Monster Catalog
+         * @description Report the shipped monster catalog as picker summaries.
+         *
+         *     Args:
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         Every shipped monster, in shipped order.
+         */
+        get: operations["get_monster_catalog_api_catalogs_monsters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalogs/equipment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Equipment Catalog
+         * @description Report the pickable equipment items.
+         *
+         *     Args:
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         Every item across the four id-addressable lists, in list order.
+         */
+        get: operations["get_equipment_catalog_api_catalogs_equipment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalogs/treasure-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Treasure Type Catalog
+         * @description Report the shipped treasure types.
+         *
+         *     Args:
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         Every treasure-type letter with its section.
+         */
+        get: operations["get_treasure_type_catalog_api_catalogs_treasure_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalogs/encounter-tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Encounter Table Catalog
+         * @description Report the six compiled dungeon encounter tables.
+         *
+         *     Args:
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The compiled tables, verbatim — the wandering-table editor seeds from
+         *         the level's band table.
+         */
+        get: operations["get_encounter_table_catalog_api_catalogs_encounter_tables_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/importers": {
         parameters: {
             query?: never;
@@ -390,6 +533,33 @@ export interface components {
             width: number;
             /** Height */
             height: number;
+        };
+        /**
+         * AddFeature
+         * @description Add a feature to an area or (with `area_id=None`) the level itself.
+         *
+         *     Invariants at apply: the feature id non-empty; not already used anywhere on
+         *     the level — `validate_adventure`'s uniqueness scope spans the level's own
+         *     features and every area's, and a duplicate is never intentional (the
+         *     `CreateArea` reasoning); not the reserved id `"pile"` (colliding with the
+         *     runtime's drop-pile convention is never intentional either). A non-`None`
+         *     `cell` must be in bounds — the editor never authors out-of-bounds geometry.
+         *     `cell=None` is admitted at level scope: `feature_needs_cell` is a content
+         *     finding, legal while editing.
+         */
+        AddFeature: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "add_feature";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string | null;
+            feature: components["schemas"]["FeatureSpec"];
         };
         /**
          * AddLevel
@@ -564,6 +734,55 @@ export interface components {
         AttackRoutine: {
             /** Attacks */
             attacks: components["schemas"]["MonsterAttack"][];
+        };
+        /**
+         * CatalogItem
+         * @description One equipment picker entry.
+         *
+         *     The four pickable lists (`weapons`, `armour`, `gear`, `ammunition`) are the
+         *     same four `EquipmentCatalog.get` resolves; `treasure_weights` is not
+         *     id-addressable equipment and stays out.
+         */
+        CatalogItem: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Item Type */
+            item_type: string;
+            /** Cost Gp */
+            cost_gp: number;
+        };
+        /**
+         * CatalogMonster
+         * @description One monster picker entry: identity, grouping, and the fields the encounter card constrains by.
+         *
+         *     `alignment_options` flattens `AlignmentSpec.options` — the encounter card's
+         *     alignment select offers the intersection of every line's options.
+         *     `hit_dice` rides whole; the frontend formats it.
+         */
+        CatalogMonster: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Page */
+            page: string;
+            /** Categories */
+            categories: string[];
+            /** Alignment Options */
+            alignment_options: components["schemas"]["Alignment"][];
+            usual_alignment: components["schemas"]["Alignment"] | null;
+            hit_dice: components["schemas"]["MonsterHitDice"];
+        };
+        /**
+         * CatalogTreasureType
+         * @description One treasure-type picker entry: the letter and its section.
+         */
+        CatalogTreasureType: {
+            /** Letter */
+            letter: string;
+            kind: components["schemas"]["TreasureSection"];
         };
         /**
          * Coins
@@ -844,6 +1063,14 @@ export interface components {
             overrides_applied: string[];
         };
         /**
+         * EncounterTableCatalogResponse
+         * @description The six compiled dungeon encounter tables, verbatim.
+         */
+        EncounterTableCatalogResponse: {
+            /** Tables */
+            tables: components["schemas"]["EncounterTable"][];
+        };
+        /**
          * EncounterTableRow
          * @description One d20 row of a dungeon encounter table.
          *
@@ -885,6 +1112,14 @@ export interface components {
              * @default false
              */
             auto_save_magical: boolean;
+        };
+        /**
+         * EquipmentCatalogResponse
+         * @description The pickable equipment items, grouped list order preserved.
+         */
+        EquipmentCatalogResponse: {
+            /** Items */
+            items: components["schemas"]["CatalogItem"][];
         };
         /**
          * ExportRequest
@@ -1259,6 +1494,14 @@ export interface components {
             effects: string[];
         };
         /**
+         * MonsterCatalogResponse
+         * @description The shipped monster catalog, in shipped order.
+         */
+        MonsterCatalogResponse: {
+            /** Monsters */
+            monsters: components["schemas"]["CatalogMonster"][];
+        };
+        /**
          * MonsterEncounterEntry
          * @description An encounter-table cell resolving to monster template ids.
          *
@@ -1515,7 +1758,7 @@ export interface components {
             /** Revision */
             revision: string;
             /** Ops */
-            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
+            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["SetEncounter"] | components["schemas"]["SetTrap"] | components["schemas"]["SetTreasure"] | components["schemas"]["AddFeature"] | components["schemas"]["SetFeature"] | components["schemas"]["RemoveFeature"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
         };
         /**
          * OpBatchResult
@@ -1582,6 +1825,46 @@ export interface components {
             can_redo: boolean;
         };
         /**
+         * PublishRequest
+         * @description A publish request: the mode, plus optional name, overwrite, and first-use checkout path.
+         *
+         *     `name` defaults server-side to the project directory's stem; when provided
+         *     it must be a plain path component — path separators and the `.`/`..` forms
+         *     surface as `request_invalid`, the phase 1 amendment's channel. There is no
+         *     settings screen: `checkout_path` rides on the request when the dialog
+         *     collects it, and the backend saves it once the shape test passes.
+         */
+        PublishRequest: {
+            /**
+             * Mode
+             * @default symlink
+             * @enum {string}
+             */
+            mode: "symlink" | "copy";
+            /** Name */
+            name?: string | null;
+            /**
+             * Overwrite
+             * @default false
+             */
+            overwrite: boolean;
+            /** Checkout Path */
+            checkout_path?: string | null;
+        };
+        /**
+         * PublishResult
+         * @description Where the adventure was published, and how.
+         */
+        PublishResult: {
+            /** Path */
+            path: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "symlink" | "copy";
+        };
+        /**
          * ReactionResult
          * @description The five monster reaction bands, from the OSE SRD's encounter rules.
          *
@@ -1645,6 +1928,28 @@ export interface components {
             op: "remove_dungeon";
             /** Dungeon Id */
             dungeon_id: string;
+        };
+        /**
+         * RemoveFeature
+         * @description Remove one feature; first-match among foreign duplicate ids.
+         *
+         *     Moving a feature between containers is a `RemoveFeature` + `AddFeature`
+         *     batch — one gesture, one undo step, the transition-edit precedent.
+         */
+        RemoveFeature: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "remove_feature";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string | null;
+            /** Feature Id */
+            feature_id: string;
         };
         /**
          * RemoveLevel
@@ -1938,6 +2243,32 @@ export interface components {
             };
         };
         /**
+         * SetEncounter
+         * @description Replace or clear an area's keyed encounter; `None` removes.
+         *
+         *     Whole-value grain, the `SetWandering` precedent: the encounter card commits
+         *     a complete [`KeyedEncounter`][osrlib.crawl.dungeon.KeyedEncounter], and
+         *     internal validity (at least one monster line, exactly one count form per
+         *     line) is the model's own, enforced at request parse. An unknown or
+         *     dangling `template_id` is deliberately *not* checked here — cross-reference
+         *     problems are diagnostics, legal while editing, and foreign documents
+         *     legally carry them.
+         */
+        SetEncounter: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_encounter";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string;
+            encounter: components["schemas"]["KeyedEncounter"] | null;
+        };
+        /**
          * SetEntrance
          * @description Place or clear the level's entrance.
          *
@@ -1959,6 +2290,38 @@ export interface components {
                 number,
                 number
             ] | null;
+        };
+        /**
+         * SetFeature
+         * @description Replace one feature whole; a differing `feature.id` is a rename.
+         *
+         *     Whole-value replacement at the card's commit grain — this deliberately
+         *     implements the spec's `SetFeatureField` slot at whole-value grain (a
+         *     field-grained op over `FeatureSpec` would need an undiscriminable value
+         *     union; the vocabulary is explicitly representative). A rename falls under
+         *     [`AddFeature`][osreditor.ops.AddFeature]'s id rejections; nothing in the
+         *     document references feature ids, so a rename cascades nowhere. The
+         *     cell-bounds invariant applies to a *changed* cell only: a `cell` equal to
+         *     the targeted feature's current cell passes through untouched, so editing
+         *     any other field of a foreign feature with an out-of-bounds cell never
+         *     locks. Among foreign duplicate feature ids, the first match in authored
+         *     order is the target — osrlib's own resolution posture.
+         */
+        SetFeature: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_feature";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string | null;
+            /** Feature Id */
+            feature_id: string;
+            feature: components["schemas"]["FeatureSpec"];
         };
         /**
          * SetTownField
@@ -1984,6 +2347,51 @@ export interface components {
             value: string | string[] | {
                 [key: string]: number;
             };
+        };
+        /**
+         * SetTrap
+         * @description Replace or clear an area's room trap; `None` removes.
+         *
+         *     The op does not inspect `kind`: the trap card authors `kind="room"` by
+         *     construction, and a mismatched kind is exactly what the whole-batch
+         *     re-validation backstop exists to catch — `op_rejected` carrying osrlib's
+         *     own "area {id!r} carries a non-room trap".
+         */
+        SetTrap: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_trap";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string;
+            trap: components["schemas"]["TrapSpec"] | null;
+        };
+        /**
+         * SetTreasure
+         * @description Replace or clear an area's generated-treasure declaration; `None` removes.
+         *
+         *     The letters-xor-unguarded rule is the model's own
+         *     ([`AreaTreasureSpec`][osrlib.crawl.dungeon.AreaTreasureSpec]), enforced at
+         *     request parse.
+         */
+        SetTreasure: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_treasure";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string;
+            treasure: components["schemas"]["AreaTreasureSpec"] | null;
         };
         /**
          * SetWandering
@@ -2204,6 +2612,24 @@ export interface components {
              * @default false
              */
             see_below: boolean;
+        };
+        /**
+         * TreasureSection
+         * @description Which section of the treasure-type tables a letter belongs to.
+         *
+         *     The wire values are lowercase — they serialize into `treasure.json`; changing
+         *     them is a `schema_version` bump. Hoards (A–O) are lair treasure, individual
+         *     letters (P–T) generate once per monster, and group letters (U–V) once per group.
+         * @enum {string}
+         */
+        TreasureSection: "hoard" | "individual" | "group";
+        /**
+         * TreasureTypeCatalogResponse
+         * @description The shipped treasure types, table order preserved.
+         */
+        TreasureTypeCatalogResponse: {
+            /** Treasure Types */
+            treasure_types: components["schemas"]["CatalogTreasureType"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -2579,6 +3005,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_project_api_projects__project_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_monster_catalog_api_catalogs_monsters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonsterCatalogResponse"];
+                };
+            };
+        };
+    };
+    get_equipment_catalog_api_catalogs_equipment_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentCatalogResponse"];
+                };
+            };
+        };
+    };
+    get_treasure_type_catalog_api_catalogs_treasure_types_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreasureTypeCatalogResponse"];
+                };
+            };
+        };
+    };
+    get_encounter_table_catalog_api_catalogs_encounter_tables_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EncounterTableCatalogResponse"];
                 };
             };
         };

@@ -1,11 +1,14 @@
 // The map editor's dialogs: dungeon and level management, level properties
-// (dimensions, entrance, the relocated wandering form), and the transition
-// placement dialog with its mini target-level picker. Each dialog mounts its
-// body only while open, so per-invocation state initializes on mount — no
-// reset effects.
-import { useEffect, useRef, useState } from 'react'
+// (dimensions, entrance, the wandering form with its table editor, level
+// features), and the transition placement dialog. Each dialog mounts its body
+// only while open, so per-invocation state initializes on mount — no reset
+// effects.
+import { useState } from 'react'
 
+import { LevelFeaturesSection } from '@/components/level-features'
+import { MiniLevelPicker } from '@/components/mini-level-picker'
 import { Button } from '@/components/ui/button'
+import { WanderingTableEditor } from '@/components/wandering-table-editor'
 import {
   Dialog,
   DialogContent,
@@ -540,7 +543,10 @@ export function LevelPropertiesDialog({
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent aria-describedby={undefined}>
+      <DialogContent
+        aria-describedby={undefined}
+        className="max-h-[85vh] overflow-y-auto sm:max-w-2xl"
+      >
         <DialogHeader>
           <DialogTitle>Level properties</DialogTitle>
         </DialogHeader>
@@ -579,9 +585,15 @@ export function LevelPropertiesDialog({
             )}
           </div>
           <WanderingForm
+            document={document}
             dungeonId={dungeonId}
             levelNumber={levelNumber}
             wandering={level.wandering}
+          />
+          <LevelFeaturesSection
+            document={document}
+            dungeonId={dungeonId}
+            levelNumber={levelNumber}
           />
           <div>
             <Button
@@ -605,12 +617,14 @@ export function LevelPropertiesDialog({
   )
 }
 
-// The wandering form, relocated from phase 1's LevelForm — same ops, new home.
+// The wandering form: the scalar parameters plus the inline d20 table editor.
 function WanderingForm({
+  document,
   dungeonId,
   levelNumber,
   wandering,
 }: {
+  document: Adventure
   dungeonId: string
   levelNumber: number
   wandering: WanderingSpec
@@ -649,13 +663,12 @@ function WanderingForm({
           onCommit={(value) => commitPatch({ interval_turns: value })}
         />
       </div>
-      {wandering.table && (
-        <p className="text-xs text-muted-foreground">
-          This level's inline encounter table (
-          <span className="font-mono">{wandering.table.id}</span>) is preserved unchanged; its
-          editor arrives in a later release.
-        </p>
-      )}
+      <WanderingTableEditor
+        document={document}
+        dungeonId={dungeonId}
+        levelNumber={levelNumber}
+        wandering={wandering}
+      />
     </div>
   )
 }
@@ -863,76 +876,5 @@ function TransitionBody({
         </Button>
       </DialogFooter>
     </DialogContent>
-  )
-}
-
-// The mini target-level picker: the target grid at thumbnail scale, click to
-// choose the landing cell.
-function MiniLevelPicker({
-  level,
-  selected,
-  onPick,
-}: {
-  level: LevelSpec
-  selected: Position | null
-  onPick: (cell: Position) => void
-}) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const cellPx = Math.max(
-    4,
-    Math.min(Math.floor(280 / level.width), Math.floor(200 / level.height)),
-  )
-  const width = level.width * cellPx
-  const height = level.height * cellPx
-
-  useEffect(() => {
-    const ctx = canvasRef.current?.getContext('2d')
-    if (!ctx) return
-    ctx.clearRect(0, 0, width, height)
-    ctx.fillStyle = 'rgba(125, 115, 95, 0.08)'
-    ctx.fillRect(0, 0, width, height)
-    ctx.strokeStyle = 'rgba(125, 115, 95, 0.35)'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    for (let x = 0; x <= level.width; x += 1) {
-      ctx.moveTo(x * cellPx + 0.5, 0)
-      ctx.lineTo(x * cellPx + 0.5, height)
-    }
-    for (let y = 0; y <= level.height; y += 1) {
-      ctx.moveTo(0, y * cellPx + 0.5)
-      ctx.lineTo(width, y * cellPx + 0.5)
-    }
-    ctx.stroke()
-    ctx.fillStyle = 'rgba(125, 115, 95, 0.3)'
-    for (const area of level.areas) {
-      for (const cell of area.cells) {
-        ctx.fillRect(cell[0] * cellPx, cell[1] * cellPx, cellPx, cellPx)
-      }
-    }
-    for (const transition of level.transitions) {
-      ctx.fillStyle = 'rgba(47, 111, 143, 0.6)'
-      ctx.fillRect(transition.position[0] * cellPx, transition.position[1] * cellPx, cellPx, cellPx)
-    }
-    if (selected) {
-      ctx.strokeStyle = '#2f6f8f'
-      ctx.lineWidth = 2
-      ctx.strokeRect(selected[0] * cellPx + 1, selected[1] * cellPx + 1, cellPx - 2, cellPx - 2)
-    }
-  })
-
-  return (
-    <canvas
-      ref={canvasRef}
-      data-testid="mini-level-picker"
-      width={width}
-      height={height}
-      className="max-w-full cursor-crosshair rounded-sm border"
-      onClick={(event) => {
-        const rect = event.currentTarget.getBoundingClientRect()
-        const x = Math.floor((event.clientX - rect.left) / cellPx)
-        const y = Math.floor((event.clientY - rect.top) / cellPx)
-        if (x >= 0 && x < level.width && y >= 0 && y < level.height) onPick([x, y])
-      }}
-    />
   )
 }

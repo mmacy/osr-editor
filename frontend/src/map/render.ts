@@ -5,10 +5,11 @@
 // marker, area tints with key numbers; graphite-on-slate in dark mode. All
 // drawing happens in CSS px — the component scales the context for
 // devicePixelRatio.
-import type { Finding, LevelSpec, Position } from '@/types'
+import type { AreaSpec, Finding, LevelSpec, Position } from '@/types'
 import { edgeAt, parseEdgeKey, type Direction } from '@/map/edge-key'
 import type { HitTarget } from '@/map/hit-test'
 import type { Gesture } from '@/map/gestures'
+import { areaGlyphs, isAreaStocked } from '@/map/stocking'
 import { cellSizePx, gridToCanvas, type ViewTransform } from '@/map/view'
 
 export interface MapTheme {
@@ -67,7 +68,12 @@ export interface RenderInput {
   hover: HitTarget | null
   markers: readonly MapMarker[]
   gesture: Gesture | null
+  // The unstocked filter: stocked areas dim — reduced-alpha tint and key
+  // number; nothing hides, everything stays clickable.
+  dimStocked?: boolean
 }
+
+const DIMMED_ALPHA = 0.3
 
 // Findings addressed to the rendered level become markers; addresses that
 // parse to no geometry segment render nothing here (the panel still lists
@@ -129,10 +135,13 @@ export function drawLevel(ctx: CanvasRenderingContext2D, input: RenderInput): vo
   ctx.stroke()
 
   for (const area of level.areas) {
+    ctx.save()
+    if (input.dimStocked && isAreaStocked(area)) ctx.globalAlpha = DIMMED_ALPHA
     ctx.fillStyle = theme.areaTint
     for (const cell of area.cells) {
       fillCell(ctx, view, cell)
     }
+    ctx.restore()
   }
 
   drawGesturePreview(ctx, input)
@@ -144,14 +153,27 @@ export function drawLevel(ctx: CanvasRenderingContext2D, input: RenderInput): vo
   }
   if (level.entrance) drawEntrance(ctx, view, theme, level.entrance)
 
-  // Key numbers over the tint and walls, centered on each area's first cell.
-  ctx.fillStyle = theme.ink
+  // Key numbers over the tint and walls, centered on each area's first cell:
+  // filled for stocked areas, hollow for unstocked — the at-a-glance stocking
+  // state — with the content glyphs beside them.
   ctx.font = `${Math.max(9, size * 0.42)}px ui-monospace, Menlo, monospace`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   for (const area of level.areas) {
+    const stocked = isAreaStocked(area)
     const center = cellCenter(view, area.cells[0])
-    ctx.fillText(area.id, center.x, center.y)
+    ctx.save()
+    if (input.dimStocked && stocked) ctx.globalAlpha = DIMMED_ALPHA
+    if (stocked) {
+      ctx.fillStyle = theme.ink
+      ctx.fillText(area.id, center.x, center.y)
+    } else {
+      ctx.strokeStyle = theme.ink
+      ctx.lineWidth = 1
+      ctx.strokeText(area.id, center.x, center.y)
+    }
+    drawContentGlyphs(ctx, view, theme, area, center)
+    ctx.restore()
   }
 
   for (const marker of input.markers) {
@@ -159,6 +181,60 @@ export function drawLevel(ctx: CanvasRenderingContext2D, input: RenderInput): vo
   }
   if (input.hover) drawTargetOutline(ctx, view, input.hover, theme.faded, 2)
   if (input.selection) drawSelection(ctx, input)
+}
+
+// The content glyphs beside the key number, pencil-weight: crossed lines for
+// an encounter, an open triangle for a trap (an area trap or any trapped
+// cache), an open circle for treasure (an area treasure or any cache). Skipped
+// below readable size.
+function drawContentGlyphs(
+  ctx: CanvasRenderingContext2D,
+  view: ViewTransform,
+  theme: MapTheme,
+  area: AreaSpec,
+  center: { x: number; y: number },
+): void {
+  const size = cellSizePx(view)
+  if (size < 16) return
+  const glyphs = areaGlyphs(area)
+  const active: Array<(x: number, y: number, r: number) => void> = []
+  if (glyphs.encounter) {
+    active.push((x, y, r) => {
+      ctx.beginPath()
+      ctx.moveTo(x - r, y - r)
+      ctx.lineTo(x + r, y + r)
+      ctx.moveTo(x + r, y - r)
+      ctx.lineTo(x - r, y + r)
+      ctx.stroke()
+    })
+  }
+  if (glyphs.trap) {
+    active.push((x, y, r) => {
+      ctx.beginPath()
+      ctx.moveTo(x, y - r)
+      ctx.lineTo(x + r, y + r)
+      ctx.lineTo(x - r, y + r)
+      ctx.closePath()
+      ctx.stroke()
+    })
+  }
+  if (glyphs.treasure) {
+    active.push((x, y, r) => {
+      ctx.beginPath()
+      ctx.arc(x, y, r, 0, Math.PI * 2)
+      ctx.stroke()
+    })
+  }
+  if (active.length === 0) return
+  ctx.save()
+  ctx.strokeStyle = theme.ink
+  ctx.lineWidth = 1
+  const radius = size * 0.08
+  const step = size * 0.22
+  const baseX = center.x + size * 0.28
+  const baseY = center.y - size * 0.26
+  active.forEach((draw, index) => draw(baseX + index * step, baseY, radius))
+  ctx.restore()
 }
 
 function fillCell(ctx: CanvasRenderingContext2D, view: ViewTransform, cell: Position): void {

@@ -1,13 +1,18 @@
-// The right-side inspector for the current map selection: area identity
-// (phase 2 covers id, name, description only — content cards are phase 3's),
-// the door inspector, and cell/transition details. Every commit goes through
-// the store's builder form against the committed document.
+// The right-side inspector for the current map selection: the keyed-entry
+// reading view — area identity in the serif voice, then the content cards
+// (encounter, treasure, trap, features) — plus the door inspector and
+// cell/transition details. Every commit goes through the store's builder form
+// against the committed document.
+import { useEffect, useRef } from 'react'
+
+import { AreaContentCards, type CardIntent } from '@/components/area-content-cards'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
 import type { MapSelection } from '@/map/render'
+import { isAreaStocked } from '@/map/stocking'
 import { projectStore } from '@/store/project-store'
 import type { Adventure, AreaSpec, DoorSpec, Edge, LevelSpec, Position } from '@/types'
 
@@ -19,22 +24,22 @@ function findLevel(document: Adventure, dungeonId: string, levelNumber: number):
   )
 }
 
-export function areaHasContent(area: AreaSpec): boolean {
-  return Boolean(area.encounter || area.features.length > 0 || area.trap || area.treasure)
-}
-
 export function MapInspector({
   document,
   dungeonId,
   levelNumber,
   selection,
   onSelectionChange,
+  cardIntent = null,
+  onCardIntentConsumed,
 }: {
   document: Adventure
   dungeonId: string
   levelNumber: number
   selection: MapSelection | null
   onSelectionChange: (selection: MapSelection | null) => void
+  cardIntent?: CardIntent | null
+  onCardIntentConsumed?: () => void
 }) {
   const level = findLevel(document, dungeonId, levelNumber)
   if (!level || !selection) {
@@ -51,10 +56,13 @@ export function MapInspector({
     return (
       <AreaInspector
         key={`${dungeonId}/${levelNumber}/${area.id}`}
+        document={document}
         area={area}
         dungeonId={dungeonId}
         levelNumber={levelNumber}
         onSelectionChange={onSelectionChange}
+        cardIntent={cardIntent}
+        onCardIntentConsumed={onCardIntentConsumed}
       />
     )
   }
@@ -82,16 +90,31 @@ export function MapInspector({
 }
 
 function AreaInspector({
+  document,
   area,
   dungeonId,
   levelNumber,
   onSelectionChange,
+  cardIntent,
+  onCardIntentConsumed,
 }: {
+  document: Adventure
   area: AreaSpec
   dungeonId: string
   levelNumber: number
   onSelectionChange: (selection: MapSelection | null) => void
+  cardIntent: CardIntent | null
+  onCardIntentConsumed?: () => void
 }) {
+  // The context menu's description intent lands focus in the prose field —
+  // only the intent raised on this very area; a stale one focuses nothing.
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    if (cardIntent?.card === 'description' && cardIntent.areaId === area.id) {
+      descriptionRef.current?.focus()
+      onCardIntentConsumed?.()
+    }
+  }, [cardIntent, area.id, onCardIntentConsumed])
   const commitField = (field: 'id' | 'name' | 'description', value: string) => {
     void projectStore
       .getState()
@@ -115,8 +138,10 @@ function AreaInspector({
     commitField('description', value),
   )
   const removeArea = () => {
+    // The stocked predicate guards the confirm — a described area never
+    // vanishes silently, content or not.
     if (
-      areaHasContent(area) &&
+      isAreaStocked(area) &&
       !window.confirm(`Remove area ${area.id} and the content it carries?`)
     ) {
       return
@@ -145,6 +170,7 @@ function AreaInspector({
         <Label htmlFor="area-description">Description</Label>
         <Textarea
           id="area-description"
+          ref={descriptionRef}
           className="min-h-24 font-serif"
           value={description.value}
           onChange={description.onChange}
@@ -154,6 +180,13 @@ function AreaInspector({
       <p className="text-xs text-muted-foreground">
         <span className="font-mono">{area.cells.length}</span> cell(s)
       </p>
+      <AreaContentCards
+        document={document}
+        area={area}
+        target={{ dungeonId, levelNumber, areaId: area.id }}
+        intent={cardIntent}
+        onIntentConsumed={onCardIntentConsumed}
+      />
       <Button variant="destructive" size="sm" onClick={removeArea}>
         Remove area
       </Button>

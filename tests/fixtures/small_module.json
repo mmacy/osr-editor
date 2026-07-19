@@ -1,0 +1,664 @@
+{
+  "kind": "adventure",
+  "schema_version": 2,
+  "engine_version": "1.2.0",
+  "payload": {
+    "name": "The Mill on the Moor",
+    "description": "A ruined mill above a wind-scoured hamlet hides the caves its miller dug, died in, and never left.",
+    "hooks": [
+      "The miller vanished a fortnight ago; his creditors will pay for proof either way.",
+      "Orcs have been trading flour nobody grinds anymore."
+    ],
+    "town": {
+      "name": "Dusthollow",
+      "description": "A crossroads hamlet of stubborn farmers under a big grey sky.",
+      "services": [
+        "The Wheat Sheaf inn",
+        "A dour smith who buys old iron"
+      ],
+      "travel_turns": {
+        "mill-caves": 2
+      }
+    },
+    "dungeons": [
+      {
+        "id": "mill-caves",
+        "name": "The mill caves",
+        "levels": [
+          {
+            "number": 1,
+            "width": 8,
+            "height": 6,
+            "edges": {
+              "1,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "0,1:north": {
+                "kind": "open",
+                "door": null
+              },
+              "1,1:north": {
+                "kind": "open",
+                "door": null
+              },
+              "1,1:west": {
+                "kind": "open",
+                "door": null
+              },
+              "2,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "3,0:west": {
+                "kind": "door",
+                "door": {
+                  "kind": "normal",
+                  "stuck": false,
+                  "locked": false,
+                  "starts_open": false
+                }
+              },
+              "3,1:north": {
+                "kind": "open",
+                "door": null
+              },
+              "4,0:west": {
+                "kind": "door",
+                "door": {
+                  "kind": "secret",
+                  "stuck": false,
+                  "locked": false,
+                  "starts_open": false
+                }
+              },
+              "4,1:north": {
+                "kind": "open",
+                "door": null
+              }
+            },
+            "areas": [
+              {
+                "id": "1",
+                "name": "The guard post",
+                "description": "Broken millstones are stacked into a crude barricade. Orcs dice by torchlight while their skeleton porters stand motionless against the wall.",
+                "cells": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    1,
+                    0
+                  ],
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    1,
+                    1
+                  ]
+                ],
+                "encounter": {
+                  "monsters": [
+                    {
+                      "template_id": "orc",
+                      "count_dice": "3d4",
+                      "count_fixed": null
+                    },
+                    {
+                      "template_id": "skeleton",
+                      "count_dice": null,
+                      "count_fixed": 6
+                    }
+                  ],
+                  "alignment": "chaotic",
+                  "aware": true,
+                  "stance": "hostile"
+                },
+                "features": [],
+                "trap": null,
+                "treasure": null
+              },
+              {
+                "id": "2",
+                "name": "The sifting room",
+                "description": "Flour dust hangs in the air. The floor's central flags pivot on a greased axle over a ten-foot drop into the old grain hopper.",
+                "cells": [
+                  [
+                    3,
+                    0
+                  ],
+                  [
+                    3,
+                    1
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": {
+                  "kind": "room",
+                  "trigger": "enter",
+                  "effect": {
+                    "damage_dice": "1d6",
+                    "volley_dice": null,
+                    "save": {
+                      "category": "breath",
+                      "modifier": 0,
+                      "on_save": "half"
+                    },
+                    "kills": false,
+                    "condition": null,
+                    "condition_duration_dice": null,
+                    "condition_duration_amount": null,
+                    "condition_duration_unit": null,
+                    "fall_feet": 10,
+                    "transition": null,
+                    "manual": null
+                  },
+                  "affects": "triggerer"
+                },
+                "treasure": {
+                  "letters": [],
+                  "unguarded": true
+                }
+              },
+              {
+                "id": "3",
+                "name": "The miller's cache",
+                "description": "A dry vault behind the false wall, undisturbed for a generation. A brass-bound chest sits on a stone shelf above the damp.",
+                "cells": [
+                  [
+                    4,
+                    0
+                  ],
+                  [
+                    4,
+                    1
+                  ]
+                ],
+                "encounter": null,
+                "features": [
+                  {
+                    "id": "feature-1",
+                    "kind": "treasure_cache",
+                    "description": "The brass-bound chest, its lock plate scratched around the keyhole.",
+                    "cell": null,
+                    "item_ids": [
+                      "sword"
+                    ],
+                    "coins": {
+                      "pp": 0,
+                      "gp": 120,
+                      "ep": 0,
+                      "sp": 30,
+                      "cp": 0
+                    },
+                    "valuables": [
+                      {
+                        "kind": "gem",
+                        "name": "",
+                        "value_gp": 50,
+                        "weight_coins": 0
+                      },
+                      {
+                        "kind": "gem",
+                        "name": "",
+                        "value_gp": 50,
+                        "weight_coins": 0
+                      },
+                      {
+                        "kind": "jewellery",
+                        "name": "The miller's signet ring",
+                        "value_gp": 300,
+                        "weight_coins": 10
+                      }
+                    ],
+                    "trap": {
+                      "kind": "treasure",
+                      "trigger": "open",
+                      "effect": {
+                        "damage_dice": null,
+                        "volley_dice": null,
+                        "save": {
+                          "category": "death",
+                          "modifier": 0,
+                          "on_save": "negates"
+                        },
+                        "kills": true,
+                        "condition": null,
+                        "condition_duration_dice": null,
+                        "condition_duration_amount": null,
+                        "condition_duration_unit": null,
+                        "fall_feet": null,
+                        "transition": null,
+                        "manual": "A poison needle springs from the lock plate."
+                      },
+                      "affects": "triggerer"
+                    }
+                  }
+                ],
+                "trap": null,
+                "treasure": {
+                  "letters": [
+                    "C"
+                  ],
+                  "unguarded": false
+                }
+              }
+            ],
+            "features": [
+              {
+                "id": "feature-2",
+                "kind": "custom",
+                "description": "A warning in chalk, half-scuffed: 'the floor lies'.",
+                "cell": [
+                  2,
+                  0
+                ],
+                "item_ids": [],
+                "coins": {
+                  "pp": 0,
+                  "gp": 0,
+                  "ep": 0,
+                  "sp": 0,
+                  "cp": 0
+                },
+                "valuables": [],
+                "trap": null
+              }
+            ],
+            "transitions": [
+              {
+                "kind": "stairs_down",
+                "position": [
+                  0,
+                  1
+                ],
+                "to_dungeon_id": "mill-caves",
+                "to_level_number": 2,
+                "to_position": [
+                  0,
+                  0
+                ],
+                "to_facing": "south"
+              }
+            ],
+            "wandering": {
+              "chance_in_six": 1,
+              "interval_turns": 2,
+              "table": null
+            },
+            "entrance": [
+              0,
+              0
+            ]
+          },
+          {
+            "number": 2,
+            "width": 6,
+            "height": 4,
+            "edges": {
+              "1,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "1,1:north": {
+                "kind": "open",
+                "door": null
+              }
+            },
+            "areas": [
+              {
+                "id": "4",
+                "name": "The bone hall",
+                "description": "The cave widens under the mill's foundations. Long bones are sorted into alcoves by size, patient as a larder.",
+                "cells": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    1,
+                    0
+                  ]
+                ],
+                "encounter": null,
+                "features": [
+                  {
+                    "id": "feature-3",
+                    "kind": "construction_trick",
+                    "description": "The third alcove's back wall pivots when the shelf is unweighted.",
+                    "cell": null,
+                    "item_ids": [],
+                    "coins": {
+                      "pp": 0,
+                      "gp": 0,
+                      "ep": 0,
+                      "sp": 0,
+                      "cp": 0
+                    },
+                    "valuables": [],
+                    "trap": null
+                  }
+                ],
+                "trap": null,
+                "treasure": null
+              },
+              {
+                "id": "5",
+                "name": "The spring cave",
+                "description": "The millstream rises here, black and cold; the current tugs at torchlight.",
+                "cells": [
+                  [
+                    1,
+                    1
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": null
+              }
+            ],
+            "features": [],
+            "transitions": [
+              {
+                "kind": "stairs_up",
+                "position": [
+                  0,
+                  0
+                ],
+                "to_dungeon_id": "mill-caves",
+                "to_level_number": 1,
+                "to_position": [
+                  0,
+                  1
+                ],
+                "to_facing": "north"
+              }
+            ],
+            "wandering": {
+              "chance_in_six": 2,
+              "interval_turns": 2,
+              "table": {
+                "id": "mill-caves-level-2-wandering",
+                "label": "Level 2 wandering",
+                "min_level": 1,
+                "max_level": null,
+                "rows": [
+                  {
+                    "roll": 1,
+                    "name": "Skeleton patrol",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "skeleton"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": null,
+                    "count_fixed": 6
+                  },
+                  {
+                    "roll": 2,
+                    "name": "Berserker",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "berserker"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d6",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 3,
+                    "name": "Cat, Mountain Lion",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "mountain_lion"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d4",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 4,
+                    "name": "Elf",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "elf_monster"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d4",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 5,
+                    "name": "Ghoul",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "ghoul"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d6",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 6,
+                    "name": "Gnoll",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "gnoll"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d6",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 7,
+                    "name": "Grey Ooze",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "grey_ooze"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": null,
+                    "count_fixed": 1
+                  },
+                  {
+                    "roll": 8,
+                    "name": "Hobgoblin",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "hobgoblin"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d6",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 9,
+                    "name": "Lizard, Draco",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "draco"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d4",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 10,
+                    "name": "Lizard Man",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "lizard_man"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "2d4",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 11,
+                    "name": "Neanderthal",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "neanderthal_caveman"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d10",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 12,
+                    "name": "Noble",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "noble"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "2d6",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 13,
+                    "name": "Pixie",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "pixie"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "2d4",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 14,
+                    "name": "Robber Fly",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "robber_fly"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d6",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 15,
+                    "name": "Rock Baboon",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "rock_baboon"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "2d6",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 16,
+                    "name": "Snake, Pit Viper",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "pit_viper"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d8",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 17,
+                    "name": "Spider, Black Widow",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "black_widow"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d3",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 18,
+                    "name": "Troglodyte",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "troglodyte"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "1d8",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 19,
+                    "name": "Veteran",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "veteran_1",
+                        "veteran_2",
+                        "veteran_3"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "2d4",
+                    "count_fixed": null
+                  },
+                  {
+                    "roll": 20,
+                    "name": "Zombie",
+                    "entry": {
+                      "kind": "monster",
+                      "monster_ids": [
+                        "zombie"
+                      ],
+                      "variant_dice": null
+                    },
+                    "count_dice": "2d4",
+                    "count_fixed": null
+                  }
+                ],
+                "overrides_applied": []
+              }
+            },
+            "entrance": null
+          }
+        ]
+      }
+    ],
+    "monsters": []
+  }
+}

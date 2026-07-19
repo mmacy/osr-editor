@@ -69,7 +69,9 @@ export function DiagnosticsPanel({
   )
 }
 
-function FindingRow({
+// Exported for the publish dialog: publish_blocked findings render with the
+// panel's own click-to-navigate rows.
+export function FindingRow({
   finding,
   target,
   onNavigate,
