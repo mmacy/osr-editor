@@ -2,7 +2,7 @@
 
 A local GUI application for creating and modifying adventure modules playable by [osrlib](https://github.com/mmacy/osrlib-python)-powered games. osr-editor authors the same stamped `adventure.json` documents that [osr-forge](https://github.com/mmacy/osr-forge) produces and [osr-web](https://github.com/mmacy/osr-web) plays: a FastAPI backend that holds the working document as real osrlib model objects, serving a React frontend to the browser.
 
-**Development status: pre-alpha.** Phase 0 of [the spec](docs/spec.md) is in place — the two-toolchain skeleton, canonical document serialization, and the locked API contracts. There is no editing UI yet.
+**Development status: pre-alpha.** Phases 0 and 1 of [the spec](docs/spec.md) are in place — the two-toolchain skeleton, canonical document serialization, the locked API contracts, and the first editing surface: create and open native projects, edit adventure and town prose with undo/redo, watch content validation react live, and export a stamped document osr-web lists. The map editor and keyed-content surfaces arrive in later phases.
 
 ## Requirements
 
@@ -19,7 +19,9 @@ uv sync
 uv run osr-editor
 ```
 
-`osr-editor` serves on `http://127.0.0.1:8630` and opens your browser. Flags: `--port` to change the port, `--no-browser` to suppress the browser launch.
+`osr-editor` serves on `http://127.0.0.1:8630` and opens your browser to the home screen. Pass a project directory to open it straight away — `osr-editor ~/adventures/mill.osr` — or use the home screen's recents, new-adventure, and open-by-path entries. Flags: `--port` to change the port, `--no-browser` to suppress the browser launch.
+
+App config (the recents list) lives at `platformdirs.user_config_path("osr-editor")/config.json` — for example `~/Library/Application Support/osr-editor/config.json` on macOS or `~/.config/osr-editor/config.json` on Linux. It is a convenience cache; deleting it only clears the recents.
 
 ## Development
 
