@@ -2,7 +2,7 @@
 
 A local GUI application for creating and modifying adventure modules playable by [osrlib](https://github.com/mmacy/osrlib-python)-powered games. osr-editor authors the same stamped `adventure.json` documents that [osr-forge](https://github.com/mmacy/osr-forge) produces and [osr-web](https://github.com/mmacy/osr-web) plays: a FastAPI backend that holds the working document as real osrlib model objects, serving a React frontend to the browser.
 
-**Development status: pre-alpha.** Phases 0–3 of [the spec](docs/spec.md) are in place — the two-toolchain skeleton, canonical document serialization, the locked API contracts, the project/prose surface (create and open native projects, edit adventure and town prose with undo/redo, live content validation, export), the map editor (the full geometry tool set, multi-level and multi-dungeon management, live structural lint, geometry import through the `GeometryImporter` plugin seam), and keyed content: the map-first stocking flow over encounters, treasure, traps, features, and wandering tables, plus publish to osr-web. The monster editor and forge-backed review arrive in later phases.
+**Development status: pre-alpha.** Phases 0–3 and 5 of [the spec](docs/spec.md) are in place — the two-toolchain skeleton, canonical document serialization, the locked API contracts, the project/prose surface (create and open native projects, edit adventure and town prose with undo/redo, live content validation, export), the map editor (the full geometry tool set, multi-level and multi-dungeon management, live structural lint, geometry import through the `GeometryImporter` plugin seam), keyed content (the map-first stocking flow over encounters, treasure, traps, features, and wandering tables) with publish to osr-web, and forge-backed review (open an osr-forge workdir and correct its conversion through `overrides.yaml`). The native monster editor (phase 4) arrives in a later release.
 
 ### The map tools
 
@@ -16,7 +16,17 @@ Right-click an area cell for the stocking menu: description, encounter, treasure
 
 ### Publish to osr-web
 
-**Publish** (beside export) places the adventure in an [osr-web](https://github.com/mmacy/osr-web) checkout's `adventures/` directory — as a live symlink that republishes on every save, or a point-in-time snapshot copy. Publish requires clean validation; lint warnings prompt but never block (secret-only access is sometimes the point). The checkout path is collected on first use and saved to the app config once its shape checks out.
+**Publish** (beside export) places the adventure in an [osr-web](https://github.com/mmacy/osr-web) checkout's `adventures/` directory — as a live symlink that republishes on every save, or a point-in-time snapshot copy. Publish requires clean validation; lint and forge findings prompt but never block (secret-only access is sometimes the point). The checkout path is collected on first use and saved to the app config once its shape checks out.
+
+### Forge-backed review
+
+Open an [osr-forge](https://github.com/mmacy/osr-forge) workdir — a directory whose `run.json` describes a completed conversion — and the editor corrects the draft through `overrides.yaml` instead of authoring `adventure.json`. It never writes the derived artifacts: every correction writes `overrides.yaml` and re-runs forge's `assemble`, so a post-session `assemble()` reproduces the session's `adventure.json`, `report.json`, and previews byte-for-byte. The **Review** section lists the report's flags per area (and the module) with per-flag dismissal and an honest work-remaining count, and the printed source pages render beside the inspector — correction happens against the page. Editing an area, drawing geometry, or clearing an encounter translates to a merged, reasoned override entry; an edit with no override kind (renaming a dungeon, resizing a level) offers **detach** in place. The **Monsters** section resolves unresolved names — remap through the monster picker, or supply the printed stat block verbatim in the notation form. The **Corrections** section is the reviewable record: every override entry, its reason inline-editable, a machine-draft badge until you compose one. The **Pipeline** section renders `run.json` with an on-demand playability `check` and the assemble-stage rerun knob.
+
+**Detach** crosses a workdir to a new native project — the current assembled document written through the native serializer, provenance and author notes carried over, the forge re-run loop severed. **Publish** and **export** copy forge's own `adventure.json` verbatim; a symlink publish republishes live on every correction.
+
+### Author notes
+
+The area panel and level properties carry a quiet **author notes** field, stored in the `editor.json` sidecar and never in the published deliverable. Notes follow their entity across a rename, renumber, or re-key, and survive undo and redo.
 
 ## Requirements
 

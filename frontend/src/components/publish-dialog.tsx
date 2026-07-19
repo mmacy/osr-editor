@@ -54,7 +54,10 @@ export function PublishDialog({ onNavigate }: { onNavigate: (target: NavTarget) 
   const [publishing, setPublishing] = useState(false)
 
   if (!project) return null
-  const lintFindings = project.diagnostics.lint
+  // The client-side confirm lists lint and forge findings alike — secret-only
+  // access, a delve_incomplete warning: sometimes the point. Validation still
+  // gates server-side.
+  const lintFindings = [...project.diagnostics.lint, ...project.diagnostics.forge]
 
   const openDialog = (next: boolean) => {
     if (next) {
