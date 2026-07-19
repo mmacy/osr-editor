@@ -172,6 +172,13 @@ export function MapEditor({
     setCardIntent(null)
   }
 
+  // A one-shot intent lives only while its area stays selected: the selection
+  // leaving the area drops it (render-time adjustment), and consumption nulls
+  // it — either way a reselect remounting the inspector never replays an add.
+  if (cardIntent && !(selection?.kind === 'area' && selection.areaId === cardIntent.areaId)) {
+    setCardIntent(null)
+  }
+
   // Fit-level-on-open, derived: user interactions set the view state; until
   // the first one (or after a level switch), the fitted transform is computed
   // from the viewport.
@@ -714,6 +721,7 @@ export function MapEditor({
             selection={selection}
             onSelectionChange={setSelection}
             cardIntent={cardIntent}
+            onCardIntentConsumed={() => setCardIntent(null)}
           />
         </aside>
       </div>

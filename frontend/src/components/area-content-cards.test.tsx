@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 import { AreaContentCards, type CardIntent } from '@/components/area-content-cards'
@@ -84,4 +85,50 @@ test('a stale intent from another area never replays — the inspector remounts 
   expect(postOps).not.toHaveBeenCalled()
   // The trap card stays the collapsed empty add row, unexpanded.
   expect(screen.queryByRole('button', { name: 'Trap', expanded: true })).not.toBeInTheDocument()
+})
+
+test('consumption nulls the parent copy, so a same-area deselect/reselect never replays', async () => {
+  // The parent contract: the editor holds the intent across inspector
+  // remounts and nulls it on onIntentConsumed. Deselect (unmount) then
+  // reselect the same area — the remounted consumer, guards freshly reset,
+  // must receive null and commit nothing further.
+  const target = { dungeonId: 'dungeon-1', levelNumber: 1, areaId: '1' }
+  const spec = area('1')
+  const document = makeDocument()
+  document.dungeons[0].levels[0].areas = [spec]
+  projectStore.getState().setProject(makeProjectState({ document }))
+
+  function Harness() {
+    // The parent survives the child's unmount, exactly like the editor
+    // surviving the per-area inspector remount.
+    const [intent, setIntent] = useState<CardIntent | null>({
+      areaId: '1',
+      card: 'features',
+      action: 'add',
+      token: 1,
+    })
+    const [show, setShow] = useState(true)
+    return (
+      <>
+        <button type="button" onClick={() => setShow((current) => !current)}>
+          toggle selection
+        </button>
+        {show && (
+          <AreaContentCards
+            document={document}
+            area={spec}
+            target={target}
+            intent={intent}
+            onIntentConsumed={() => setIntent(null)}
+          />
+        )}
+      </>
+    )
+  }
+  render(<Harness />)
+  await waitFor(() => expect(postOps).toHaveBeenCalledTimes(1))
+  fireEvent.click(screen.getByRole('button', { name: 'toggle selection' }))
+  fireEvent.click(screen.getByRole('button', { name: 'toggle selection' }))
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(postOps).toHaveBeenCalledTimes(1)
 })

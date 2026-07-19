@@ -31,6 +31,7 @@ export function MapInspector({
   selection,
   onSelectionChange,
   cardIntent = null,
+  onCardIntentConsumed,
 }: {
   document: Adventure
   dungeonId: string
@@ -38,6 +39,7 @@ export function MapInspector({
   selection: MapSelection | null
   onSelectionChange: (selection: MapSelection | null) => void
   cardIntent?: CardIntent | null
+  onCardIntentConsumed?: () => void
 }) {
   const level = findLevel(document, dungeonId, levelNumber)
   if (!level || !selection) {
@@ -60,6 +62,7 @@ export function MapInspector({
         levelNumber={levelNumber}
         onSelectionChange={onSelectionChange}
         cardIntent={cardIntent}
+        onCardIntentConsumed={onCardIntentConsumed}
       />
     )
   }
@@ -93,6 +96,7 @@ function AreaInspector({
   levelNumber,
   onSelectionChange,
   cardIntent,
+  onCardIntentConsumed,
 }: {
   document: Adventure
   area: AreaSpec
@@ -100,6 +104,7 @@ function AreaInspector({
   levelNumber: number
   onSelectionChange: (selection: MapSelection | null) => void
   cardIntent: CardIntent | null
+  onCardIntentConsumed?: () => void
 }) {
   // The context menu's description intent lands focus in the prose field —
   // only the intent raised on this very area; a stale one focuses nothing.
@@ -107,8 +112,9 @@ function AreaInspector({
   useEffect(() => {
     if (cardIntent?.card === 'description' && cardIntent.areaId === area.id) {
       descriptionRef.current?.focus()
+      onCardIntentConsumed?.()
     }
-  }, [cardIntent, area.id])
+  }, [cardIntent, area.id, onCardIntentConsumed])
   const commitField = (field: 'id' | 'name' | 'description', value: string) => {
     void projectStore
       .getState()
@@ -179,6 +185,7 @@ function AreaInspector({
         area={area}
         target={{ dungeonId, levelNumber, areaId: area.id }}
         intent={cardIntent}
+        onIntentConsumed={onCardIntentConsumed}
       />
       <Button variant="destructive" size="sm" onClick={removeArea}>
         Remove area

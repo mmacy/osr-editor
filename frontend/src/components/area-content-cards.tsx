@@ -156,11 +156,13 @@ export function AreaContentCards({
   area,
   target,
   intent,
+  onIntentConsumed,
 }: {
   document: Adventure
   area: AreaSpec
   target: AreaTarget
   intent: CardIntent | null
+  onIntentConsumed?: () => void
 }) {
   const [expanded, setExpanded] = useState<Set<ContentCardKind>>(new Set())
   const toggle = (card: ContentCardKind) =>
@@ -187,12 +189,16 @@ export function AreaContentCards({
   useEffect(() => {
     if (!intent || intent.areaId !== area.id || intent.token === committedToken.current) return
     committedToken.current = intent.token
-    if (intent.action !== 'add') return
-    if (intent.card === 'trap' && !area.trap) {
-      void projectStore.getState().commit(areaTrapOps(target, emptyTrap('room')))
-    } else if (intent.card === 'features') {
-      commitAddFeature({ ...target, areaId: target.areaId }, area.cells[0])
+    if (intent.action === 'add') {
+      if (intent.card === 'trap' && !area.trap) {
+        void projectStore.getState().commit(areaTrapOps(target, emptyTrap('room')))
+      } else if (intent.card === 'features') {
+        commitAddFeature({ ...target, areaId: target.areaId }, area.cells[0])
+      }
     }
+    // Consumed: the parent nulls its copy, so a deselect/reselect remounting
+    // this panel (fresh guards) can never replay the add.
+    onIntentConsumed?.()
   })
   return (
     <div className="flex flex-col gap-2" aria-label="Contents">
