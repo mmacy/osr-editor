@@ -6,9 +6,12 @@ import type {
   ApiError,
   ApiErrorDetail,
   ExportResult,
+  ImportedGeometry,
+  ImporterListResponse,
   OpBatchResult,
   ProjectListResponse,
   ProjectState,
+  SniffResult,
   StatusResponse,
 } from '@/types'
 
@@ -65,6 +68,14 @@ export const api = {
   redo: (id: string) => request<OpBatchResult>(`/api/projects/${id}/redo`, jsonPost()),
   exportProject: (id: string, path: string) =>
     request<ExportResult>(`/api/projects/${id}/export`, jsonPost({ path })),
+  listImporters: () => request<ImporterListResponse>('/api/importers'),
+  sniffImporters: (path: string) =>
+    request<SniffResult>('/api/importers/sniff', jsonPost({ path })),
+  loadGeometry: (formatId: string, path: string) =>
+    request<ImportedGeometry>(
+      `/api/importers/${encodeURIComponent(formatId)}/load`,
+      jsonPost({ path }),
+    ),
 }
 
 export type ApiClient = typeof api

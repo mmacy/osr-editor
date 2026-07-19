@@ -6,15 +6,18 @@ import { toast } from 'sonner'
 import { DiagnosticsPanel } from '@/components/diagnostics-panel'
 import { ExportDialog } from '@/components/export-dialog'
 import { FidelityDialog } from '@/components/fidelity-dialog'
-import { AdventureForm, LevelForm, TownForm } from '@/components/forms'
+import { AdventureForm, TownForm } from '@/components/forms'
+import { MapEditor } from '@/components/map-editor'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, ApiRequestError } from '@/lib/api'
 import type { NavTarget } from '@/lib/address'
+import { removeInvalidEdgeOps } from '@/lib/lint-actions'
 import { cn } from '@/lib/utils'
 import { projectStore, useProjectStore } from '@/store/project-store'
+import type { Finding } from '@/types'
 
 export function ProjectScreen() {
   const { id } = useParams<{ id: string }>()
@@ -22,6 +25,18 @@ export function ProjectScreen() {
   const project = useProjectStore((state) => state.project)
   const gone = useProjectStore((state) => state.gone)
   const [section, setSection] = useState<NavTarget>({ kind: 'adventure' })
+  // Bumped on every diagnostics navigation so clicking the same finding twice
+  // re-applies its focus (re-select, re-scroll, re-open properties).
+  const [focusToken, setFocusToken] = useState(0)
+
+  const navigateTo = (target: NavTarget) => {
+    setSection(target)
+    setFocusToken((token) => token + 1)
+  }
+
+  const removeEntry = (finding: Finding) => {
+    void projectStore.getState().commit((document) => removeInvalidEdgeOps(finding, document))
+  }
 
   // A direct URL load (a second tab) fetches by id; a stale id after a server
   // restart routes home with the toast — the recent is right there to reopen.
@@ -135,39 +150,50 @@ export function ProjectScreen() {
                   <span className="truncate px-2 text-xs font-medium text-muted-foreground">
                     {dungeon.name || <span className="font-mono">{dungeon.id}</span>}
                   </span>
-                  {dungeon.levels.map((level) => (
-                    <SectionButton
-                      key={level.number}
-                      label={`Level ${level.number}`}
-                      indent
-                      active={
-                        section.kind === 'level' &&
-                        section.dungeonId === dungeon.id &&
-                        section.levelNumber === level.number
-                      }
-                      onClick={() =>
-                        setSection({
-                          kind: 'level',
-                          dungeonId: dungeon.id,
-                          levelNumber: level.number,
-                        })
-                      }
-                    />
-                  ))}
+                  {[...dungeon.levels]
+                    .sort((a, b) => a.number - b.number)
+                    .map((level) => (
+                      <SectionButton
+                        key={level.number}
+                        label={`Level ${level.number}`}
+                        indent
+                        active={
+                          section.kind === 'level' &&
+                          section.dungeonId === dungeon.id &&
+                          section.levelNumber === level.number
+                        }
+                        onClick={() =>
+                          navigateTo({
+                            kind: 'level',
+                            dungeonId: dungeon.id,
+                            levelNumber: level.number,
+                          })
+                        }
+                      />
+                    ))}
                 </div>
               ))}
             </nav>
           </ScrollArea>
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-y-auto p-6">
+        <main
+          className={cn(
+            'min-w-0 flex-1',
+            section.kind === 'level' ? 'flex min-h-0 flex-col' : 'overflow-y-auto p-6',
+          )}
+        >
           {section.kind === 'adventure' && <AdventureForm document={project.document} />}
           {section.kind === 'town' && <TownForm document={project.document} />}
           {section.kind === 'level' && (
-            <LevelForm
+            <MapEditor
               document={project.document}
+              diagnostics={project.diagnostics}
               dungeonId={section.dungeonId}
               levelNumber={section.levelNumber}
+              focus={section.focus}
+              focusToken={focusToken}
+              onNavigate={navigateTo}
             />
           )}
         </main>
@@ -176,7 +202,8 @@ export function ProjectScreen() {
       <DiagnosticsPanel
         diagnostics={project.diagnostics}
         document={project.document}
-        onNavigate={setSection}
+        onNavigate={navigateTo}
+        onRemoveEntry={removeEntry}
       />
       <FidelityDialog />
     </div>
