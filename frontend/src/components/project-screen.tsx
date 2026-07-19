@@ -6,7 +6,15 @@ import { toast } from 'sonner'
 import { DiagnosticsPanel } from '@/components/diagnostics-panel'
 import { ExportDialog } from '@/components/export-dialog'
 import { FidelityDialog } from '@/components/fidelity-dialog'
+import { BlockedOpDialog, DetachDialog } from '@/components/forge-dialogs'
+import {
+  CorrectionsPanel,
+  MonsterResolutionPanel,
+  PipelinePanel,
+  ReviewQueue,
+} from '@/components/forge-panels'
 import { PublishDialog } from '@/components/publish-dialog'
+import { SourcePagesPane } from '@/components/source-pages-pane'
 import { AdventureForm, TownForm } from '@/components/forms'
 import { MapEditor } from '@/components/map-editor'
 import { Button } from '@/components/ui/button'
@@ -14,25 +22,45 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, ApiRequestError } from '@/lib/api'
+import type { ReviewRow } from '@/lib/flags'
 import type { NavTarget } from '@/lib/address'
 import { removeInvalidEdgeOps } from '@/lib/lint-actions'
 import { cn } from '@/lib/utils'
 import { projectStore, useProjectStore } from '@/store/project-store'
 import type { Finding } from '@/types'
 
+type ForgePanel = 'review' | 'corrections' | 'pipeline' | 'monsters'
+type Section = NavTarget | { kind: 'forge'; panel: ForgePanel }
+
+const FORGE_PANELS: { panel: ForgePanel; label: string }[] = [
+  { panel: 'review', label: 'Review' },
+  { panel: 'monsters', label: 'Monsters' },
+  { panel: 'corrections', label: 'Corrections' },
+  { panel: 'pipeline', label: 'Pipeline' },
+]
+
 export function ProjectScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const project = useProjectStore((state) => state.project)
   const gone = useProjectStore((state) => state.gone)
-  const [section, setSection] = useState<NavTarget>({ kind: 'adventure' })
+  const blockedOp = useProjectStore((state) => state.blockedOp)
+  const [section, setSection] = useState<Section>({ kind: 'adventure' })
   // Bumped on every diagnostics navigation so clicking the same finding twice
   // re-applies its focus (re-select, re-scroll, re-open properties).
   const [focusToken, setFocusToken] = useState(0)
+  // The source pages for the currently selected review row, shown beside the map.
+  const [sourcePages, setSourcePages] = useState<number[]>([])
+  const [detachOpen, setDetachOpen] = useState(false)
 
   const navigateTo = (target: NavTarget) => {
     setSection(target)
     setFocusToken((token) => token + 1)
+  }
+
+  const selectReviewRow = (target: NavTarget, row: ReviewRow) => {
+    setSourcePages(row.sourcePages)
+    navigateTo(target)
   }
 
   const removeEntry = (finding: Finding) => {
@@ -147,6 +175,20 @@ export function ProjectScreen() {
                 active={section.kind === 'town'}
                 onClick={() => setSection({ kind: 'town' })}
               />
+              {project.forge && (
+                <div className="mt-2 flex flex-col gap-0.5">
+                  <span className="px-2 text-xs font-medium text-muted-foreground">Forge</span>
+                  {FORGE_PANELS.map(({ panel, label }) => (
+                    <SectionButton
+                      key={panel}
+                      label={label}
+                      indent
+                      active={section.kind === 'forge' && section.panel === panel}
+                      onClick={() => setSection({ kind: 'forge', panel })}
+                    />
+                  ))}
+                </div>
+              )}
               {project.document.dungeons.map((dungeon) => (
                 <div key={dungeon.id} className="mt-2 flex flex-col gap-0.5">
                   <span className="truncate px-2 text-xs font-medium text-muted-foreground">
@@ -182,21 +224,39 @@ export function ProjectScreen() {
         <main
           className={cn(
             'min-w-0 flex-1',
-            section.kind === 'level' ? 'flex min-h-0 flex-col' : 'overflow-y-auto p-6',
+            section.kind === 'level' ? 'flex min-h-0' : 'overflow-y-auto',
+            section.kind === 'forge' ? 'overflow-y-auto' : section.kind === 'level' ? '' : 'p-6',
           )}
         >
           {section.kind === 'adventure' && <AdventureForm document={project.document} />}
           {section.kind === 'town' && <TownForm document={project.document} />}
+          {section.kind === 'forge' && (
+            <div className="min-w-0 flex-1">
+              {section.panel === 'review' && (
+                <ReviewQueue project={project} onNavigate={selectReviewRow} />
+              )}
+              {section.panel === 'corrections' && (
+                <CorrectionsPanel project={project} onNavigate={navigateTo} />
+              )}
+              {section.panel === 'pipeline' && <PipelinePanel project={project} />}
+              {section.panel === 'monsters' && <MonsterResolutionPanel project={project} />}
+            </div>
+          )}
           {section.kind === 'level' && (
-            <MapEditor
-              document={project.document}
-              diagnostics={project.diagnostics}
-              dungeonId={section.dungeonId}
-              levelNumber={section.levelNumber}
-              focus={section.focus}
-              focusToken={focusToken}
-              onNavigate={navigateTo}
-            />
+            <>
+              <div className="flex min-h-0 flex-1 flex-col">
+                <MapEditor
+                  document={project.document}
+                  diagnostics={project.diagnostics}
+                  dungeonId={section.dungeonId}
+                  levelNumber={section.levelNumber}
+                  focus={section.focus}
+                  focusToken={focusToken}
+                  onNavigate={navigateTo}
+                />
+              </div>
+              {project.forge && <SourcePagesPane projectId={project.id} pages={sourcePages} />}
+            </>
           )}
         </main>
       </div>
@@ -208,6 +268,14 @@ export function ProjectScreen() {
         onRemoveEntry={removeEntry}
       />
       <FidelityDialog />
+      <BlockedOpDialog
+        blocked={blockedOp}
+        onOpenChange={(open) => {
+          if (!open) projectStore.getState().clearBlockedOp()
+        }}
+        onDetach={() => setDetachOpen(true)}
+      />
+      {project.forge && <DetachDialog open={detachOpen} onOpenChange={setDetachOpen} />}
     </div>
   )
 }

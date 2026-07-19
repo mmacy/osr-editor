@@ -6,7 +6,7 @@ import { beforeEach, expect, test, vi } from 'vitest'
 import { AreaContentCards, type CardIntent } from '@/components/area-content-cards'
 import { api } from '@/lib/api'
 import { projectStore } from '@/store/project-store'
-import { makeDocument, makeProjectState } from '@/test/fixtures'
+import { makeDocument, makeProjectState, makeSidecar } from '@/test/fixtures'
 import type { AreaSpec, OpBatchResult } from '@/types'
 
 vi.mock('sonner', () => ({
@@ -60,6 +60,7 @@ beforeEach(() => {
     delta: [],
     can_undo: true,
     can_redo: false,
+    sidecar: makeSidecar(),
   } satisfies OpBatchResult)
 })
 

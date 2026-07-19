@@ -6,6 +6,7 @@
 import { useEffect, useRef } from 'react'
 
 import { AreaContentCards, type CardIntent } from '@/components/area-content-cards'
+import { AuthorNotes } from '@/components/author-notes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -186,6 +187,9 @@ function AreaInspector({
         target={{ dungeonId, levelNumber, areaId: area.id }}
         intent={cardIntent}
         onIntentConsumed={onCardIntentConsumed}
+      />
+      <AuthorNotes
+        address={`dungeon:${encodeURIComponent(dungeonId)}/level:${levelNumber}/area:${encodeURIComponent(area.id)}`}
       />
       <Button variant="destructive" size="sm" onClick={removeArea}>
         Remove area

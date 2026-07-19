@@ -3,6 +3,8 @@
 // every caller can toast the message and remedy generically.
 import type {
   AnyEditOp,
+  AnyOverrideEdit,
+  AnySidecarPatch,
   ApiError,
   ApiErrorDetail,
   EncounterTableCatalogResponse,
@@ -78,6 +80,15 @@ export const api = {
     request<OpBatchResult>(`/api/projects/${id}/ops`, jsonPost({ revision, ops })),
   undo: (id: string) => request<OpBatchResult>(`/api/projects/${id}/undo`, jsonPost()),
   redo: (id: string) => request<OpBatchResult>(`/api/projects/${id}/redo`, jsonPost()),
+  forgeOverrides: (id: string, revision: string, edits: AnyOverrideEdit[]) =>
+    request<OpBatchResult>(`/api/projects/${id}/forge/overrides`, jsonPost({ revision, edits })),
+  forgeCheck: (id: string) => request<OpBatchResult>(`/api/projects/${id}/forge/check`, jsonPost()),
+  forgeRerun: (id: string, settings: Record<string, unknown>) =>
+    request<OpBatchResult>(`/api/projects/${id}/forge/rerun`, jsonPost({ settings })),
+  forgeDetach: (id: string, path: string) =>
+    request<ProjectState>(`/api/projects/${id}/forge/detach`, jsonPost({ path })),
+  patchSidecar: (id: string, patches: AnySidecarPatch[]) =>
+    request<ProjectState>(`/api/projects/${id}/sidecar`, jsonPost({ patches })),
   exportProject: (id: string, path: string) =>
     request<ExportResult>(`/api/projects/${id}/export`, jsonPost({ path })),
   publishProject: (id: string, body: PublishRequest) =>
@@ -99,3 +110,13 @@ export const api = {
 }
 
 export type ApiClient = typeof api
+
+// The byte routes are used as element srcs (an <img> for a page, an inline SVG
+// fetch for a preview), so they are plain URL builders, not JSON requests.
+export function forgePageUrl(projectId: string, page: number): string {
+  return `/api/projects/${projectId}/forge/pages/${page}`
+}
+
+export function forgePreviewUrl(projectId: string, dungeonId: string, levelNumber: number): string {
+  return `/api/projects/${projectId}/forge/previews/${encodeURIComponent(dungeonId)}/${levelNumber}`
+}

@@ -572,6 +572,7 @@ class DocumentService:
             delta=delta,
             can_undo=bool(project.undo_stack),
             can_redo=bool(project.redo_stack),
+            sidecar=project.sidecar,
         )
 
     # --- The forge commit protocol -------------------------------------------------
@@ -707,6 +708,7 @@ class DocumentService:
                 delta=(),
                 can_undo=bool(forge.undo_stack),
                 can_redo=bool(forge.redo_stack),
+                sidecar=project.sidecar,
                 forge=ForgeState(report=forge.report, run=forge.run, overrides=forge.overrides),
             )
 
@@ -864,6 +866,7 @@ class DocumentService:
             delta=_whole_document_delta(project.adventure),
             can_undo=bool(forge.undo_stack),
             can_redo=bool(forge.redo_stack),
+            sidecar=project.sidecar,
             forge=ForgeState(report=forge.report, run=forge.run, overrides=forge.overrides),
         )
 

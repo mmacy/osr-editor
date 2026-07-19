@@ -41,7 +41,9 @@ beforeEach(() => {
   projectStore.getState().clear()
 })
 
-function openDialog(diagnostics = { validation: [] as Finding[], lint: [] as Finding[], forge: [] as Finding[] }) {
+function openDialog(
+  diagnostics = { validation: [] as Finding[], lint: [] as Finding[], forge: [] as Finding[] },
+) {
   const onNavigate = vi.fn()
   projectStore.getState().setProject(makeProjectState({ diagnostics }))
   render(<PublishDialog onNavigate={onNavigate} />)

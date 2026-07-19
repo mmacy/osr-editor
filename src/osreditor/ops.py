@@ -42,6 +42,8 @@ from osrlib.crawl.dungeon import (
 )
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from osreditor.sidecar import EditorSidecar
+
 __all__ = [
     "AddDungeon",
     "AddFeature",
@@ -664,4 +666,5 @@ class OpBatchResult(BaseModel):
     delta: tuple[SubtreeChange, ...]
     can_undo: bool
     can_redo: bool
+    sidecar: EditorSidecar
     forge: ForgeState | None = None

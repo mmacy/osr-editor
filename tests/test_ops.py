@@ -28,6 +28,7 @@ from osreditor.ops import (
     SetWandering,
     SubtreeChange,
 )
+from osreditor.sidecar import EditorSidecar
 
 FINDING = Finding(
     source="validation",
@@ -46,6 +47,7 @@ RESULT = OpBatchResult(
     delta=(SubtreeChange(path="/town", value={"name": "Dusthollow"}),),
     can_undo=True,
     can_redo=False,
+    sidecar=EditorSidecar(),
 )
 
 

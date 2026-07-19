@@ -2,7 +2,7 @@ import { beforeEach, expect, test, vi } from 'vitest'
 
 import { ApiRequestError, type ApiClient } from '@/lib/api'
 import { createProjectStore } from '@/store/project-store'
-import { makeProjectState } from '@/test/fixtures'
+import { makeProjectState, makeSidecar } from '@/test/fixtures'
 import type { AnyEditOp, OpBatchResult } from '@/types'
 
 vi.mock('sonner', () => ({
@@ -18,6 +18,7 @@ function result(revision: string, overrides: Partial<OpBatchResult> = {}): OpBat
     delta: [{ path: '/name', value: `name at ${revision}` }],
     can_undo: true,
     can_redo: false,
+    sidecar: makeSidecar(),
     ...overrides,
   }
 }

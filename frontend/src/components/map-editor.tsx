@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 
 import type { CardIntent } from '@/components/area-content-cards'
+import { SvgPreviewDialog } from '@/components/forge-dialogs'
 import { ImportDialog } from '@/components/import-dialog'
 import { MapCanvas } from '@/components/map-canvas'
 import {
@@ -628,6 +629,7 @@ export function MapEditor({
         >
           <MaximizeIcon />
         </Button>
+        <SvgPreviewDialog dungeonId={dungeonId} levelNumber={levelNumber} />
         <Separator orientation="vertical" className="mx-1 h-5" />
         <Tooltip>
           <TooltipTrigger asChild>

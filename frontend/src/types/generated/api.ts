@@ -2420,6 +2420,7 @@ export interface components {
             can_undo: boolean;
             /** Can Redo */
             can_redo: boolean;
+            sidecar: components["schemas"]["EditorSidecar"];
             forge?: components["schemas"]["ForgeState"] | null;
         };
         /**
