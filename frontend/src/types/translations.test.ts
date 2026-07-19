@@ -3,23 +3,31 @@
 // time and under vitest — instead of silently loosening types.
 import { expectTypeOf, test } from 'vitest'
 
-import type { components } from '@/types/generated/api'
 import type {
   AddTransition,
   AnyEditOp,
+  AreaTreasureSpec,
+  CatalogMonster,
   Edge,
+  EncounterEntry,
+  FeatureSpec,
   ImportedArea,
   ImportedGeometry,
   ImportedLevel,
+  KeyedEncounter,
   LevelSpec,
+  PublishResult,
   SetEdges,
+  SetEncounter,
+  SetFeature,
+  SetTrap,
+  SetTreasure,
   SetWandering,
   SubtreeChange,
   TransitionSpec,
+  TrapSpec,
   WanderingSpec,
 } from '@/types'
-
-type EncounterEntry = components['schemas']['EncounterTableRow']['entry']
 
 test('the pinned schema translations hold', () => {
   // Position is a two-tuple, not number[].
@@ -39,7 +47,7 @@ test('the pinned schema translations hold', () => {
 })
 
 test('the op vocabulary translations hold', () => {
-  // The edit-op union discriminates over the full phase 2 vocabulary.
+  // The edit-op union discriminates over the full grown vocabulary.
   expectTypeOf<AnyEditOp['op']>().toEqualTypeOf<
     | 'set_adventure_field'
     | 'set_town_field'
@@ -50,6 +58,12 @@ test('the op vocabulary translations hold', () => {
     | 'set_area_cells'
     | 'set_area_field'
     | 'remove_area'
+    | 'set_encounter'
+    | 'set_trap'
+    | 'set_treasure'
+    | 'add_feature'
+    | 'set_feature'
+    | 'remove_feature'
     | 'add_transition'
     | 'remove_transition'
     | 'add_dungeon'
@@ -77,6 +91,40 @@ test('the op vocabulary translations hold', () => {
 
   // SubtreeChange.value is loose JSON by design.
   expectTypeOf<SubtreeChange['value']>().toEqualTypeOf<unknown>()
+})
+
+test('the content op translations hold', () => {
+  // SetEncounter admits null — the card's remove action.
+  expectTypeOf<SetEncounter['encounter']>().toEqualTypeOf<KeyedEncounter | null>()
+  expectTypeOf<SetTrap['trap']>().toEqualTypeOf<TrapSpec | null>()
+  expectTypeOf<SetTreasure['treasure']>().toEqualTypeOf<AreaTreasureSpec | null>()
+
+  // Feature ops address a container: area_id null means the level itself.
+  expectTypeOf<SetFeature['area_id']>().toEqualTypeOf<string | null>()
+  expectTypeOf<SetFeature['feature']>().toEqualTypeOf<FeatureSpec>()
+
+  // FeatureSpec.cell is nullable (bind to the whole area) and a two-tuple.
+  expectTypeOf<NonNullable<FeatureSpec['cell']>>().toEqualTypeOf<[number, number]>()
+  expectTypeOf<null extends FeatureSpec['cell'] ? true : false>().toEqualTypeOf<true>()
+
+  // The trap split and effect enums keep osrlib's exact wire values.
+  expectTypeOf<TrapSpec['kind']>().toEqualTypeOf<'room' | 'treasure'>()
+  expectTypeOf<TrapSpec['trigger']>().toEqualTypeOf<'enter' | 'open'>()
+})
+
+test('the catalog and publish translations hold', () => {
+  // Alignment options are string-literal arrays, not plain strings.
+  expectTypeOf<CatalogMonster['alignment_options']>().toEqualTypeOf<
+    ('lawful' | 'neutral' | 'chaotic')[]
+  >()
+
+  // The encounter entry union discriminates on kind (rides the catalog's
+  // verbatim EncounterTable rows).
+  expectTypeOf<EncounterEntry['kind']>().toEqualTypeOf<'monster' | 'npc_party'>()
+  expectTypeOf<Extract<EncounterEntry, { kind: 'monster' }>>().toHaveProperty('monster_ids')
+  expectTypeOf<Extract<EncounterEntry, { kind: 'npc_party' }>>().toHaveProperty('party_kind')
+
+  expectTypeOf<PublishResult['mode']>().toEqualTypeOf<'symlink' | 'copy'>()
 })
 
 test('the importer payload translations hold', () => {
