@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { DiagnosticsPanel } from '@/components/diagnostics-panel'
 import { ExportDialog } from '@/components/export-dialog'
 import { FidelityDialog } from '@/components/fidelity-dialog'
+import { PublishDialog } from '@/components/publish-dialog'
 import { AdventureForm, TownForm } from '@/components/forms'
 import { MapEditor } from '@/components/map-editor'
 import { Button } from '@/components/ui/button'
@@ -129,6 +130,7 @@ export function ProjectScreen() {
           <TooltipContent>Redo (Shift+Ctrl/Cmd+Z)</TooltipContent>
         </Tooltip>
         <ExportDialog />
+        <PublishDialog onNavigate={navigateTo} />
       </header>
 
       <div className="flex min-h-0 flex-1">

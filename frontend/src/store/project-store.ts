@@ -33,10 +33,15 @@ export interface ProjectStoreState {
   fidelityAcknowledged: boolean
   gone: boolean
   lastExportPath: string | null
+  // The session's remembered checkout path, prefilling the publish dialog —
+  // the backend's config is the durable copy; this is only the echo of the
+  // last path this session typed or used.
+  lastCheckoutPath: string | null
   setProject: (state: ProjectState) => void
   clear: () => void
   acknowledgeFidelity: () => void
   setLastExportPath: (path: string) => void
+  setLastCheckoutPath: (path: string) => void
   commit: (ops: OpsInput, options?: CommitOptions) => Promise<boolean>
   undo: () => Promise<void>
   redo: () => Promise<void>
@@ -104,11 +109,13 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       fidelityAcknowledged: false,
       gone: false,
       lastExportPath: null,
+      lastCheckoutPath: null,
 
       setProject: (state) => set({ project: state, fidelityAcknowledged: false, gone: false }),
       clear: () => set({ project: null, fidelityAcknowledged: false, gone: false }),
       acknowledgeFidelity: () => set({ fidelityAcknowledged: true }),
       setLastExportPath: (path) => set({ lastExportPath: path }),
+      setLastCheckoutPath: (path) => set({ lastCheckoutPath: path }),
 
       commit: (ops, options) =>
         enqueue(async () => {
