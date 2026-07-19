@@ -32,6 +32,16 @@ from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION, engine_version
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from osreditor.catalogs import (
+    EncounterTableCatalogResponse,
+    EquipmentCatalogResponse,
+    MonsterCatalogResponse,
+    TreasureTypeCatalogResponse,
+    encounter_table_catalog,
+    equipment_catalog,
+    monster_catalog,
+    treasure_type_catalog,
+)
 from osreditor.config import RecentEntry, load_config, record_recent, save_config
 from osreditor.documents import DocumentService, OpenProject, dump_adventure, json_pointer
 from osreditor.errors import (
@@ -473,6 +483,59 @@ def export_project(request: Request, project_id: str, body: ExportRequest, user:
         data = dump_adventure(project.adventure)
     atomic_write_bytes(Path(body.path), data)
     return ExportResult(path=body.path)
+
+
+@router.get("/api/catalogs/monsters")
+def get_monster_catalog(user: CurrentUser) -> MonsterCatalogResponse:
+    """Report the shipped monster catalog as picker summaries.
+
+    Args:
+        user: The authenticated caller.
+
+    Returns:
+        Every shipped monster, in shipped order.
+    """
+    return monster_catalog()
+
+
+@router.get("/api/catalogs/equipment")
+def get_equipment_catalog(user: CurrentUser) -> EquipmentCatalogResponse:
+    """Report the pickable equipment items.
+
+    Args:
+        user: The authenticated caller.
+
+    Returns:
+        Every item across the four id-addressable lists, in list order.
+    """
+    return equipment_catalog()
+
+
+@router.get("/api/catalogs/treasure-types")
+def get_treasure_type_catalog(user: CurrentUser) -> TreasureTypeCatalogResponse:
+    """Report the shipped treasure types.
+
+    Args:
+        user: The authenticated caller.
+
+    Returns:
+        Every treasure-type letter with its section.
+    """
+    return treasure_type_catalog()
+
+
+@router.get("/api/catalogs/encounter-tables")
+def get_encounter_table_catalog(user: CurrentUser) -> EncounterTableCatalogResponse:
+    """Report the six compiled dungeon encounter tables.
+
+    Args:
+        user: The authenticated caller.
+
+    Returns:
+        The compiled tables, verbatim — the wandering-table editor seeds from
+        the level's band table.
+    """
+    return encounter_table_catalog()
 
 
 def _importers(request: Request) -> dict[str, GeometryImporter]:
