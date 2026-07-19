@@ -328,6 +328,7 @@ def test_unrecognized_line_is_never_dropped() -> None:
         Finding(
             source="validation",
             code="validation_unclassified",
+            severity="error",
             message="something novel osrlib now says",
             address=None,
         ),

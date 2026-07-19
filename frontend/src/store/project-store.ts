@@ -21,6 +21,13 @@ import type { Adventure, AnyEditOp, OpBatchResult, ProjectState } from '@/types'
 // returning no ops skips the batch (its target vanished underneath).
 export type OpsInput = AnyEditOp[] | ((document: Adventure) => AnyEditOp[])
 
+export interface CommitOptions {
+  // A caller that can render a rejection richer than the generic toast (the
+  // resize dialog's offender list) returns true to claim it; anything
+  // unclaimed falls through to the default handling.
+  onError?: (error: ApiRequestError) => boolean
+}
+
 export interface ProjectStoreState {
   project: ProjectState | null
   fidelityAcknowledged: boolean
@@ -30,7 +37,7 @@ export interface ProjectStoreState {
   clear: () => void
   acknowledgeFidelity: () => void
   setLastExportPath: (path: string) => void
-  commit: (ops: OpsInput) => Promise<boolean>
+  commit: (ops: OpsInput, options?: CommitOptions) => Promise<boolean>
   undo: () => Promise<void>
   redo: () => Promise<void>
   refresh: () => Promise<void>
@@ -103,7 +110,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       acknowledgeFidelity: () => set({ fidelityAcknowledged: true }),
       setLastExportPath: (path) => set({ lastExportPath: path }),
 
-      commit: (ops) =>
+      commit: (ops, options) =>
         enqueue(async () => {
           const { project } = get()
           if (!project) return false
@@ -113,6 +120,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
             applyResult(await client.postOps(project.id, project.revision, built))
             return true
           } catch (error) {
+            if (error instanceof ApiRequestError && options?.onError?.(error)) return false
             handleError(error)
             return false
           }

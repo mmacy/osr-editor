@@ -1,14 +1,11 @@
-import { AlertCircleIcon } from 'lucide-react'
-
 import { ListEditor } from '@/components/list-editor'
 import { TravelTurnsEditor } from '@/components/travel-turns-editor'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
+import { useCommittedField } from '@/hooks/use-committed-field'
 import { projectStore } from '@/store/project-store'
-import type { Adventure, WanderingSpec } from '@/types'
+import type { Adventure } from '@/types'
 
 // Every form commits through the store's single-flight queue: one committed
 // field, one op batch, one undo step. Scalar sets carry their value directly;
@@ -115,118 +112,5 @@ export function TownForm({ document }: { document: Adventure }) {
       />
       <TravelTurnsEditor travelTurns={document.town.travel_turns} onCommit={commitTravelTurns} />
     </section>
-  )
-}
-
-export function LevelForm({
-  document,
-  dungeonId,
-  levelNumber,
-}: {
-  document: Adventure
-  dungeonId: string
-  levelNumber: number
-}) {
-  const dungeon = document.dungeons.find((candidate) => candidate.id === dungeonId)
-  const level = dungeon?.levels.find((candidate) => candidate.number === levelNumber)
-  if (!dungeon || !level) {
-    return <p className="text-sm text-muted-foreground">This level no longer exists.</p>
-  }
-  const wandering = level.wandering
-
-  // Each field commits only its own change; the rest of the spec — the other
-  // field and the inline table phase 1 must never destroy — is read from the
-  // post-time document inside the builder.
-  const commitWanderingPatch = (
-    patch: Partial<Pick<WanderingSpec, 'chance_in_six' | 'interval_turns'>>,
-  ) => {
-    void projectStore.getState().commit((current) => {
-      const target = current.dungeons
-        .find((candidate) => candidate.id === dungeonId)
-        ?.levels.find((candidate) => candidate.number === levelNumber)
-      if (!target) return []
-      return [
-        {
-          op: 'set_wandering',
-          dungeon_id: dungeonId,
-          level_number: levelNumber,
-          wandering: { ...target.wandering, ...patch },
-        },
-      ]
-    })
-  }
-
-  return (
-    <section aria-label={`Level ${levelNumber}`} className="flex max-w-2xl flex-col gap-6">
-      <h2 className="font-serif text-xl font-semibold">
-        {dungeon.name || <span className="font-mono text-lg">{dungeon.id}</span>} — level{' '}
-        <span className="font-mono">{levelNumber}</span>
-      </h2>
-      <p className="text-sm text-muted-foreground">
-        Grid{' '}
-        <span className="font-mono">
-          {level.width}×{level.height}
-        </span>
-        ; the map editor arrives in a later release.
-      </p>
-      <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">Wandering monsters</h3>
-        <div className="flex items-end gap-4">
-          <WanderingNumberField
-            id="wandering-chance"
-            label="Chance-in-six"
-            value={wandering.chance_in_six}
-            min={0}
-            max={6}
-            onCommit={(value) => commitWanderingPatch({ chance_in_six: value })}
-          />
-          <WanderingNumberField
-            id="wandering-interval"
-            label="Check interval (turns)"
-            value={wandering.interval_turns}
-            min={1}
-            onCommit={(value) => commitWanderingPatch({ interval_turns: value })}
-          />
-        </div>
-        {wandering.table && (
-          <Alert>
-            <AlertCircleIcon />
-            <AlertTitle>This level has an inline encounter table</AlertTitle>
-            <AlertDescription>
-              The table (<span className="font-mono">{wandering.table.id}</span>) is preserved
-              unchanged; its editor arrives in a later release.
-            </AlertDescription>
-          </Alert>
-        )}
-      </div>
-    </section>
-  )
-}
-
-function WanderingNumberField({
-  id,
-  label,
-  value,
-  min,
-  max,
-  onCommit,
-}: {
-  id: string
-  label: string
-  value: number
-  min: number
-  max?: number
-  onCommit: (value: number) => void
-}) {
-  const field = useCommittedField(
-    String(value),
-    (draft) => onCommit(Number(draft)),
-    integerInRange(min, max),
-  )
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input id={id} className="w-32 font-mono" type="number" min={min} max={max} {...field} />
-    </div>
   )
 }

@@ -1,0 +1,342 @@
+{
+  "kind": "adventure",
+  "schema_version": 2,
+  "engine_version": "1.2.0",
+  "payload": {
+    "name": "The tannery vaults",
+    "description": "The doors-and-transitions torture case: every door state, a stairs pair, a one-way chute.",
+    "hooks": [],
+    "town": {
+      "name": "Wattle-on-Sludge",
+      "description": "",
+      "services": [],
+      "travel_turns": {
+        "tannery-vaults": 3
+      }
+    },
+    "dungeons": [
+      {
+        "id": "tannery-vaults",
+        "name": "The tannery vaults",
+        "levels": [
+          {
+            "number": 1,
+            "width": 8,
+            "height": 6,
+            "edges": {
+              "1,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "2,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "3,0:west": {
+                "kind": "door",
+                "door": {
+                  "kind": "normal",
+                  "stuck": false,
+                  "locked": false,
+                  "starts_open": false
+                }
+              },
+              "4,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "5,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "6,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "7,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "1,1:north": {
+                "kind": "door",
+                "door": {
+                  "kind": "secret",
+                  "stuck": false,
+                  "locked": false,
+                  "starts_open": false
+                }
+              },
+              "2,1:west": {
+                "kind": "open",
+                "door": null
+              },
+              "3,1:north": {
+                "kind": "door",
+                "door": {
+                  "kind": "normal",
+                  "stuck": false,
+                  "locked": false,
+                  "starts_open": true
+                }
+              },
+              "4,1:north": {
+                "kind": "door",
+                "door": {
+                  "kind": "normal",
+                  "stuck": true,
+                  "locked": false,
+                  "starts_open": false
+                }
+              },
+              "5,1:west": {
+                "kind": "door",
+                "door": {
+                  "kind": "normal",
+                  "stuck": false,
+                  "locked": true,
+                  "starts_open": false
+                }
+              },
+              "4,2:north": {
+                "kind": "open",
+                "door": null
+              },
+              "4,3:north": {
+                "kind": "open",
+                "door": null
+              },
+              "5,3:west": {
+                "kind": "open",
+                "door": null
+              },
+              "5,4:north": {
+                "kind": "open",
+                "door": null
+              },
+              "6,4:west": {
+                "kind": "open",
+                "door": null
+              },
+              "1,5:west": {
+                "kind": "open",
+                "door": null
+              }
+            },
+            "areas": [
+              {
+                "id": "1",
+                "name": "Guardroom",
+                "description": "Cold braziers and a knucklebone table.",
+                "cells": [
+                  [
+                    1,
+                    0
+                  ],
+                  [
+                    2,
+                    0
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": null
+              },
+              {
+                "id": "2",
+                "name": "Storeroom",
+                "description": "Racks of stiffened hides.",
+                "cells": [
+                  [
+                    4,
+                    1
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": null
+              },
+              {
+                "id": "3",
+                "name": "Locked vault",
+                "description": "The tanner's strongbox room.",
+                "cells": [
+                  [
+                    5,
+                    1
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": null
+              },
+              {
+                "id": "4",
+                "name": "Hidden shrine",
+                "description": "A niche behind the guardroom wall.",
+                "cells": [
+                  [
+                    1,
+                    1
+                  ],
+                  [
+                    2,
+                    1
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": null
+              },
+              {
+                "id": "5",
+                "name": "Flooded cellar",
+                "description": "Ankle-deep run-off.",
+                "cells": [
+                  [
+                    5,
+                    3
+                  ],
+                  [
+                    5,
+                    4
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": null
+              },
+              {
+                "id": "6",
+                "name": "Silt bench",
+                "description": "A mud shelf sharing the cellar's low corner.",
+                "cells": [
+                  [
+                    5,
+                    4
+                  ],
+                  [
+                    6,
+                    4
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": null
+              }
+            ],
+            "features": [],
+            "transitions": [
+              {
+                "kind": "stairs_down",
+                "position": [
+                  7,
+                  0
+                ],
+                "to_dungeon_id": "tannery-vaults",
+                "to_level_number": 2,
+                "to_position": [
+                  0,
+                  0
+                ],
+                "to_facing": "south"
+              },
+              {
+                "kind": "chute",
+                "position": [
+                  5,
+                  1
+                ],
+                "to_dungeon_id": "tannery-vaults",
+                "to_level_number": 2,
+                "to_position": [
+                  3,
+                  2
+                ],
+                "to_facing": "north"
+              }
+            ],
+            "wandering": {
+              "chance_in_six": 1,
+              "interval_turns": 2,
+              "table": null
+            },
+            "entrance": [
+              0,
+              0
+            ]
+          },
+          {
+            "number": 2,
+            "width": 6,
+            "height": 4,
+            "edges": {
+              "1,0:west": {
+                "kind": "open",
+                "door": null
+              },
+              "1,1:north": {
+                "kind": "open",
+                "door": null
+              },
+              "4,2:west": {
+                "kind": "open",
+                "door": null
+              }
+            },
+            "areas": [
+              {
+                "id": "1",
+                "name": "Tanning pits",
+                "description": "Sunken vats, long dry.",
+                "cells": [
+                  [
+                    1,
+                    0
+                  ],
+                  [
+                    1,
+                    1
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": null
+              }
+            ],
+            "features": [],
+            "transitions": [
+              {
+                "kind": "stairs_up",
+                "position": [
+                  0,
+                  0
+                ],
+                "to_dungeon_id": "tannery-vaults",
+                "to_level_number": 1,
+                "to_position": [
+                  7,
+                  0
+                ],
+                "to_facing": "east"
+              }
+            ],
+            "wandering": {
+              "chance_in_six": 1,
+              "interval_turns": 2,
+              "table": null
+            },
+            "entrance": null
+          }
+        ]
+      }
+    ],
+    "monsters": []
+  }
+}

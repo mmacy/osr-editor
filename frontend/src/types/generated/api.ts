@@ -251,6 +251,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/importers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Importers
+         * @description Report the registered geometry importers.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         Every importer discovered through the `osreditor.importers` entry-point
+         *         group, in registry order.
+         */
+        get: operations["list_importers_api_importers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/importers/sniff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sniff Importers
+         * @description Probe a source path against every registered importer.
+         *
+         *     Sniff never errors: a nonexistent or unrecognized path answers an empty
+         *     match list — presence-level probing has nothing to throw — and the dialog
+         *     renders zero matches as an inline message.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         body: The absolute source path.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The format ids that recognize the path.
+         */
+        post: operations["sniff_importers_api_importers_sniff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/importers/{format_id}/load": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Load Geometry
+         * @description Load geometry from a source path through one importer.
+         *
+         *     Import needs no apply route: the loaded geometry crosses to the frontend,
+         *     and the import dialog turns the user's choices into one ordinary op batch
+         *     through `POST /projects/{id}/ops` — undoable, revision-guarded,
+         *     immediately linted.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         format_id: The importer to load through.
+         *         body: The absolute source path.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The imported geometry, normalized to what the op vocabulary admits.
+         */
+        post: operations["load_geometry_api_importers__format_id__load_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -269,6 +363,86 @@ export interface components {
              * @default
              */
             condition: string;
+        };
+        /**
+         * AddDungeon
+         * @description Add a dungeon, scaffolding level 1 with an entrance at `(0, 0)`.
+         *
+         *     The scaffold is exactly `starter_adventure`'s, so a new dungeon validates
+         *     clean from birth and the entrance tool moves what exists rather than the
+         *     panel nagging about what doesn't. Invariant at apply: a duplicate dungeon
+         *     id is rejected.
+         */
+        AddDungeon: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "add_dungeon";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+        };
+        /**
+         * AddLevel
+         * @description Add a level to a dungeon; no entrance (validation requires one per dungeon, not per level).
+         *
+         *     Invariant at apply: `number` unique in the dungeon. The new level is
+         *     *inserted* before the first existing level whose `number` exceeds it,
+         *     appended when none does — deterministic over any tuple,
+         *     ascending-preserving over an ascending one; no op ever reorders existing
+         *     levels. Stored order is rules-visible when more than one level bears an
+         *     entrance (`EnterDungeon` lands on the first entrance-bearing level in
+         *     stored order), so a re-sort could silently change where a foreign dungeon's
+         *     play begins; insertion is safe precisely because a new level carries no
+         *     entrance.
+         */
+        AddLevel: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "add_level";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Number */
+            number: number;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+        };
+        /**
+         * AddTransition
+         * @description Add a transition, carrying the full [`TransitionSpec`][osrlib.crawl.dungeon.TransitionSpec].
+         *
+         *     Invariants at apply: the source `position` in bounds and unoccupied —
+         *     osrlib's `transition_at` returns the first match, so a second transition on
+         *     one cell is dead data; editing a transition is a remove+add batch (one
+         *     gesture, one undo step). The target is deliberately unvalidated beyond the
+         *     model's own `to_level_number >= 1`: an unknown dungeon, missing level, or
+         *     out-of-bounds target cell is a validation finding, legal while editing —
+         *     an import may land stairs before their destination level exists.
+         */
+        AddTransition: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "add_transition";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            transition: components["schemas"]["TransitionSpec"];
         };
         /**
          * Adventure
@@ -436,6 +610,44 @@ export interface components {
          * @enum {string}
          */
         Condition: "paralysed" | "asleep" | "blind" | "charmed" | "petrified" | "diseased" | "exhausted" | "lycanthropy_incubation" | "averted_eyes" | "poisoned" | "dead" | "silenced" | "entangled" | "afraid" | "feebleminded" | "invisible" | "turned" | "confused" | "weakened";
+        /**
+         * CreateArea
+         * @description Create a keyed area over a cell cluster.
+         *
+         *     Invariants at apply: `area_id` non-empty and not already present on the
+         *     level (a duplicate is never intentional — the model can't see it and
+         *     `validate_adventure` would only flag it later); every cell in bounds. Cells
+         *     may overlap another area's — that is `area_overlap` lint's territory, legal
+         *     by the model and sometimes transiently useful mid-edit.
+         */
+        CreateArea: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "create_area";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string;
+            /** Cells */
+            cells: [
+                number,
+                number
+            ][];
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        };
         /**
          * CreateProjectRequest
          * @description A new native project: where to put it and what to call the adventure.
@@ -744,12 +956,19 @@ export interface components {
         };
         /**
          * Finding
-         * @description One diagnostic finding: its source tier, a stable code, and a location.
+         * @description One diagnostic finding: its source tier, a stable code, severity, and a location.
+         *
+         *     `severity` is a field with a producer-pinned table, not a function of the
+         *     code (forge's own contract decision, mirrored): the validation producer
+         *     sets `"error"` on every finding — `validate_adventure` output gates
+         *     publish, which is what error means here — and the lint producer pins each
+         *     check's severity in [`osreditor.lint`][osreditor.lint]. The design language
+         *     reserves red for errors; warnings use the pencil palette.
          *
          *     `address` is the click-to-navigate location. Its grammar is pinned by the
          *     first producers as content within this locked shape — phase 1's validation
          *     tier pins `/`-joined `kind:value` segments with percent-encoded values (see
-         *     [`osreditor.diagnostics`][osreditor.diagnostics]); phase 2's lint extends it
+         *     [`osreditor.addresses`][osreditor.addresses]); phase 2's lint extends it
          *     with `cell:` and `edge:` segments.
          */
         Finding: {
@@ -760,6 +979,11 @@ export interface components {
             source: "validation" | "lint" | "forge";
             /** Code */
             code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "error" | "warning";
             /** Message */
             message: string;
             /** Address */
@@ -769,6 +993,111 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * ImportedArea
+         * @description One keyed area an importer offers: identity plus its cell cluster.
+         */
+        ImportedArea: {
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Cells */
+            cells: [
+                number,
+                number
+            ][];
+        };
+        /**
+         * ImportedGeometry
+         * @description An importer's whole answer: optional adoptable metadata plus one or more levels.
+         */
+        ImportedGeometry: {
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Levels */
+            levels: components["schemas"]["ImportedLevel"][];
+        };
+        /**
+         * ImportedLevel
+         * @description One level of imported geometry, normalized to what the op vocabulary admits.
+         *
+         *     `label` is the source-side display name (which level of which source this
+         *     was). `edges` carries canonical keys only — the importer owns
+         *     normalization. `notes` is the importer flagging what it guessed, dropped,
+         *     or repaired, rendered in the import dialog.
+         */
+        ImportedLevel: {
+            /** Label */
+            label: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /**
+             * Edges
+             * @default {}
+             */
+            edges: {
+                [key: string]: components["schemas"]["Edge"];
+            };
+            /**
+             * Areas
+             * @default []
+             */
+            areas: components["schemas"]["ImportedArea"][];
+            /** Entrance */
+            entrance?: [
+                number,
+                number
+            ] | null;
+            /**
+             * Transitions
+             * @default []
+             */
+            transitions: components["schemas"]["TransitionSpec"][];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: string[];
+        };
+        /**
+         * ImporterInfo
+         * @description One registered geometry importer's identity.
+         */
+        ImporterInfo: {
+            /** Format Id */
+            format_id: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * ImporterListResponse
+         * @description The registered importers, in registry order.
+         */
+        ImporterListResponse: {
+            /** Importers */
+            importers: components["schemas"]["ImporterInfo"][];
+        };
+        /**
+         * ImporterPathRequest
+         * @description An importer source path: absolute, read-only, local — the same honestly-local posture as export.
+         */
+        ImporterPathRequest: {
+            /** Path */
+            path: string;
         };
         /**
          * KeyedEncounter
@@ -1186,7 +1515,7 @@ export interface components {
             /** Revision */
             revision: string;
             /** Ops */
-            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["SetWandering"])[];
+            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
         };
         /**
          * OpBatchResult
@@ -1281,6 +1610,161 @@ export interface components {
             missing: boolean;
         };
         /**
+         * RemoveArea
+         * @description Remove an area; its cells become corridor (osrlib's convention — cells in no area).
+         *
+         *     Removing an area discards any content it carries; the frontend confirms
+         *     when content exists (foreign documents), silently otherwise.
+         */
+        RemoveArea: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "remove_area";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string;
+        };
+        /**
+         * RemoveDungeon
+         * @description Remove a dungeon — never the last one, and never cascading.
+         *
+         *     A removed dungeon's dangling `travel_turns` entry and inbound transitions
+         *     are honest diagnostics (`travel_unknown_dungeon`,
+         *     `transition_target_unknown`) — removal never silently edits other subtrees.
+         */
+        RemoveDungeon: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "remove_dungeon";
+            /** Dungeon Id */
+            dungeon_id: string;
+        };
+        /**
+         * RemoveLevel
+         * @description Remove a level — never a dungeon's last one. Inbound transitions dangle as diagnostics.
+         */
+        RemoveLevel: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "remove_level";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+        };
+        /**
+         * RemoveTransition
+         * @description Remove the first transition at a source position.
+         *
+         *     First-match is osrlib's own resolution order (`transition_at`) — a foreign
+         *     document can stack two transitions on one cell, and first-match keeps
+         *     "remove one per existing entry" sequences (the replace-mode import) correct
+         *     by construction. No transition at the position is a targeting miss.
+         */
+        RemoveTransition: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "remove_transition";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Position */
+            position: [
+                number,
+                number
+            ];
+        };
+        /**
+         * RenameDungeon
+         * @description Rename a dungeon, cascading every reference to it.
+         *
+         *     A rename means "same thing, new name", so references follow, atomically, in
+         *     one undo step: the dungeon's `id`, the town's `travel_turns` key (order
+         *     preserved), and every `TransitionSpec.to_dungeon_id` naming it, across all
+         *     dungeons. Invariants at apply: `new_id` non-empty and not already taken.
+         *     Contrast [`RemoveDungeon`][osreditor.ops.RemoveDungeon], which deliberately
+         *     does not cascade.
+         */
+        RenameDungeon: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "rename_dungeon";
+            /** Old Id */
+            old_id: string;
+            /** New Id */
+            new_id: string;
+        };
+        /**
+         * RenumberLevel
+         * @description Renumber a level, cascading every transition in the document targeting it.
+         *
+         *     Same rename-vs-remove logic as dungeons; per the no-reorder rule the level
+         *     stays where it sits in the tuple (display order is sorted anyway, and
+         *     moving it could change the stored-order entrance semantics). Invariant at
+         *     apply: `new_number` not already taken in the dungeon.
+         */
+        RenumberLevel: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "renumber_level";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Old Number */
+            old_number: number;
+            /** New Number */
+            new_number: number;
+        };
+        /**
+         * ResizeLevel
+         * @description Resize a level's grid.
+         *
+         *     Shrinking below existing content is rejected listing every offender —
+         *     areas with cells outside the new bounds, features with out-of-bounds cells,
+         *     transitions whose *source* leaves the grid, an entrance outside — as
+         *     `details.offenders`, each an address-grammar string plus a message.
+         *     (Transitions *elsewhere* that target now-out-of-bounds cells in this level
+         *     are not offenders; they become `transition_target_cell_out_of_bounds`
+         *     validation findings, the dangling-reference rule.) One pinned exception:
+         *     edge entries whose incident cells fall outside the new bounds are pruned by
+         *     the op — edges are spatial annotation, not content; osrlib treats an
+         *     out-of-bounds entry as nonexistent and `validate_adventure` never sees it,
+         *     so keeping it would strand invisible `edge_invalid` errors on keys the map
+         *     cannot even display, and rejecting on it would demand the user hand-erase
+         *     edges they cannot see. The prune is deterministic and inside the single
+         *     undo step.
+         */
+        ResizeLevel: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "resize_level";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+        };
+        /**
          * SaveCategory
          * @description The five saving throw categories.
          * @enum {string}
@@ -1346,6 +1830,137 @@ export interface components {
             value: string | string[];
         };
         /**
+         * SetAreaCells
+         * @description Replace an area's cell cluster wholesale — the paint/lasso tool's op.
+         *
+         *     Invariant at apply: every cell in bounds.
+         */
+        SetAreaCells: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_area_cells";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string;
+            /** Cells */
+            cells: [
+                number,
+                number
+            ][];
+        };
+        /**
+         * SetAreaField
+         * @description Set one area identity field; every field in the literal takes a string.
+         *
+         *     `id` is the re-key affordance (key numbers render on the map, so re-keying
+         *     is a map concern): apply rejects empty and duplicate ids like
+         *     [`CreateArea`][osreditor.ops.CreateArea]. Nothing references area ids in
+         *     the document, so re-keying cascades nowhere. Phase 3 does not grow this
+         *     literal — encounter, trap, and treasure have their own ops per the spec's
+         *     vocabulary.
+         */
+        SetAreaField: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_area_field";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "id" | "name" | "description";
+            /** Value */
+            value: string;
+        };
+        /**
+         * SetDungeonField
+         * @description Set one dungeon field — `name`, the one plain settable field.
+         *
+         *     The literal grows if `DungeonSpec` ever does.
+         */
+        SetDungeonField: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_dungeon_field";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /**
+             * Field
+             * @constant
+             */
+            field: "name";
+            /** Value */
+            value: string;
+        };
+        /**
+         * SetEdges
+         * @description Apply a batch of edge-key → assignment entries; `None` deletes (wall).
+         *
+         *     Invariants at apply: a non-`None` assignment requires a key in the
+         *     canonical grammar (`x,y:north|west`, non-negative, no leading zeros — the
+         *     editor authors storage form, never the aliases osrlib silently ignores)
+         *     with both incident cells in bounds, and rejects an explicit
+         *     `Edge(kind="wall")` value — deletion is the one way to say wall, so
+         *     editor-written documents keep a single representation. A `None` assignment
+         *     instead accepts any key string exactly matching an existing entry (and
+         *     rejects a key matching nothing): deletion authors no key, so the malformed
+         *     and non-canonical keys a foreign document legally carries stay deletable —
+         *     the `edge_invalid` remediation path and replace-mode import depend on
+         *     exactly this.
+         */
+        SetEdges: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_edges";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Edges */
+            edges: {
+                [key: string]: components["schemas"]["Edge"] | null;
+            };
+        };
+        /**
+         * SetEntrance
+         * @description Place or clear the level's entrance.
+         *
+         *     A position must be in bounds (apply-time invariant); `None` clears, and the
+         *     resulting `entrance_missing` finding is the legal, navigable consequence.
+         */
+        SetEntrance: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_entrance";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Entrance */
+            entrance: [
+                number,
+                number
+            ] | null;
+        };
+        /**
          * SetTownField
          * @description Set one town field.
          *
@@ -1390,6 +2005,14 @@ export interface components {
             /** Level Number */
             level_number: number;
             wandering: components["schemas"]["WanderingSpec"];
+        };
+        /**
+         * SniffResult
+         * @description Which registered importers recognize a source path.
+         */
+        SniffResult: {
+            /** Format Ids */
+            format_ids: string[];
         };
         /**
          * StatusResponse
@@ -1947,6 +2570,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_importers_api_importers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImporterListResponse"];
+                };
+            };
+        };
+    };
+    sniff_importers_api_importers_sniff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImporterPathRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SniffResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    load_geometry_api_importers__format_id__load_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                format_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImporterPathRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportedGeometry"];
                 };
             };
             /** @description Validation Error */

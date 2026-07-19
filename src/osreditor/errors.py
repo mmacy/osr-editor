@@ -9,7 +9,10 @@ their members under [`OsrEditorError`][osreditor.errors.OsrEditorError].
 __all__ = [
     "ArtifactNotFoundError",
     "DocumentPayloadInvalidError",
+    "ImportSourceInvalidError",
+    "ImporterNotFoundError",
     "InvalidProjectError",
+    "OpInvariantError",
     "OpRejectedError",
     "OpTargetNotFoundError",
     "OsrEditorError",
@@ -97,7 +100,50 @@ class OpRejectedError(OsrEditorError):
 
 
 class OpTargetNotFoundError(OsrEditorError):
-    """An op named a dungeon or level the document does not contain."""
+    """An op's target is not in the document.
+
+    Covers every targeting miss in the vocabulary: an unknown dungeon, an
+    unknown level, an unknown area id, or a position with no transition on it.
+    """
+
+
+class OpInvariantError(OsrEditorError):
+    """An op violated an editor-enforced semantic invariant and was rejected at commit.
+
+    The invariants the ops enforce ahead of re-validation: duplicate ids, an
+    occupied transition cell, removing the last dungeon or level, a
+    non-canonical edge key, an out-of-bounds cell, an explicit wall entry, and
+    a resize that would strand existing content. The message names the
+    violation.
+
+    Attributes:
+        offenders: Present only when the violation enumerates a list (the
+            `ResizeLevel` rejection): one `{"address", "message"}` entry per
+            stranded item, the address in the diagnostics address grammar.
+    """
+
+    def __init__(self, message: str, *, offenders: list[dict[str, str]] | None = None) -> None:
+        """Build the error.
+
+        Args:
+            message: The violated invariant.
+            offenders: One `{"address", "message"}` entry per stranded item,
+                when the violation enumerates a list.
+        """
+        super().__init__(message)
+        self.offenders = offenders
+
+
+class ImporterNotFoundError(OsrEditorError):
+    """No registered geometry importer has the requested format id."""
+
+
+class ImportSourceInvalidError(OsrEditorError):
+    """An importer's load could not produce geometry from the source path.
+
+    Wraps whatever the importer raised — an unreadable path, a sniff-negative
+    source, a document that fails to load — with the importer's own message.
+    """
 
 
 class DocumentPayloadInvalidError(OsrEditorError):
