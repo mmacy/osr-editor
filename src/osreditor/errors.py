@@ -17,6 +17,7 @@ __all__ = [
     "ImportSourceInvalidError",
     "ImporterNotFoundError",
     "InvalidProjectError",
+    "NotAForgeProjectError",
     "OpInvariantError",
     "OpRejectedError",
     "OpTargetNotFoundError",
@@ -202,6 +203,10 @@ class ForgePageNotFoundError(OsrEditorError):
     Normal for a licensed subset or a lean workdir — a page a conversion never
     captured, or a preview for a level forge did not render.
     """
+
+
+class NotAForgeProjectError(OsrEditorError):
+    """A forge-only route was called on a native project — a client bug the seam guards."""
 
 
 class OsrWebNotConfiguredError(OsrEditorError):

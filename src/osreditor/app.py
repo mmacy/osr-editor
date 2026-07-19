@@ -54,6 +54,7 @@ from osreditor.errors import (
     ImporterNotFoundError,
     ImportSourceInvalidError,
     InvalidProjectError,
+    NotAForgeProjectError,
     OpInvariantError,
     OpRejectedError,
     OpTargetNotFoundError,
@@ -69,6 +70,7 @@ from osreditor.errors import (
     StaleRevisionError,
     UndoStackEmptyError,
 )
+from osreditor.forge_edits import OverrideEditBatch
 from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
 from osreditor.ops import Diagnostics, ForgeState, OpBatch, OpBatchResult
 from osreditor.projects import create_native_project, open_project, utc_now_iso
@@ -493,6 +495,38 @@ def post_ops(request: Request, project_id: str, batch: OpBatch, user: CurrentUse
     return service.apply_batch(service.get(project_id), batch)
 
 
+def _forge_project(request: Request, project_id: str) -> OpenProject:
+    """Resolve an open project and require it to be forge-backed — the forge-route seam guard."""
+    project = _service(request).get(project_id)
+    if project.forge is None:
+        raise NotAForgeProjectError(f"project {project_id} is a native project; this route is forge-only")
+    return project
+
+
+@router.post("/api/projects/{project_id}/forge/overrides")
+def post_forge_overrides(
+    request: Request, project_id: str, body: OverrideEditBatch, user: CurrentUser
+) -> OpBatchResult:
+    """Apply a batch of override-level edits: monster remaps, stat-block patches, reasons, removals.
+
+    Revision-guarded and applied through the same commit protocol as a translated
+    op batch — one undo step. Exclusivity between a name's remap and its
+    stat-block patch is resolved here; forge validates the names and cache state
+    at assembly, its message surfaced verbatim on failure.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The revision and the typed edits.
+        user: The authenticated caller.
+
+    Returns:
+        The refreshed result, carrying the forge projection.
+    """
+    project = _forge_project(request, project_id)
+    return _service(request).apply_forge_edits(project, body.revision, body.edits)
+
+
 @router.post("/api/projects/{project_id}/undo")
 def post_undo(request: Request, project_id: str, user: CurrentUser) -> OpBatchResult:
     """Revert the latest commit.
@@ -806,6 +840,7 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
     ForgeRerunInvalidError: (422, "forge_rerun_invalid", None, _details_none),
     OpUnsupportedForgeError: (422, "op_unsupported_forge", None, _details_op_unsupported_forge),
     ForgePageNotFoundError: (404, "forge_page_not_found", None, _details_none),
+    NotAForgeProjectError: (422, "not_a_forge_project", None, _details_none),
     ProjectExistsError: (409, "project_dir_not_empty", "Choose a new or empty directory.", _details_none),
     StaleRevisionError: (
         409,

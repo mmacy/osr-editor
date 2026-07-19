@@ -75,6 +75,7 @@ from osreditor.forge import (
     assemble_workdir,
     forge_findings,
 )
+from osreditor.forge_edits import AnyOverrideEdit, apply_overrides_edits
 from osreditor.ops import (
     AddDungeon,
     AddFeature,
@@ -591,6 +592,36 @@ class DocumentService:
                 forge.report,
                 project.sidecar.auto_reasons,
             )
+            return self._commit_forge_locked(project, overrides, auto_reasons)
+
+    def apply_forge_edits(
+        self, project: OpenProject, revision: str, edits: tuple[AnyOverrideEdit, ...]
+    ) -> OpBatchResult:
+        """Apply a batch of override-level edits at a named revision, through the commit protocol.
+
+        Monster remaps, stat-block patches, reason edits, and entry removals fold
+        into the current overrides (exclusivity resolved at the edit), then commit
+        as one undo step — the same protocol a translated op batch uses.
+
+        Args:
+            project: The open forge project.
+            revision: The revision the edits were computed against.
+            edits: The typed, discriminated edits.
+
+        Returns:
+            The refreshed result, carrying the forge projection.
+
+        Raises:
+            StaleRevisionError: If `revision` is not current.
+            OpTargetNotFoundError: If a reason edit or removal names a missing entry.
+            ForgeOverrideInvalidError: If forge refuses the result at assembly (an
+                unknown name, a cache-state failure) — the workdir is restored first.
+        """
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            self._require_revision(project, revision)
+            overrides, auto_reasons = apply_overrides_edits(edits, forge.overrides, project.sidecar.auto_reasons)
             return self._commit_forge_locked(project, overrides, auto_reasons)
 
     def commit_forge_overrides(
