@@ -13,11 +13,21 @@ import {
   nextFreeFeatureKey,
   parseCount,
   patchTrapEffect,
+  replaceEncounterTableRow,
+  seededWanderingTable,
   toggleTreasureLetter,
   type AreaTarget,
 } from '@/lib/content-builders'
 import { makeDocument } from '@/test/fixtures'
-import type { Adventure, AreaSpec, FeatureSpec, KeyedMonster, LevelSpec } from '@/types'
+import type {
+  Adventure,
+  AreaSpec,
+  EncounterTable,
+  EncounterTableRow,
+  FeatureSpec,
+  KeyedMonster,
+  LevelSpec,
+} from '@/types'
 
 const TARGET: AreaTarget = { dungeonId: 'dungeon-1', levelNumber: 1, areaId: '1' }
 
@@ -247,5 +257,56 @@ describe('feature builders', () => {
       { description: 'New.' },
     )
     expect(ops).toEqual([])
+  })
+})
+
+describe('the wandering table seed', () => {
+  const bandRow = (roll: number): EncounterTableRow => ({
+    roll,
+    name: `Row ${roll}`,
+    entry: { kind: 'monster', monster_ids: ['orc'], variant_dice: null },
+    count_dice: '1d6',
+    count_fixed: null,
+  })
+  const band: EncounterTable = {
+    id: 'dungeon-level-1',
+    label: 'Dungeon level 1',
+    min_level: 1,
+    max_level: 1,
+    rows: Array.from({ length: 20 }, (_, index) => bandRow(index + 1)),
+    overrides_applied: ['some-band-override'],
+  }
+
+  test('seeds all twenty rows from the band with the pinned identity', () => {
+    const seeded = seededWanderingTable(band, 'mill-caves', 2, null)
+    expect(seeded.id).toBe('mill-caves-level-2-wandering')
+    expect(seeded.label).toBe('Level 2 wandering')
+    expect(seeded.min_level).toBe(1)
+    expect(seeded.max_level).toBeNull()
+    expect(seeded.overrides_applied).toEqual([])
+    expect(seeded.rows).toHaveLength(20)
+    expect(seeded.rows.map((row) => row.roll)).toEqual(band.rows.map((row) => row.roll))
+    expect(seeded.rows[0]).toEqual(band.rows[0])
+    expect(seeded.rows[0]).not.toBe(band.rows[0])
+  })
+
+  test('an existing table keeps its id and label through a re-seed', () => {
+    const existing = { ...band, id: 'foreign-id', label: 'Foreign label' }
+    const seeded = seededWanderingTable(band, 'mill-caves', 2, existing)
+    expect(seeded.id).toBe('foreign-id')
+    expect(seeded.label).toBe('Foreign label')
+  })
+
+  test('replacing a row keeps rolls 1-20 in order by construction', () => {
+    const seeded = seededWanderingTable(band, 'mill-caves', 1, null)
+    const replacement: EncounterTableRow = {
+      ...seeded.rows[4],
+      name: 'Ghouls',
+      entry: { kind: 'monster', monster_ids: ['ghoul'], variant_dice: null },
+    }
+    const next = replaceEncounterTableRow(seeded, 4, replacement)
+    expect(next.rows[4].name).toBe('Ghouls')
+    expect(next.rows.map((row) => row.roll)).toEqual(seeded.rows.map((row) => row.roll))
+    expect(next.id).toBe(seeded.id)
   })
 })

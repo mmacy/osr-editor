@@ -11,6 +11,8 @@ import type {
   AreaSpec,
   AreaTreasureSpec,
   Condition,
+  EncounterTable,
+  EncounterTableRow,
   FeatureSpec,
   KeyedEncounter,
   KeyedMonster,
@@ -374,4 +376,39 @@ export function featureRemoveOps(scope: FeatureScope, featureId: string): AnyEdi
       feature_id: featureId,
     },
   ]
+}
+
+// --- the wandering table ---
+
+// Seed an inline table from the compiled band table for the level. Blind
+// row-by-row authoring cannot produce a valid table (twenty rows, 1-20 in
+// order, each complete), so the editor always starts from the band and edits
+// from there. Authored tables pin `<dungeon-id>-level-<n>-wandering` and keep
+// an existing table's id and label through re-seeds; min_level pins 1 and
+// max_level null — self-description only, since the runtime consumes an
+// inline table wholesale and never consults its band.
+export function seededWanderingTable(
+  band: EncounterTable,
+  dungeonId: string,
+  levelNumber: number,
+  existing: EncounterTable | null,
+): EncounterTable {
+  return {
+    id: existing?.id ?? `${dungeonId}-level-${levelNumber}-wandering`,
+    label: existing?.label ?? `Level ${levelNumber} wandering`,
+    min_level: 1,
+    max_level: null,
+    rows: band.rows.map((row) => ({ ...row, entry: { ...row.entry } })),
+    overrides_applied: [],
+  }
+}
+
+// Replace one d20 row; rolls are fixed row labels, so order and coverage hold
+// by construction and the model's validator is satisfied by shape.
+export function replaceEncounterTableRow(
+  table: EncounterTable,
+  index: number,
+  row: EncounterTableRow,
+): EncounterTable {
+  return { ...table, rows: table.rows.map((existing, at) => (at === index ? row : existing)) }
 }

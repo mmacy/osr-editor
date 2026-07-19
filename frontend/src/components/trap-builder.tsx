@@ -6,7 +6,7 @@
 // damage, duration only with a condition (patchTrapEffect clears dependents).
 import { useState } from 'react'
 
-import { MiniLevelPicker } from '@/components/map-dialogs'
+import { MiniLevelPicker } from '@/components/mini-level-picker'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'

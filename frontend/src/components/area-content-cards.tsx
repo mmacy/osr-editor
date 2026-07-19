@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, XIcon } from 'lucide-react'
 
 import { EquipmentPicker } from '@/components/equipment-picker'
-import { MiniLevelPicker } from '@/components/map-dialogs'
+import { MiniLevelPicker } from '@/components/mini-level-picker'
 import { MonsterPicker } from '@/components/monster-picker'
 import { TrapBuilder } from '@/components/trap-builder'
 import { TreasureTypePicker } from '@/components/treasure-type-picker'
