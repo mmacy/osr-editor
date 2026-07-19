@@ -5,15 +5,27 @@ import type {
   AnyEditOp,
   ApiError,
   ApiErrorDetail,
+  EncounterTableCatalogResponse,
+  EquipmentCatalogResponse,
   ExportResult,
   ImportedGeometry,
   ImporterListResponse,
+  MonsterCatalogResponse,
   OpBatchResult,
   ProjectListResponse,
   ProjectState,
+  PublishResult,
   SniffResult,
   StatusResponse,
+  TreasureTypeCatalogResponse,
 } from '@/types'
+
+export interface PublishRequest {
+  mode: 'symlink' | 'copy'
+  name?: string
+  overwrite?: boolean
+  checkout_path?: string
+}
 
 export class ApiRequestError extends Error {
   readonly status: number
@@ -68,6 +80,14 @@ export const api = {
   redo: (id: string) => request<OpBatchResult>(`/api/projects/${id}/redo`, jsonPost()),
   exportProject: (id: string, path: string) =>
     request<ExportResult>(`/api/projects/${id}/export`, jsonPost({ path })),
+  publishProject: (id: string, body: PublishRequest) =>
+    request<PublishResult>(`/api/projects/${id}/publish`, jsonPost(body)),
+  getMonsterCatalog: () => request<MonsterCatalogResponse>('/api/catalogs/monsters'),
+  getEquipmentCatalog: () => request<EquipmentCatalogResponse>('/api/catalogs/equipment'),
+  getTreasureTypeCatalog: () =>
+    request<TreasureTypeCatalogResponse>('/api/catalogs/treasure-types'),
+  getEncounterTableCatalog: () =>
+    request<EncounterTableCatalogResponse>('/api/catalogs/encounter-tables'),
   listImporters: () => request<ImporterListResponse>('/api/importers'),
   sniffImporters: (path: string) =>
     request<SniffResult>('/api/importers/sniff', jsonPost({ path })),
