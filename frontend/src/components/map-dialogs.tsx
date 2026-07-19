@@ -867,8 +867,10 @@ function TransitionBody({
 }
 
 // The mini target-level picker: the target grid at thumbnail scale, click to
-// choose the landing cell.
-function MiniLevelPicker({
+// choose the landing cell. Exported as the shared one-shot cell-pick gesture —
+// the trap builder's slide destination and the feature cards' cell binding
+// reuse it.
+export function MiniLevelPicker({
   level,
   selected,
   onPick,

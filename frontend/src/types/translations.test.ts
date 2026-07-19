@@ -3,11 +3,13 @@
 // time and under vitest — instead of silently loosening types.
 import { expectTypeOf, test } from 'vitest'
 
+import { CONDITIONS, REACTION_RESULTS, SAVE_CATEGORIES, TIME_UNITS } from '@/lib/content-builders'
 import type {
   AddTransition,
   AnyEditOp,
   AreaTreasureSpec,
   CatalogMonster,
+  Condition,
   Edge,
   EncounterEntry,
   FeatureSpec,
@@ -17,6 +19,8 @@ import type {
   KeyedEncounter,
   LevelSpec,
   PublishResult,
+  ReactionResult,
+  SaveCategory,
   SetEdges,
   SetEncounter,
   SetFeature,
@@ -24,6 +28,7 @@ import type {
   SetTreasure,
   SetWandering,
   SubtreeChange,
+  TimeUnit,
   TransitionSpec,
   TrapSpec,
   WanderingSpec,
@@ -125,6 +130,16 @@ test('the catalog and publish translations hold', () => {
   expectTypeOf<Extract<EncounterEntry, { kind: 'npc_party' }>>().toHaveProperty('party_kind')
 
   expectTypeOf<PublishResult['mode']>().toEqualTypeOf<'symlink' | 'copy'>()
+})
+
+test('the enum option lists stay exhaustive', () => {
+  // A value osrlib adds to an enum must join its option list — Exclude
+  // collapsing to never proves nothing is missing; `satisfies` in the list
+  // definitions proves nothing extra crept in.
+  expectTypeOf<Exclude<Condition, (typeof CONDITIONS)[number]>>().toEqualTypeOf<never>()
+  expectTypeOf<Exclude<SaveCategory, (typeof SAVE_CATEGORIES)[number]>>().toEqualTypeOf<never>()
+  expectTypeOf<Exclude<TimeUnit, (typeof TIME_UNITS)[number]>>().toEqualTypeOf<never>()
+  expectTypeOf<Exclude<ReactionResult, (typeof REACTION_RESULTS)[number]>>().toEqualTypeOf<never>()
 })
 
 test('the importer payload translations hold', () => {
