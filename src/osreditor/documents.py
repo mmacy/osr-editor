@@ -73,6 +73,7 @@ from osreditor.forge import (
     ForgeProjectState,
     ForgeSnapshot,
     assemble_workdir,
+    check_workdir,
     forge_findings,
 )
 from osreditor.forge_edits import AnyOverrideEdit, apply_overrides_edits
@@ -593,6 +594,39 @@ class DocumentService:
                 project.sidecar.auto_reasons,
             )
             return self._commit_forge_locked(project, overrides, auto_reasons)
+
+    def run_forge_check(self, project: OpenProject) -> OpBatchResult:
+        """Run forge's `check()` over the workdir, merge its findings, and refresh the forge tier.
+
+        Check is on-demand, not part of the per-commit loop: re-assembly wipes
+        findings by forge's design, the editor's live lint already mirrors the
+        five static checks per commit, and the delve is a deliberate whole-dungeon
+        act. It changes no document — `adventure.json` is untouched; forge rewrites
+        `report.json` with the findings merged — so it takes no revision and pushes
+        no undo step, answering the current revision with the refreshed diagnostics
+        and forge projection.
+
+        Args:
+            project: The open forge project.
+
+        Returns:
+            The result: current revision, empty delta, refreshed diagnostics and
+            forge state.
+        """
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            findings = check_workdir(self.store, str(project.path))
+            forge.report = forge.report.model_copy(update={"findings": findings})
+            project.diagnostics = forge_diagnostics(project.adventure, forge.report)
+            return OpBatchResult(
+                revision=project.revision,
+                diagnostics=project.diagnostics,
+                delta=(),
+                can_undo=bool(forge.undo_stack),
+                can_redo=bool(forge.redo_stack),
+                forge=ForgeState(report=forge.report, run=forge.run, overrides=forge.overrides),
+            )
 
     def apply_forge_edits(
         self, project: OpenProject, revision: str, edits: tuple[AnyOverrideEdit, ...]

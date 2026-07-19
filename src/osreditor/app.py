@@ -527,6 +527,25 @@ def post_forge_overrides(
     return _service(request).apply_forge_edits(project, body.revision, body.edits)
 
 
+@router.post("/api/projects/{project_id}/forge/check")
+def post_forge_check(request: Request, project_id: str, user: CurrentUser) -> OpBatchResult:
+    """Run forge's `check()` on demand: the delve and the static findings, merged into the report.
+
+    Populates the forge diagnostics tier (which every commit empties, since
+    re-assembly wipes findings by forge's design). Changes no document.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        user: The authenticated caller.
+
+    Returns:
+        The result carrying the refreshed diagnostics and forge projection.
+    """
+    project = _forge_project(request, project_id)
+    return _service(request).run_forge_check(project)
+
+
 @router.post("/api/projects/{project_id}/undo")
 def post_undo(request: Request, project_id: str, user: CurrentUser) -> OpBatchResult:
     """Revert the latest commit.
