@@ -50,6 +50,7 @@ from osreditor.errors import (
     StaleRevisionError,
     UndoStackEmptyError,
 )
+from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
 from osreditor.ops import Diagnostics, OpBatch, OpBatchResult
 from osreditor.projects import create_native_project, open_project, utc_now_iso
 from osreditor.store import LocalProjectStore, atomic_write_bytes
@@ -61,10 +62,14 @@ __all__ = [
     "CurrentUser",
     "ExportRequest",
     "ExportResult",
+    "ImporterInfo",
+    "ImporterListResponse",
+    "ImporterPathRequest",
     "OpenProjectRequest",
     "ProjectListResponse",
     "ProjectState",
     "RecentProject",
+    "SniffResult",
     "StatusResponse",
     "User",
     "create_app",
@@ -167,6 +172,35 @@ class ExportResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     path: str
+
+
+class ImporterPathRequest(_AbsolutePathRequest):
+    """An importer source path: absolute, read-only, local — the same honestly-local posture as export."""
+
+
+class ImporterInfo(BaseModel):
+    """One registered geometry importer's identity."""
+
+    model_config = ConfigDict(frozen=True)
+
+    format_id: str
+    label: str
+
+
+class ImporterListResponse(BaseModel):
+    """The registered importers, in registry order."""
+
+    model_config = ConfigDict(frozen=True)
+
+    importers: tuple[ImporterInfo, ...]
+
+
+class SniffResult(BaseModel):
+    """Which registered importers recognize a source path."""
+
+    model_config = ConfigDict(frozen=True)
+
+    format_ids: tuple[str, ...]
 
 
 class RecentProject(BaseModel):
@@ -441,6 +475,87 @@ def export_project(request: Request, project_id: str, body: ExportRequest, user:
     return ExportResult(path=body.path)
 
 
+def _importers(request: Request) -> dict[str, GeometryImporter]:
+    registry: dict[str, GeometryImporter] = request.app.state.importers
+    return registry
+
+
+def _safe_sniff(importer: GeometryImporter, path: Path) -> bool:
+    """Probe one importer defensively — a third-party sniff that raises is a non-match, never a 500."""
+    try:
+        return bool(importer.sniff(path))
+    except Exception:
+        return False
+
+
+@router.get("/api/importers")
+def list_importers(request: Request, user: CurrentUser) -> ImporterListResponse:
+    """Report the registered geometry importers.
+
+    Args:
+        request: The current request (carries the app state).
+        user: The authenticated caller.
+
+    Returns:
+        Every importer discovered through the `osreditor.importers` entry-point
+        group, in registry order.
+    """
+    return ImporterListResponse(
+        importers=tuple(
+            ImporterInfo(format_id=importer.format_id, label=importer.label)
+            for importer in _importers(request).values()
+        )
+    )
+
+
+@router.post("/api/importers/sniff")
+def sniff_importers(request: Request, body: ImporterPathRequest, user: CurrentUser) -> SniffResult:
+    """Probe a source path against every registered importer.
+
+    Sniff never errors: a nonexistent or unrecognized path answers an empty
+    match list — presence-level probing has nothing to throw — and the dialog
+    renders zero matches as an inline message.
+
+    Args:
+        request: The current request (carries the app state).
+        body: The absolute source path.
+        user: The authenticated caller.
+
+    Returns:
+        The format ids that recognize the path.
+    """
+    path = Path(body.path)
+    return SniffResult(
+        format_ids=tuple(
+            format_id for format_id, importer in _importers(request).items() if _safe_sniff(importer, path)
+        )
+    )
+
+
+@router.post("/api/importers/{format_id}/load")
+def load_geometry(request: Request, format_id: str, body: ImporterPathRequest, user: CurrentUser) -> ImportedGeometry:
+    """Load geometry from a source path through one importer.
+
+    Import needs no apply route: the loaded geometry crosses to the frontend,
+    and the import dialog turns the user's choices into one ordinary op batch
+    through `POST /projects/{id}/ops` — undoable, revision-guarded,
+    immediately linted.
+
+    Args:
+        request: The current request (carries the app state).
+        format_id: The importer to load through.
+        body: The absolute source path.
+        user: The authenticated caller.
+
+    Returns:
+        The imported geometry, normalized to what the op vocabulary admits.
+    """
+    importer = _importers(request).get(format_id)
+    if importer is None:
+        raise ImporterNotFoundError(f"no registered geometry importer has format id {format_id!r}")
+    return importer.load(Path(body.path))
+
+
 def _details_none(error: Exception) -> dict[str, object] | None:
     return None
 
@@ -553,6 +668,9 @@ def create_app(open_at_launch: Path | None = None) -> FastAPI:
     # factory, and tests must not leak open projects across app instances.
     app.state.service = DocumentService(LocalProjectStore())
     app.state.open_at_launch = str(open_at_launch) if open_at_launch is not None else None
+    # The importer registry is built once per app: discovery walks installed
+    # entry points, which cannot change under a running process.
+    app.state.importers = discover_importers()
     for error_type, (status, code, remedy, details) in _ERROR_MAPPINGS.items():
         app.add_exception_handler(error_type, _make_handler(status, code, remedy, details))
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)

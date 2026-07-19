@@ -39,6 +39,13 @@ dependencies = [
 [project.scripts]
 osr-editor = "osreditor.app:main"
 
+# The geometry importer seam: each entry is a zero-arg callable returning a
+# GeometryImporter instance. The built-in import-from-project importer
+# registers through the same public group any third-party converter uses —
+# dogfooding the seam keeps the protocol honest.
+[project.entry-points."osreditor.importers"]
+project = "osreditor.importers:ProjectImporter"
+
 [project.urls]
 Repository = "https://github.com/mmacy/osr-editor"
 Issues = "https://github.com/mmacy/osr-editor/issues"

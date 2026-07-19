@@ -95,6 +95,7 @@ __all__ = [
     "DocumentService",
     "OpenProject",
     "ProjectType",
+    "canonical_edge_cells",
     "canonical_json_bytes",
     "dropped_pointers",
     "dump_adventure",
@@ -588,7 +589,7 @@ renders any other entry as wall without consulting it.
 """
 
 
-def _canonical_edge_cells(key: str) -> tuple[Position, Position] | None:
+def canonical_edge_cells(key: str) -> tuple[Position, Position] | None:
     """Return a canonical edge key's two incident cells, or `None` for any other string.
 
     The incident cells are the key's own cell and its north or west neighbour —
@@ -621,7 +622,7 @@ def _apply_set_edges(adventure: Adventure, op: SetEdges) -> tuple[Adventure, str
                 raise OpInvariantError(f"edge delete names no existing entry {key!r}")
             del edges[key]
             continue
-        cells = _canonical_edge_cells(key)
+        cells = canonical_edge_cells(key)
         if cells is None:
             raise OpInvariantError(
                 f"edge key {key!r} is not canonical — the editor authors only 'x,y:north' and 'x,y:west' keys"
@@ -905,7 +906,7 @@ def _apply_resize_level(adventure: Adventure, op: ResizeLevel) -> tuple[Adventur
     edges = {
         key: edge
         for key, edge in level.edges.items()
-        if (cells := _canonical_edge_cells(key)) is None or all(in_new(cell) for cell in cells)
+        if (cells := canonical_edge_cells(key)) is None or all(in_new(cell) for cell in cells)
     }
     new_level = level.model_copy(update={"width": op.width, "height": op.height, "edges": edges})
     return _replace_level(adventure, dungeon_index, level_index, new_level), f"/dungeons/{dungeon_index}"
