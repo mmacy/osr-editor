@@ -147,6 +147,52 @@ def create_native_project(store: ProjectStore, project_id: str, name: str) -> Ad
     return adventure
 
 
+def detach_to_native(service: DocumentService, forge_project: OpenProject, path: Path) -> OpenProject:
+    """Detach a forge project to a new native project — the recorded crossing to the native world.
+
+    Writes the current assembled `Adventure` through the native canonical
+    serializer and records provenance (`source_workdir`, `osrforge_version`).
+    Notes carry over (addresses are stable across the crossing); review marks and
+    `auto_reasons` stay behind — they are forge-review state with no native
+    meaning. The workdir is untouched and drops from the open registry.
+
+    Args:
+        service: The document service holding the registry.
+        forge_project: The open forge project to detach.
+        path: The absolute destination directory for the new native project.
+
+    Returns:
+        The new native project, opened.
+
+    Raises:
+        ProjectExistsError: If the destination exists and is not empty.
+    """
+    store = service.store
+    resolved = path.resolve()
+    store_key = str(resolved)
+    if store.project_exists(store_key) and store.list_artifacts(store_key):
+        raise ProjectExistsError(f"directory {resolved} already exists and is not empty")
+    with forge_project.lock:
+        adventure = forge_project.adventure
+        assert forge_project.forge is not None
+        osrforge_version = forge_project.forge.run.osrforge_version
+        notes = dict(forge_project.sidecar.notes)
+    sidecar = EditorSidecar(
+        provenance=SidecarProvenance(
+            created_by=f"osr-editor {metadata.version('osr-editor')}",
+            osrlib_version=engine_version(),
+            created_at=utc_now_iso(),
+            source_workdir=str(forge_project.path),
+            osrforge_version=osrforge_version,
+        ),
+        notes=notes,
+    )
+    store.write_artifact(store_key, ADVENTURE_ARTIFACT, dump_adventure(adventure))
+    write_sidecar(store, store_key, sidecar)
+    service.close(forge_project)
+    return open_project(service, resolved)
+
+
 def open_project(service: DocumentService, path: Path) -> OpenProject:
     """Open a project by path: resolve, classify, load, register.
 

@@ -75,6 +75,7 @@ from osreditor.forge import (
     assemble_workdir,
     check_workdir,
     forge_findings,
+    rerun_assemble,
 )
 from osreditor.forge_edits import AnyOverrideEdit, apply_overrides_edits
 from osreditor.ops import (
@@ -594,6 +595,47 @@ class DocumentService:
                 project.sidecar.auto_reasons,
             )
             return self._commit_forge_locked(project, overrides, auto_reasons)
+
+    def close(self, project: OpenProject) -> None:
+        """Drop a project from the open registry — used by detach to release the workdir.
+
+        Args:
+            project: The project to close. Its files on disk are untouched.
+        """
+        with self._registry_lock:
+            self._by_id.pop(project.id, None)
+            self._by_path.pop(str(project.path), None)
+
+    def rerun_forge(self, project: OpenProject, settings_updates: dict[str, object]) -> OpBatchResult:
+        """Re-run the assemble stage with settings updates (the assembly-owned knob), and adopt the result.
+
+        Phase 5 reruns the assemble stage only — a pipeline-panel knob change
+        (`unresolved_fallback`), not an overrides edit — so it takes no undo step:
+        the settings echo lives in `run.json`, outside the overrides snapshot the
+        history tracks. It re-assembles with the current overrides applied, bumps
+        the revision, and refreshes the document, report, run, and diagnostics.
+
+        Args:
+            project: The open forge project.
+            settings_updates: The knob updates for the assemble stage.
+
+        Returns:
+            The refreshed result.
+
+        Raises:
+            ForgeRerunInvalidError: A knob→owning-stage drift or stage precondition.
+            pydantic.ValidationError: An unknown knob or an out-of-range value.
+        """
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            result = rerun_assemble(self.store, str(project.path), settings_updates)
+            project.adventure = result.adventure
+            forge.report = result.report
+            forge.run = result.run
+            project.revision_number += 1
+            project.diagnostics = forge_diagnostics(result.adventure, result.report)
+            return self._forge_result(project)
 
     def run_forge_check(self, project: OpenProject) -> OpBatchResult:
         """Run forge's `check()` over the workdir, merge its findings, and refresh the forge tier.

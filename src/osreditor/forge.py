@@ -281,6 +281,11 @@ def rerun_assemble(store: ProjectStore, project_id: str, settings_updates: dict[
     """
     try:
         return rerun(store.materialize(project_id), Stage.ASSEMBLE, settings_updates=settings_updates)
+    except ValidationError:
+        # An unknown knob or an out-of-range value — pydantic.ValidationError is a
+        # subclass of ValueError, so it must be caught first and propagated to the
+        # request_invalid handler, never folded into forge_rerun_invalid.
+        raise
     except ValueError as error:
         raise ForgeRerunInvalidError(str(error)) from error
 

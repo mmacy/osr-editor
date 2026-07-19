@@ -25,12 +25,12 @@ from typing import Annotated
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from osrlib.crawl.adventure import Adventure
 from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION, engine_version
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from osreditor.catalogs import (
     EncounterTableCatalogResponse,
@@ -43,8 +43,9 @@ from osreditor.catalogs import (
     treasure_type_catalog,
 )
 from osreditor.config import RecentEntry, load_config, record_recent, save_config
-from osreditor.documents import DocumentService, OpenProject, dump_adventure, json_pointer
+from osreditor.documents import ADVENTURE_ARTIFACT, DocumentService, OpenProject, dump_adventure, json_pointer
 from osreditor.errors import (
+    ArtifactNotFoundError,
     DocumentPayloadInvalidError,
     ForgeOverrideInvalidError,
     ForgePageNotFoundError,
@@ -73,7 +74,7 @@ from osreditor.errors import (
 from osreditor.forge_edits import OverrideEditBatch
 from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
 from osreditor.ops import Diagnostics, ForgeState, OpBatch, OpBatchResult
-from osreditor.projects import create_native_project, open_project, utc_now_iso
+from osreditor.projects import create_native_project, detach_to_native, open_project, utc_now_iso
 from osreditor.publish import PublishMode, PublishResult, check_osr_web_checkout, publish_adventure
 from osreditor.sidecar import EditorSidecar
 from osreditor.store import LocalProjectStore, atomic_write_bytes
@@ -200,6 +201,18 @@ class ExportResult(BaseModel):
 
 class ImporterPathRequest(_AbsolutePathRequest):
     """An importer source path: absolute, read-only, local — the same honestly-local posture as export."""
+
+
+class RerunRequest(BaseModel):
+    """A rerun request: the assemble-stage settings updates (phase 5's one knob, `unresolved_fallback`)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    settings: dict[str, object] = {}
+
+
+class DetachRequest(_AbsolutePathRequest):
+    """A detach destination: the absolute directory for the new native project."""
 
 
 class ImporterInfo(BaseModel):
@@ -503,6 +516,19 @@ def _forge_project(request: Request, project_id: str) -> OpenProject:
     return project
 
 
+def _current_document_bytes(service: DocumentService, project: OpenProject) -> bytes:
+    """The stamped document bytes to export or copy-publish.
+
+    A forge project's `adventure.json` is forge's byte contract — stamped,
+    byte-stable — so it is copied verbatim through the store, never
+    re-serialized; the editor's canonical serializer is for documents the editor
+    owns. Native behavior is unchanged. The caller holds the project lock.
+    """
+    if project.forge is not None:
+        return service.store.read_artifact(str(project.path), ADVENTURE_ARTIFACT)
+    return dump_adventure(project.adventure)
+
+
 @router.post("/api/projects/{project_id}/forge/overrides")
 def post_forge_overrides(
     request: Request, project_id: str, body: OverrideEditBatch, user: CurrentUser
@@ -544,6 +570,100 @@ def post_forge_check(request: Request, project_id: str, user: CurrentUser) -> Op
     """
     project = _forge_project(request, project_id)
     return _service(request).run_forge_check(project)
+
+
+@router.post("/api/projects/{project_id}/forge/rerun")
+def post_forge_rerun(request: Request, project_id: str, body: RerunRequest, user: CurrentUser) -> OpBatchResult:
+    """Re-run the assemble stage with settings updates — phase 5's assembly-owned knob.
+
+    The upstream-knob guard rejects a settings update whose owning stage is
+    upstream of assemble (`forge_rerun_invalid`, forge's message verbatim);
+    unknown knobs and bad values are `request_invalid` from forge's own settings
+    validation.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The settings updates.
+        user: The authenticated caller.
+
+    Returns:
+        The refreshed result.
+    """
+    project = _forge_project(request, project_id)
+    return _service(request).rerun_forge(project, body.settings)
+
+
+@router.post("/api/projects/{project_id}/forge/detach", status_code=201)
+def post_forge_detach(request: Request, project_id: str, body: DetachRequest, user: CurrentUser) -> ProjectState:
+    """Detach a forge project to a new native project at an absolute path.
+
+    The forge re-run loop is severed; corrections no longer land in
+    `overrides.yaml`. Notes carry over; review marks and machine-draft flags stay
+    behind. The workdir is untouched and drops from the open registry.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The destination directory.
+        user: The authenticated caller.
+
+    Returns:
+        The new native project's full state.
+    """
+    service = _service(request)
+    project = _forge_project(request, project_id)
+    native = detach_to_native(service, project, Path(body.path))
+    _record_recent(native)
+    return _project_state(native)
+
+
+@router.get("/api/projects/{project_id}/forge/pages/{page_number}")
+def get_forge_page(request: Request, project_id: str, page_number: int, user: CurrentUser) -> Response:
+    """Serve one source page render (`pages/NNNN.png`) from the workdir.
+
+    A 404 (`forge_page_not_found`) is normal — a licensed subset or a lean
+    workdir may not carry every page.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        page_number: The 1-based source page number.
+        user: The authenticated caller.
+
+    Returns:
+        The PNG bytes.
+    """
+    project = _forge_project(request, project_id)
+    try:
+        data = _service(request).store.read_artifact(str(project.path), f"pages/{page_number:04d}.png")
+    except ArtifactNotFoundError as error:
+        raise ForgePageNotFoundError(f"the workdir has no source page {page_number}") from error
+    return Response(content=data, media_type="image/png")
+
+
+@router.get("/api/projects/{project_id}/forge/previews/{dungeon_id}/{level_number}")
+def get_forge_preview(
+    request: Request, project_id: str, dungeon_id: str, level_number: int, user: CurrentUser
+) -> Response:
+    """Serve one level's rendered SVG preview (`previews/<dungeon>.<level>.svg`) from the workdir.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        dungeon_id: The canonical dungeon id.
+        level_number: The 1-based level number.
+        user: The authenticated caller.
+
+    Returns:
+        The SVG bytes.
+    """
+    project = _forge_project(request, project_id)
+    try:
+        data = _service(request).store.read_artifact(str(project.path), f"previews/{dungeon_id}.{level_number}.svg")
+    except ArtifactNotFoundError as error:
+        raise ForgePageNotFoundError(f"the workdir has no preview for {dungeon_id} level {level_number}") from error
+    return Response(content=data, media_type="image/svg+xml")
 
 
 @router.post("/api/projects/{project_id}/undo")
@@ -599,9 +719,10 @@ def export_project(request: Request, project_id: str, body: ExportRequest, user:
     Returns:
         The written path.
     """
-    project = _service(request).get(project_id)
+    service = _service(request)
+    project = service.get(project_id)
     with project.lock:
-        data = dump_adventure(project.adventure)
+        data = _current_document_bytes(service, project)
     atomic_write_bytes(Path(body.path), data)
     return ExportResult(path=body.path)
 
@@ -628,7 +749,8 @@ def publish_project(request: Request, project_id: str, body: PublishRequest, use
     Returns:
         The published path and mode.
     """
-    project = _service(request).get(project_id)
+    service = _service(request)
+    project = service.get(project_id)
     config = load_config()
     checkout_value = body.checkout_path or config.osr_web_checkout
     if checkout_value is None:
@@ -645,7 +767,7 @@ def publish_project(request: Request, project_id: str, body: PublishRequest, use
                 "the document has validation findings; publish requires a clean validation tier",
                 findings=[finding.model_dump(mode="json") for finding in findings],
             )
-        document = dump_adventure(project.adventure)
+        document = _current_document_bytes(service, project)
     return publish_adventure(
         checkout=checkout,
         project_path=project.path,
@@ -932,6 +1054,21 @@ def _request_validation_error_handler(request: Request, error: Exception) -> JSO
     return _error_response(422, "request_invalid", "the request is malformed", details={"errors": reported})
 
 
+def _validation_error_handler(request: Request, error: Exception) -> JSONResponse:
+    """Map a pydantic `ValidationError` raised inside a handler into the one envelope.
+
+    Forge's own settings validation raises this on an unknown rerun knob or an
+    out-of-range value — the spec's `request_invalid` channel for a bad forge
+    settings update.
+    """
+    assert isinstance(error, ValidationError)
+    reported = [
+        {"path": json_pointer(detail.get("loc", ())), "message": str(detail.get("msg", ""))}
+        for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
+    ]
+    return _error_response(422, "request_invalid", "the request is malformed", details={"errors": reported})
+
+
 def create_app(open_at_launch: Path | None = None) -> FastAPI:
     """Build the FastAPI app: state, API routes, error handlers, then the static mount.
 
@@ -953,6 +1090,7 @@ def create_app(open_at_launch: Path | None = None) -> FastAPI:
     for error_type, (status, code, remedy, details) in _ERROR_MAPPINGS.items():
         app.add_exception_handler(error_type, _make_handler(status, code, remedy, details))
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)
+    app.add_exception_handler(ValidationError, _validation_error_handler)
     app.include_router(router)
     # Mounted last so API routes always win; guarded so a dev backend without a
     # built frontend still boots and serves /api.
