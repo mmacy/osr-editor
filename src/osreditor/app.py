@@ -52,10 +52,14 @@ from osreditor.errors import (
     OpInvariantError,
     OpRejectedError,
     OpTargetNotFoundError,
+    OsrWebCheckoutInvalidError,
+    OsrWebNotConfiguredError,
     ProjectExistsError,
     ProjectNotFoundError,
     ProjectPathNotFoundError,
     ProjectTypeUnsupportedError,
+    PublishBlockedError,
+    PublishDestinationExistsError,
     RedoStackEmptyError,
     StaleRevisionError,
     UndoStackEmptyError,
@@ -63,6 +67,7 @@ from osreditor.errors import (
 from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
 from osreditor.ops import Diagnostics, OpBatch, OpBatchResult
 from osreditor.projects import create_native_project, open_project, utc_now_iso
+from osreditor.publish import PublishMode, PublishResult, check_osr_web_checkout, publish_adventure
 from osreditor.store import LocalProjectStore, atomic_write_bytes
 
 __all__ = [
@@ -78,6 +83,7 @@ __all__ = [
     "OpenProjectRequest",
     "ProjectListResponse",
     "ProjectState",
+    "PublishRequest",
     "RecentProject",
     "SniffResult",
     "StatusResponse",
@@ -211,6 +217,44 @@ class SniffResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     format_ids: tuple[str, ...]
+
+
+class PublishRequest(BaseModel):
+    """A publish request: the mode, plus optional name, overwrite, and first-use checkout path.
+
+    `name` defaults server-side to the project directory's stem; when provided
+    it must be a plain path component — path separators and the `.`/`..` forms
+    surface as `request_invalid`, the phase 1 amendment's channel. There is no
+    settings screen: `checkout_path` rides on the request when the dialog
+    collects it, and the backend saves it once the shape test passes.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    mode: PublishMode = "symlink"
+    name: str | None = None
+    overwrite: bool = False
+    checkout_path: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name_must_be_a_plain_entry(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not value:
+            raise ValueError("name must be non-empty")
+        if value in (".", ".."):
+            raise ValueError(f"name must not be {value!r}")
+        if "/" in value or "\\" in value:
+            raise ValueError("name must not contain path separators")
+        return value
+
+    @field_validator("checkout_path")
+    @classmethod
+    def _checkout_path_must_be_absolute(cls, value: str | None) -> str | None:
+        if value is not None and not Path(value).is_absolute():
+            raise ValueError(f"checkout_path must be absolute, got {value!r}")
+        return value
 
 
 class RecentProject(BaseModel):
@@ -485,6 +529,56 @@ def export_project(request: Request, project_id: str, body: ExportRequest, user:
     return ExportResult(path=body.path)
 
 
+@router.post("/api/projects/{project_id}/publish")
+def publish_project(request: Request, project_id: str, body: PublishRequest, user: CurrentUser) -> PublishResult:
+    """Publish the current document into an osr-web checkout's `adventures/` directory.
+
+    Publish gates on validation and only validation: the tier is recomputed on
+    every commit, so the check reads fresh state, and lint never blocks
+    server-side — the frontend confirms when lint findings exist, because
+    secret-only access is sometimes the point. The checkout path is validated
+    and saved to config before the destination attempt, so a later collision
+    never costs the user their typed path. Honestly local, like export: a
+    symlink into a user checkout is the single-user posture, and a hosted
+    future replaces this one handler.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The mode, plus optional name, overwrite, and checkout path.
+        user: The authenticated caller.
+
+    Returns:
+        The published path and mode.
+    """
+    project = _service(request).get(project_id)
+    config = load_config()
+    checkout_value = body.checkout_path or config.osr_web_checkout
+    if checkout_value is None:
+        raise OsrWebNotConfiguredError("no osr-web checkout is configured")
+    checkout = Path(checkout_value)
+    check_osr_web_checkout(checkout)
+    if body.checkout_path is not None and body.checkout_path != config.osr_web_checkout:
+        save_config(config.model_copy(update={"osr_web_checkout": body.checkout_path}))
+    name = body.name if body.name is not None else project.path.stem
+    with project.lock:
+        findings = project.diagnostics.validation
+        if findings:
+            raise PublishBlockedError(
+                "the document has validation findings; publish requires a clean validation tier",
+                findings=[finding.model_dump(mode="json") for finding in findings],
+            )
+        document = dump_adventure(project.adventure)
+    return publish_adventure(
+        checkout=checkout,
+        project_path=project.path,
+        document=document,
+        name=name,
+        mode=body.mode,
+        overwrite=body.overwrite,
+    )
+
+
 @router.get("/api/catalogs/monsters")
 def get_monster_catalog(user: CurrentUser) -> MonsterCatalogResponse:
     """Report the shipped monster catalog as picker summaries.
@@ -648,9 +742,14 @@ def _details_payload_invalid(error: Exception) -> dict[str, object] | None:
     return {"errors": error.errors}
 
 
+def _details_publish_blocked(error: Exception) -> dict[str, object] | None:
+    assert isinstance(error, PublishBlockedError)
+    return {"findings": error.findings}
+
+
 _UPGRADE_REMEDY = "This document was written by a newer osrlib. Upgrade osrlib, then reopen it."
 
-# Every typed error a phase 1 route can raise, mapped to the envelope:
+# Every typed error a route can raise, mapped to the envelope:
 # (status, code, remedy, details builder).
 _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exception], dict[str, object] | None]]] = {
     SaveVersionError: (409, "schema_version_newer", _UPGRADE_REMEDY, _details_none),
@@ -682,6 +781,30 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
     OpInvariantError: (422, "op_invariant", None, _details_op_invariant),
     ImporterNotFoundError: (404, "importer_not_found", None, _details_none),
     ImportSourceInvalidError: (422, "import_source_invalid", None, _details_none),
+    OsrWebNotConfiguredError: (
+        422,
+        "osr_web_not_configured",
+        "Provide the path to your osr-web checkout in the publish dialog.",
+        _details_none,
+    ),
+    OsrWebCheckoutInvalidError: (
+        422,
+        "osr_web_checkout_invalid",
+        "An osr-web checkout is a directory containing an adventures/ directory.",
+        _details_none,
+    ),
+    PublishBlockedError: (
+        409,
+        "publish_blocked",
+        "Fix the validation findings, then publish again.",
+        _details_publish_blocked,
+    ),
+    PublishDestinationExistsError: (
+        409,
+        "publish_destination_exists",
+        "Choose another name, or publish again with overwrite.",
+        _details_none,
+    ),
     ContentValidationError: (422, "document_invalid", None, _details_none),
     DocumentPayloadInvalidError: (
         422,
