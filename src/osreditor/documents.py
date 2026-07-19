@@ -44,6 +44,7 @@ from osrlib.crawl.dungeon import (
     AreaSpec,
     DungeonSpec,
     EdgeKind,
+    FeatureSpec,
     LevelSpec,
     Position,
     TransitionSpec,
@@ -64,6 +65,7 @@ from osreditor.errors import (
 )
 from osreditor.ops import (
     AddDungeon,
+    AddFeature,
     AddLevel,
     AddTransition,
     AnyEditOp,
@@ -73,6 +75,7 @@ from osreditor.ops import (
     OpBatchResult,
     RemoveArea,
     RemoveDungeon,
+    RemoveFeature,
     RemoveLevel,
     RemoveTransition,
     RenameDungeon,
@@ -83,8 +86,12 @@ from osreditor.ops import (
     SetAreaField,
     SetDungeonField,
     SetEdges,
+    SetEncounter,
     SetEntrance,
+    SetFeature,
     SetTownField,
+    SetTrap,
+    SetTreasure,
     SetWandering,
     SubtreeChange,
 )
@@ -510,6 +517,18 @@ def _apply_op(adventure: Adventure, op: AnyEditOp) -> tuple[Adventure, str]:
         return _apply_set_area_field(adventure, op)
     if isinstance(op, RemoveArea):
         return _apply_remove_area(adventure, op)
+    if isinstance(op, SetEncounter):
+        return _apply_set_area_content(adventure, op, "encounter", op.encounter)
+    if isinstance(op, SetTrap):
+        return _apply_set_area_content(adventure, op, "trap", op.trap)
+    if isinstance(op, SetTreasure):
+        return _apply_set_area_content(adventure, op, "treasure", op.treasure)
+    if isinstance(op, AddFeature):
+        return _apply_add_feature(adventure, op)
+    if isinstance(op, SetFeature):
+        return _apply_set_feature(adventure, op)
+    if isinstance(op, RemoveFeature):
+        return _apply_remove_feature(adventure, op)
     if isinstance(op, AddTransition):
         return _apply_add_transition(adventure, op)
     if isinstance(op, RemoveTransition):
@@ -703,6 +722,125 @@ def _apply_remove_area(adventure: Adventure, op: RemoveArea) -> tuple[Adventure,
     level = adventure.dungeons[dungeon_index].levels[level_index]
     area_index = _resolve_area(level, op.dungeon_id, op.area_id)
     return _replace_area(adventure, dungeon_index, level_index, area_index, None)
+
+
+_RESERVED_FEATURE_ID = "pile"
+"""The runtime's drop-pile convention: `TakeTreasure(feature_id="pile")` targets the cell's pile."""
+
+
+def _apply_set_area_content(
+    adventure: Adventure, op: SetEncounter | SetTrap | SetTreasure, field: str, value: object
+) -> tuple[Adventure, str]:
+    """Replace one area content field, answering the indexed area pointer.
+
+    The indexed pointer (`/areas/<k>`) is deliberately finer than the `/areas`
+    the phase 2 area ops answer — a pointer choice per op, not a helper change.
+    """
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    area_index = _resolve_area(level, op.dungeon_id, op.area_id)
+    area = level.areas[area_index].model_copy(update={field: value})
+    new_adventure, _ = _replace_area(adventure, dungeon_index, level_index, area_index, area)
+    return new_adventure, f"/dungeons/{dungeon_index}/levels/{level_index}/areas/{area_index}"
+
+
+def _level_feature_ids(level: LevelSpec) -> list[str]:
+    """Collect every feature id on a level — its own and every area's.
+
+    `validate_adventure`'s uniqueness scope spans exactly this union, so the
+    duplicate-id invariant checks against it.
+    """
+    ids = [feature.id for feature in level.features]
+    for area in level.areas:
+        ids.extend(feature.id for feature in area.features)
+    return ids
+
+
+def _require_feature_id_free(level: LevelSpec, dungeon_id: str, feature_id: str) -> None:
+    """Reject an empty, reserved, or already-used feature id (the `AddFeature` id rules)."""
+    if not feature_id:
+        raise OpInvariantError("feature id must be non-empty")
+    if feature_id == _RESERVED_FEATURE_ID:
+        raise OpInvariantError("feature id 'pile' is reserved for drop piles")
+    if feature_id in _level_feature_ids(level):
+        raise OpInvariantError(f"dungeon {dungeon_id!r} level {level.number} already has a feature {feature_id!r}")
+
+
+def _resolve_feature(features: Sequence[FeatureSpec], container: str, feature_id: str) -> int:
+    """Return the index of the first feature with `feature_id` (osrlib's first-match order)."""
+    for index, feature in enumerate(features):
+        if feature.id == feature_id:
+            return index
+    raise OpTargetNotFoundError(f"{container} has no feature {feature_id!r}")
+
+
+def _feature_container(
+    adventure: Adventure, op: AddFeature | SetFeature | RemoveFeature
+) -> tuple[int, int, int | None, tuple[FeatureSpec, ...], str]:
+    """Resolve a feature op's container: indices, the container's features, and its name.
+
+    Returns `(dungeon index, level index, area index or None, features, container name)`;
+    an unknown level or area is a targeting miss.
+    """
+    dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    if op.area_id is None:
+        return dungeon_index, level_index, None, level.features, f"dungeon {op.dungeon_id!r} level {op.level_number}"
+    area_index = _resolve_area(level, op.dungeon_id, op.area_id)
+    container = f"dungeon {op.dungeon_id!r} level {op.level_number} area {op.area_id!r}"
+    return dungeon_index, level_index, area_index, level.areas[area_index].features, container
+
+
+def _replace_container_features(
+    adventure: Adventure,
+    dungeon_index: int,
+    level_index: int,
+    area_index: int | None,
+    features: tuple[FeatureSpec, ...],
+) -> tuple[Adventure, str]:
+    """Install a container's rebuilt features tuple, answering the container's pointer."""
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    if area_index is None:
+        new_level = level.model_copy(update={"features": features})
+        pointer = f"/dungeons/{dungeon_index}/levels/{level_index}/features"
+        return _replace_level(adventure, dungeon_index, level_index, new_level), pointer
+    area = level.areas[area_index].model_copy(update={"features": features})
+    new_adventure, _ = _replace_area(adventure, dungeon_index, level_index, area_index, area)
+    return new_adventure, f"/dungeons/{dungeon_index}/levels/{level_index}/areas/{area_index}"
+
+
+def _apply_add_feature(adventure: Adventure, op: AddFeature) -> tuple[Adventure, str]:
+    dungeon_index, level_index, area_index, features, _ = _feature_container(adventure, op)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    _require_feature_id_free(level, op.dungeon_id, op.feature.id)
+    if op.feature.cell is not None:
+        _require_cells_in_bounds(level, (op.feature.cell,))
+    return _replace_container_features(adventure, dungeon_index, level_index, area_index, (*features, op.feature))
+
+
+def _apply_set_feature(adventure: Adventure, op: SetFeature) -> tuple[Adventure, str]:
+    dungeon_index, level_index, area_index, features, container = _feature_container(adventure, op)
+    level = adventure.dungeons[dungeon_index].levels[level_index]
+    feature_index = _resolve_feature(features, container, op.feature_id)
+    current = features[feature_index]
+    if op.feature.id != current.id:
+        # A rename, under AddFeature's id rules; an unchanged id — reserved or
+        # not — carries through, so a foreign 'pile' feature stays editable and
+        # its finding stays navigable.
+        _require_feature_id_free(level, op.dungeon_id, op.feature.id)
+    if op.feature.cell is not None and op.feature.cell != current.cell:
+        # The invariant guards *changed* cells only: an unchanged foreign
+        # out-of-bounds cell passes through, so the feature never locks.
+        _require_cells_in_bounds(level, (op.feature.cell,))
+    features = (*features[:feature_index], op.feature, *features[feature_index + 1 :])
+    return _replace_container_features(adventure, dungeon_index, level_index, area_index, features)
+
+
+def _apply_remove_feature(adventure: Adventure, op: RemoveFeature) -> tuple[Adventure, str]:
+    dungeon_index, level_index, area_index, features, container = _feature_container(adventure, op)
+    feature_index = _resolve_feature(features, container, op.feature_id)
+    features = (*features[:feature_index], *features[feature_index + 1 :])
+    return _replace_container_features(adventure, dungeon_index, level_index, area_index, features)
 
 
 def _apply_add_transition(adventure: Adventure, op: AddTransition) -> tuple[Adventure, str]:

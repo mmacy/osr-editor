@@ -1,16 +1,30 @@
 """The envelope models and the phase 1 op vocabulary: round-trips, pairing validators, frozen-ness."""
 
 import pytest
-from osrlib.crawl.dungeon import WanderingSpec
+from osrlib.crawl.dungeon import (
+    AreaTreasureSpec,
+    FeatureSpec,
+    KeyedEncounter,
+    KeyedMonster,
+    TrapEffect,
+    TrapSpec,
+    WanderingSpec,
+)
 from pydantic import BaseModel, ValidationError
 
 from osreditor.ops import (
+    AddFeature,
     Diagnostics,
     Finding,
     OpBatch,
     OpBatchResult,
+    RemoveFeature,
     SetAdventureField,
+    SetEncounter,
+    SetFeature,
     SetTownField,
+    SetTrap,
+    SetTreasure,
     SetWandering,
     SubtreeChange,
 )
@@ -43,6 +57,34 @@ RESULT = OpBatchResult(
         SetTownField(field="services", value=("inn",)),
         SetTownField(field="travel_turns", value={"mill-caves": 2}),
         SetWandering(dungeon_id="mill-caves", level_number=1, wandering=WanderingSpec(chance_in_six=2)),
+        SetEncounter(
+            dungeon_id="mill-caves",
+            level_number=1,
+            area_id="1",
+            encounter=KeyedEncounter(monsters=(KeyedMonster(template_id="orc", count_dice="3d4"),)),
+        ),
+        SetEncounter(dungeon_id="mill-caves", level_number=1, area_id="1", encounter=None),
+        SetTrap(
+            dungeon_id="mill-caves",
+            level_number=1,
+            area_id="1",
+            trap=TrapSpec(kind="room", trigger="enter", effect=TrapEffect(damage_dice="2d6")),
+        ),
+        SetTreasure(dungeon_id="mill-caves", level_number=1, area_id="1", treasure=AreaTreasureSpec(letters=("C",))),
+        AddFeature(
+            dungeon_id="mill-caves",
+            level_number=1,
+            area_id=None,
+            feature=FeatureSpec(id="feature-1", kind="custom", cell=(1, 1)),
+        ),
+        SetFeature(
+            dungeon_id="mill-caves",
+            level_number=1,
+            area_id="1",
+            feature_id="feature-1",
+            feature=FeatureSpec(id="feature-1", kind="treasure_cache", cell=None),
+        ),
+        RemoveFeature(dungeon_id="mill-caves", level_number=1, area_id="1", feature_id="feature-1"),
         OpBatch(revision="rev-1", ops=(SetAdventureField(field="description", value="…"),)),
         FINDING,
         Finding(source="lint", code="orphan_cell", severity="warning", message="cell (2, 1) is in no area"),
@@ -64,10 +106,75 @@ def test_op_batch_discriminates_on_op() -> None:
                 {"op": "set_adventure_field", "field": "name", "value": "X"},
                 {"op": "set_town_field", "field": "name", "value": "Y"},
                 {"op": "set_wandering", "dungeon_id": "d", "level_number": 1, "wandering": {}},
+                {"op": "set_encounter", "dungeon_id": "d", "level_number": 1, "area_id": "1", "encounter": None},
+                {"op": "set_trap", "dungeon_id": "d", "level_number": 1, "area_id": "1", "trap": None},
+                {"op": "set_treasure", "dungeon_id": "d", "level_number": 1, "area_id": "1", "treasure": None},
+                {
+                    "op": "add_feature",
+                    "dungeon_id": "d",
+                    "level_number": 1,
+                    "area_id": None,
+                    "feature": {"id": "feature-1", "kind": "custom", "cell": [1, 1]},
+                },
+                {
+                    "op": "set_feature",
+                    "dungeon_id": "d",
+                    "level_number": 1,
+                    "area_id": "1",
+                    "feature_id": "feature-1",
+                    "feature": {"id": "feature-1", "kind": "custom"},
+                },
+                {"op": "remove_feature", "dungeon_id": "d", "level_number": 1, "area_id": "1", "feature_id": "f"},
             ],
         }
     )
-    assert [type(op) for op in batch.ops] == [SetAdventureField, SetTownField, SetWandering]
+    assert [type(op) for op in batch.ops] == [
+        SetAdventureField,
+        SetTownField,
+        SetWandering,
+        SetEncounter,
+        SetTrap,
+        SetTreasure,
+        AddFeature,
+        SetFeature,
+        RemoveFeature,
+    ]
+
+
+def test_the_content_models_validate_at_request_parse() -> None:
+    # The embedded osrlib models' own validators fire when an op parses, so an
+    # invalid combination is a 422 before any op logic runs.
+    with pytest.raises(ValidationError, match="exactly one of count_dice or count_fixed"):
+        SetEncounter.model_validate(
+            {
+                "dungeon_id": "d",
+                "level_number": 1,
+                "area_id": "1",
+                "encounter": {"monsters": [{"template_id": "orc", "count_dice": "1d6", "count_fixed": 3}]},
+            }
+        )
+    with pytest.raises(ValidationError, match="letters or sets unguarded"):
+        SetTreasure.model_validate(
+            {"dungeon_id": "d", "level_number": 1, "area_id": "1", "treasure": {"letters": [], "unguarded": False}}
+        )
+    with pytest.raises(ValidationError, match="a volley needs per-projectile damage dice"):
+        SetTrap.model_validate(
+            {
+                "dungeon_id": "d",
+                "level_number": 1,
+                "area_id": "1",
+                "trap": {"kind": "room", "trigger": "enter", "effect": {"volley_dice": "1d6"}},
+            }
+        )
+    with pytest.raises(ValidationError, match="a condition duration needs a condition"):
+        SetTrap.model_validate(
+            {
+                "dungeon_id": "d",
+                "level_number": 1,
+                "area_id": "1",
+                "trap": {"kind": "room", "trigger": "enter", "effect": {"condition_duration_amount": 3}},
+            }
+        )
 
 
 def test_op_batch_rejects_unknown_op_code() -> None:
