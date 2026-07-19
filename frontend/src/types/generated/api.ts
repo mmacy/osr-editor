@@ -158,6 +158,232 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/forge/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Forge Overrides
+         * @description Apply a batch of override-level edits: monster remaps, stat-block patches, reasons, removals.
+         *
+         *     Revision-guarded and applied through the same commit protocol as a translated
+         *     op batch — one undo step. Exclusivity between a name's remap and its
+         *     stat-block patch is resolved here; forge validates the names and cache state
+         *     at assembly, its message surfaced verbatim on failure.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The revision and the typed edits.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The refreshed result, carrying the forge projection.
+         */
+        post: operations["post_forge_overrides_api_projects__project_id__forge_overrides_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/forge/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Forge Check
+         * @description Run forge's `check()` on demand: the delve and the static findings, merged into the report.
+         *
+         *     Populates the forge diagnostics tier (which every commit empties, since
+         *     re-assembly wipes findings by forge's design). Changes no document.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The result carrying the refreshed diagnostics and forge projection.
+         */
+        post: operations["post_forge_check_api_projects__project_id__forge_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/forge/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Forge Rerun
+         * @description Re-run the assemble stage with settings updates — phase 5's assembly-owned knob.
+         *
+         *     The upstream-knob guard rejects a settings update whose owning stage is
+         *     upstream of assemble (`forge_rerun_invalid`, forge's message verbatim);
+         *     unknown knobs and bad values are `request_invalid` from forge's own settings
+         *     validation.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The settings updates.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The refreshed result.
+         */
+        post: operations["post_forge_rerun_api_projects__project_id__forge_rerun_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/forge/detach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Forge Detach
+         * @description Detach a forge project to a new native project at an absolute path.
+         *
+         *     The forge re-run loop is severed; corrections no longer land in
+         *     `overrides.yaml`. Notes carry over; review marks and machine-draft flags stay
+         *     behind. The workdir is untouched and drops from the open registry.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The destination directory.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The new native project's full state.
+         */
+        post: operations["post_forge_detach_api_projects__project_id__forge_detach_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/forge/pages/{page_number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Forge Page
+         * @description Serve one source page render (`pages/NNNN.png`) from the workdir.
+         *
+         *     A 404 (`forge_page_not_found`) is normal — a licensed subset or a lean
+         *     workdir may not carry every page.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         page_number: The 1-based source page number.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The PNG bytes.
+         */
+        get: operations["get_forge_page_api_projects__project_id__forge_pages__page_number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/forge/previews/{dungeon_id}/{level_number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Forge Preview
+         * @description Serve one level's rendered SVG preview (`previews/<dungeon>.<level>.svg`) from the workdir.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         dungeon_id: The canonical dungeon id.
+         *         level_number: The 1-based level number.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The SVG bytes.
+         */
+        get: operations["get_forge_preview_api_projects__project_id__forge_previews__dungeon_id___level_number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/sidecar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Sidecar
+         * @description Apply a batch of sidecar patches: view state, author notes, review dismissals.
+         *
+         *     Not revision-guarded — annotation state is single-user, last-write-wins.
+         *     Available for both project types.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The sidecar patches.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The project's full state, its sidecar refreshed.
+         */
+        post: operations["post_sidecar_api_projects__project_id__sidecar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/undo": {
         parameters: {
             query?: never;
@@ -671,6 +897,68 @@ export interface components {
             usual?: components["schemas"]["Alignment"] | null;
         };
         /**
+         * AreaGeometryOverride
+         * @description Replace one area's cell cluster.
+         */
+        AreaGeometryOverride: {
+            /** Cells */
+            cells: [
+                number,
+                number
+            ][];
+        };
+        /**
+         * AreaOverride
+         * @description Replace fields of one keyed area, add an area, or remove one.
+         *
+         *     An entry addressing an area the draft doesn't have is an area *add* and must
+         *     carry the full required payload — enforced at application time, since
+         *     only assembly knows what the draft contains.
+         */
+        AreaOverride: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            encounter?: components["schemas"]["KeyedEncounter"] | null;
+            trap?: components["schemas"]["TrapSpec"] | null;
+            treasure?: components["schemas"]["AreaTreasureSpec"] | null;
+            /** Features */
+            features?: components["schemas"]["FeatureSpec"][] | null;
+            /**
+             * Remove
+             * @default false
+             */
+            remove: boolean;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * AreaReport
+         * @description One keyed area's extraction record.
+         */
+        AreaReport: {
+            /** Id */
+            id: string;
+            /**
+             * Source Pages
+             * @default []
+             */
+            source_pages: number[];
+            /** Confidence */
+            confidence: number;
+            /**
+             * Flags
+             * @default []
+             */
+            flags: string[];
+            /**
+             * Overridden
+             * @default []
+             */
+            overridden: string[];
+        };
+        /**
          * AreaSpec
          * @description A keyed area (a room or cave): a named region over cells with content bindings.
          *
@@ -830,6 +1118,70 @@ export interface components {
          */
         Condition: "paralysed" | "asleep" | "blind" | "charmed" | "petrified" | "diseased" | "exhausted" | "lycanthropy_incubation" | "averted_eyes" | "poisoned" | "dead" | "silenced" | "entangled" | "afraid" | "feebleminded" | "invisible" | "turned" | "confused" | "weakened";
         /**
+         * ConversionSettings
+         * @description The deterministic pipeline knobs and their pinned defaults.
+         *
+         *     The page and size caps are guardrails against wrong-file mistakes, not real
+         *     constraints — they let a host surface "this file is not a module" before any
+         *     work happens. The full `model_dump` of this model is echoed into `run.json`
+         *     so [`rerun`][osrforge.convert.rerun] can detect settings drift between
+         *     stages (the [drift guard][drift-guard]).
+         */
+        ConversionSettings: {
+            /**
+             * Render Dpi
+             * @default 150
+             */
+            render_dpi: number;
+            /**
+             * Max Pages
+             * @default 200
+             */
+            max_pages: number;
+            /**
+             * Max Source Bytes
+             * @default 104857600
+             */
+            max_source_bytes: number;
+            /**
+             * Blank Page Renders
+             * @default []
+             */
+            blank_page_renders: number[];
+            /**
+             * Content Batch Pages
+             * @default 8
+             */
+            content_batch_pages: number;
+            /**
+             * Survey Max Pages
+             * @default 50
+             */
+            survey_max_pages: number;
+            /**
+             * Monster Fuzzy Threshold
+             * @default 0.85
+             */
+            monster_fuzzy_threshold: number;
+            /**
+             * Monster Llm Top K
+             * @default 8
+             */
+            monster_llm_top_k: number;
+            /**
+             * Custom Monsters
+             * @default emit
+             * @enum {string}
+             */
+            custom_monsters: "emit" | "off";
+            /**
+             * Unresolved Fallback
+             * @default best-effort
+             * @enum {string}
+             */
+            unresolved_fallback: "best-effort" | "omit";
+        };
+        /**
          * CreateArea
          * @description Create a keyed area over a cell cluster.
          *
@@ -876,6 +1228,31 @@ export interface components {
             path: string;
             /** Name */
             name: string;
+        };
+        /**
+         * CustomMonsterRecord
+         * @description One emitted custom template's review record.
+         *
+         *     The `monster_custom` flag is the review badge; this is the review detail:
+         *     the emitted id, the extracted name it serves, the pages its stat block was
+         *     transcribed from, and every field the mapping derived, defaulted, or
+         *     discarded-and-rederived rather than read off the printed page.
+         */
+        CustomMonsterRecord: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Source Pages
+             * @default []
+             */
+            source_pages: number[];
+            /**
+             * Derived
+             * @default []
+             */
+            derived: string[];
         };
         /**
          * DamageKey
@@ -942,14 +1319,23 @@ export interface components {
             condition_immunities: components["schemas"]["Condition"][];
         };
         /**
+         * DetachRequest
+         * @description A detach destination: the absolute directory for the new native project.
+         */
+        DetachRequest: {
+            /** Path */
+            path: string;
+        };
+        /**
          * Diagnostics
          * @description Live diagnostics, recomputed after every batch.
          *
-         *     Two tiers here mirror the spec's diagnostics panel: `validation` is
-         *     `validate_adventure` output, `lint` the editor's structural lint. Tier 1,
-         *     model validity, is unrepresentable by construction — invalid batches are
-         *     rejected whole and never become state. Forge-check findings merge in
-         *     phase 5 via an additive `forge` field.
+         *     Three tiers here mirror the spec's diagnostics panel: `validation` is
+         *     `validate_adventure` output, `lint` the editor's structural lint, and `forge`
+         *     the playability findings a forge `check` run merged into `report.json` (empty
+         *     for native projects, and emptied on every forge commit — re-assembly wipes
+         *     findings by forge's design). Tier 1, model validity, is unrepresentable by
+         *     construction — invalid batches are rejected whole and never become state.
          */
         Diagnostics: {
             /**
@@ -962,6 +1348,11 @@ export interface components {
              * @default []
              */
             lint: components["schemas"]["Finding"][];
+            /**
+             * Forge
+             * @default []
+             */
+            forge: components["schemas"]["Finding"][];
         };
         /**
          * Direction
@@ -972,6 +1363,21 @@ export interface components {
          * @enum {string}
          */
         Direction: "north" | "east" | "south" | "west";
+        /**
+         * DismissFlag
+         * @description Dismiss one review flag — one mark, keyed by the exact flag string.
+         */
+        DismissFlag: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            patch: "dismiss_flag";
+            /** Address */
+            address: string;
+            /** Flag */
+            flag: string;
+        };
         /**
          * DoorSpec
          * @description A door on an edge, exactly as authored.
@@ -1032,6 +1438,46 @@ export interface components {
          * @enum {string}
          */
         EdgeKind: "open" | "wall" | "door";
+        /**
+         * EditorSidecar
+         * @description The `editor.json` envelope: editor-only data beside the deliverable.
+         *
+         *     Native create writes provenance; open never rewrites an existing sidecar,
+         *     and the first sidecar-bearing write persists one honestly recording what the
+         *     editor did and didn't author (a foreign project's first note persists a
+         *     sidecar with `provenance=None`).
+         */
+        EditorSidecar: {
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            provenance?: components["schemas"]["SidecarProvenance"] | null;
+            /**
+             * @default {
+             *       "levels": {}
+             *     }
+             */
+            view_state: components["schemas"]["ViewState"];
+            /**
+             * Notes
+             * @default {}
+             */
+            notes: {
+                [key: string]: string;
+            };
+            /**
+             * Review
+             * @default []
+             */
+            review: components["schemas"]["ReviewMark"][];
+            /**
+             * Auto Reasons
+             * @default []
+             */
+            auto_reasons: string[];
+        };
         /**
          * Element
          * @description Energy elements that appear in monster attacks, breath weapons, and defenses.
@@ -1138,6 +1584,44 @@ export interface components {
             path: string;
         };
         /**
+         * ExtractionReport
+         * @description The `report.json` document.
+         *
+         *     `flags` carries module-scope conditions with no per-area home — a defaulted
+         *     adventure title or town name — in the same flag grammar as per-area flags.
+         *     `findings` is empty from `assemble()` (stale lint about a changed draft is
+         *     worse than none; re-assembly wipes findings by design) and populated by
+         *     `check()`.
+         */
+        ExtractionReport: {
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /** Osrforge Version */
+            osrforge_version?: string;
+            module: components["schemas"]["ModuleInfo"];
+            validation: components["schemas"]["ValidationResult"];
+            /**
+             * Areas
+             * @default []
+             */
+            areas: components["schemas"]["AreaReport"][];
+            monsters: components["schemas"]["MonsterSummary"];
+            usage: components["schemas"]["TokenUsage"];
+            /**
+             * Flags
+             * @default []
+             */
+            flags: string[];
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["LintFinding"][];
+        };
+        /**
          * FeatureSpec
          * @description A keyed feature: a treasure cache, a construction trick, or custom content.
          *
@@ -1223,6 +1707,52 @@ export interface components {
             message: string;
             /** Address */
             address?: string | null;
+        };
+        /**
+         * ForgeState
+         * @description The forge-only projection of an open project: the report, run metadata, and overrides.
+         *
+         *     Forge's own pydantic models ride the OpenAPI surface into the generated
+         *     types — the same source-of-truth discipline as osrlib's models, no
+         *     hand-written mirror. `None` on a native project; refreshed on every forge
+         *     commit, undo, and redo.
+         */
+        ForgeState: {
+            report: components["schemas"]["ExtractionReport"];
+            run: components["schemas"]["RunMeta"];
+            overrides: components["schemas"]["Overrides"];
+        };
+        /**
+         * GeometryOverride
+         * @description Correct one level's geometry: area cells, edges, entrance, transitions.
+         *
+         *     The nesting follows osrlib's models: a level owns edges, entrance, and
+         *     transitions; an area owns only its cells.
+         */
+        GeometryOverride: {
+            /**
+             * Areas
+             * @default {}
+             */
+            areas: {
+                [key: string]: components["schemas"]["AreaGeometryOverride"];
+            };
+            /**
+             * Edges
+             * @default {}
+             */
+            edges: {
+                [key: string]: components["schemas"]["Edge"];
+            };
+            /** Entrance */
+            entrance?: [
+                number,
+                number
+            ] | null;
+            /** Transitions */
+            transitions?: components["schemas"]["TransitionSpec"][] | null;
+            /** Reason */
+            reason: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1421,6 +1951,81 @@ export interface components {
             ] | null;
         };
         /**
+         * LevelViewState
+         * @description One level's remembered zoom and pan, keyed by its level address.
+         */
+        LevelViewState: {
+            /**
+             * Zoom
+             * @default 1
+             */
+            zoom: number;
+            /**
+             * Pan X
+             * @default 0
+             */
+            pan_x: number;
+            /**
+             * Pan Y
+             * @default 0
+             */
+            pan_y: number;
+        };
+        /**
+         * LintCheck
+         * @description The playability lint's finding ids.
+         *
+         *     A published vocabulary UIs badge on, like
+         *     [`Flag`][osrforge.contracts.report.Flag]: growing it is additive, renaming
+         *     a member is a schema-version event.
+         * @enum {string}
+         */
+        LintCheck: "edge_invalid" | "area_unreachable" | "orphan_cell" | "secret_only_access" | "transition_unpaired" | "delve_blocked" | "delve_incomplete";
+        /**
+         * LintFinding
+         * @description One structured playability finding, as merged into `report.json` by `check`.
+         *
+         *     Severity is a field rather than a function of the id: the id→severity table
+         *     is the producer's pin (`check`), so the contract needn't change if a check's
+         *     severity is ever re-judged.
+         */
+        LintFinding: {
+            id: components["schemas"]["LintCheck"];
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "error" | "warning";
+            /** Location */
+            location: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * ModuleInfo
+         * @description The source module's identity in the report.
+         */
+        ModuleInfo: {
+            /** Title */
+            title: string;
+            /** Pages */
+            pages: number;
+        };
+        /**
+         * ModuleOverride
+         * @description Replace adventure metadata fields: name, description, hooks.
+         */
+        ModuleOverride: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Hooks */
+            hooks?: string[] | null;
+            /** Reason */
+            reason: string;
+        };
+        /**
          * MonsterAbility
          * @description A structured monster-ability tag plus the SRD prose it came from.
          *
@@ -1565,6 +2170,16 @@ export interface components {
             fixed_hp?: number | null;
         };
         /**
+         * MonsterOverride
+         * @description Remap one extracted monster name to a catalog template.
+         */
+        MonsterOverride: {
+            /** Template Id */
+            template_id: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
          * MonsterSaves
          * @description A monster's saving throws: the five values plus the printed save-as note.
          *
@@ -1575,6 +2190,28 @@ export interface components {
             values: components["schemas"]["SavingThrows"];
             /** Save As */
             save_as: string;
+        };
+        /**
+         * MonsterSummary
+         * @description The monster-resolution summary.
+         *
+         *     `custom` records the emitted templates actually bundled into the draft —
+         *     additive and defaulted, so reports written before emission existed still
+         *     validate.
+         */
+        MonsterSummary: {
+            /** Resolved */
+            resolved: number;
+            /**
+             * Unresolved
+             * @default []
+             */
+            unresolved: string[];
+            /**
+             * Custom
+             * @default []
+             */
+            custom: components["schemas"]["CustomMonsterRecord"][];
         };
         /**
          * MonsterTemplate
@@ -1769,7 +2406,9 @@ export interface components {
          *     `delta` entries apply in order and are coalesced so no entry's path is a
          *     descendant of another's; undo and redo answer with the degenerate
          *     whole-document delta (`path=""`). `can_undo`/`can_redo` track the stacks so
-         *     the frontend's buttons never need a second request.
+         *     the frontend's buttons never need a second request. `forge` carries the
+         *     refreshed forge projection on a forge commit (a translated batch, an
+         *     override-level edit, an undo, or a redo); `None` for native projects.
          */
         OpBatchResult: {
             /** Revision */
@@ -1781,6 +2420,7 @@ export interface components {
             can_undo: boolean;
             /** Can Redo */
             can_redo: boolean;
+            forge?: components["schemas"]["ForgeState"] | null;
         };
         /**
          * OpenProjectRequest
@@ -1789,6 +2429,52 @@ export interface components {
         OpenProjectRequest: {
             /** Path */
             path: string;
+        };
+        /**
+         * OverrideEditBatch
+         * @description One atomic batch of override-level edits, computed against a named revision.
+         */
+        OverrideEditBatch: {
+            /** Revision */
+            revision: string;
+            /** Edits */
+            edits: (components["schemas"]["SetMonsterRemap"] | components["schemas"]["RemoveMonsterRemap"] | components["schemas"]["SetTemplatePatch"] | components["schemas"]["RemoveTemplatePatch"] | components["schemas"]["SetReason"] | components["schemas"]["RemoveEntry"])[];
+        };
+        /**
+         * Overrides
+         * @description The `overrides.yaml` document: the v1 override kinds.
+         */
+        Overrides: {
+            /**
+             * Monsters
+             * @default {}
+             */
+            monsters: {
+                [key: string]: components["schemas"]["MonsterOverride"];
+            };
+            /**
+             * Monster Templates
+             * @default {}
+             */
+            monster_templates: {
+                [key: string]: components["schemas"]["StatBlockOverride"];
+            };
+            /**
+             * Areas
+             * @default {}
+             */
+            areas: {
+                [key: string]: components["schemas"]["AreaOverride"];
+            };
+            /**
+             * Geometry
+             * @default {}
+             */
+            geometry: {
+                [key: string]: components["schemas"]["GeometryOverride"];
+            };
+            town?: components["schemas"]["TownOverride"] | null;
+            module?: components["schemas"]["ModuleOverride"] | null;
         };
         /**
          * ProjectListResponse
@@ -1802,9 +2488,12 @@ export interface components {
         };
         /**
          * ProjectState
-         * @description One open project's full state: the document, revision, and diagnostics.
+         * @description One open project's full state: the document, revision, diagnostics, sidecar, and forge projection.
          *
          *     The full document rides on open/get only; batches answer with deltas.
+         *     `sidecar` is always present — a default in-memory one for a project with no
+         *     `editor.json`. `forge` carries the report/run/overrides projection for a
+         *     forge-backed project, `None` for a native one.
          */
         ProjectState: {
             /** Id */
@@ -1823,6 +2512,8 @@ export interface components {
             can_undo: boolean;
             /** Can Redo */
             can_redo: boolean;
+            sidecar: components["schemas"]["EditorSidecar"];
+            forge?: components["schemas"]["ForgeState"] | null;
         };
         /**
          * PublishRequest
@@ -1930,6 +2621,27 @@ export interface components {
             dungeon_id: string;
         };
         /**
+         * RemoveEntry
+         * @description Remove one override entry at entry grain (a geometry entry removes whole, per level).
+         */
+        RemoveEntry: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            edit: "remove_entry";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "monsters" | "monster_templates" | "areas" | "geometry" | "town" | "module";
+            /**
+             * Key
+             * @default
+             */
+            key: string;
+        };
+        /**
          * RemoveFeature
          * @description Remove one feature; first-match among foreign duplicate ids.
          *
@@ -1965,6 +2677,45 @@ export interface components {
             dungeon_id: string;
             /** Level Number */
             level_number: number;
+        };
+        /**
+         * RemoveMonsterRemap
+         * @description Drop a monster remap by extracted name.
+         */
+        RemoveMonsterRemap: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            edit: "remove_monster_remap";
+            /** Name */
+            name: string;
+        };
+        /**
+         * RemoveNote
+         * @description Remove a per-entity author note by address.
+         */
+        RemoveNote: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            patch: "remove_note";
+            /** Address */
+            address: string;
+        };
+        /**
+         * RemoveTemplatePatch
+         * @description Drop a stat-block patch by extracted name.
+         */
+        RemoveTemplatePatch: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            edit: "remove_template_patch";
+            /** Name */
+            name: string;
         };
         /**
          * RemoveTransition
@@ -2036,6 +2787,19 @@ export interface components {
             new_number: number;
         };
         /**
+         * RerunRequest
+         * @description A rerun request: the assemble-stage settings updates (phase 5's one knob, `unresolved_fallback`).
+         */
+        RerunRequest: {
+            /**
+             * Settings
+             * @default {}
+             */
+            settings: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * ResizeLevel
          * @description Resize a level's grid.
          *
@@ -2068,6 +2832,48 @@ export interface components {
             width: number;
             /** Height */
             height: number;
+        };
+        /**
+         * ReviewMark
+         * @description One dismissed review flag: the address it sits at and the exact flag string.
+         *
+         *     Keyed by the exact flag string so a mark survives re-assembly for as long as
+         *     the flag it answered does, and goes dormant with the flag when a correction
+         *     clears it. `address` is `""` for a module-scope flag.
+         */
+        ReviewMark: {
+            /** Address */
+            address: string;
+            /** Flag */
+            flag: string;
+        };
+        /**
+         * RunMeta
+         * @description The `run.json` document: source identity, settings echo, and stage table.
+         */
+        RunMeta: {
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /** Osrforge Version */
+            osrforge_version?: string;
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Source Bytes */
+            source_bytes: number;
+            /** Page Count */
+            page_count: number;
+            settings: components["schemas"]["ConversionSettings"];
+            /** Provider */
+            provider?: string | null;
+            /** Model Id */
+            model_id?: string | null;
+            /** Stages */
+            stages: {
+                [key: string]: components["schemas"]["StageStatus"];
+            };
         };
         /**
          * SaveCategory
@@ -2324,6 +3130,77 @@ export interface components {
             feature: components["schemas"]["FeatureSpec"];
         };
         /**
+         * SetMonsterRemap
+         * @description Remap an extracted monster name to a catalog (or emitted custom) template.
+         */
+        SetMonsterRemap: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            edit: "set_monster_remap";
+            /** Name */
+            name: string;
+            /** Template Id */
+            template_id: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * SetNote
+         * @description Set a per-entity author note by address; an empty note clears the entry.
+         */
+        SetNote: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            patch: "set_note";
+            /** Address */
+            address: string;
+            /** Note */
+            note: string;
+        };
+        /**
+         * SetReason
+         * @description Compose an entry's reason inline — marks it human-composed (drops the machine-draft flag).
+         */
+        SetReason: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            edit: "set_reason";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "monsters" | "monster_templates" | "areas" | "geometry" | "town" | "module";
+            /**
+             * Key
+             * @default
+             */
+            key: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * SetTemplatePatch
+         * @description Patch (or supply) one extracted name's printed stat block.
+         */
+        SetTemplatePatch: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            edit: "set_template_patch";
+            /** Name */
+            name: string;
+            patch: components["schemas"]["StatBlockPatch"];
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
          * SetTownField
          * @description Set one town field.
          *
@@ -2394,6 +3271,18 @@ export interface components {
             treasure: components["schemas"]["AreaTreasureSpec"] | null;
         };
         /**
+         * SetViewState
+         * @description Replace the whole view state — the frontend flushes it on navigation transitions.
+         */
+        SetViewState: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            patch: "set_view_state";
+            view_state: components["schemas"]["ViewState"];
+        };
+        /**
          * SetWandering
          * @description Replace one level's wandering-monster parameters.
          *
@@ -2415,12 +3304,158 @@ export interface components {
             wandering: components["schemas"]["WanderingSpec"];
         };
         /**
+         * SidecarPatchBatch
+         * @description One batch of sidecar patches, applied and saved atomically.
+         *
+         *     Deliberately not revision-guarded: annotation state is single-user,
+         *     last-write-wins — the document's 409 discipline exists to prevent silent
+         *     content destruction, which annotations are not.
+         */
+        SidecarPatchBatch: {
+            /** Patches */
+            patches: (components["schemas"]["SetViewState"] | components["schemas"]["SetNote"] | components["schemas"]["RemoveNote"] | components["schemas"]["DismissFlag"] | components["schemas"]["UndismissFlag"])[];
+        };
+        /**
+         * SidecarProvenance
+         * @description Who created the project and against which engine — written once at create.
+         *
+         *     `source_workdir` and `osrforge_version` are additive: a native project
+         *     detached from a forge workdir records where it came from and the forge
+         *     version that assembled it. A project created natively leaves both `None`.
+         */
+        SidecarProvenance: {
+            /** Created By */
+            created_by: string;
+            /** Osrlib Version */
+            osrlib_version: string;
+            /** Created At */
+            created_at: string;
+            /** Source Workdir */
+            source_workdir?: string | null;
+            /** Osrforge Version */
+            osrforge_version?: string | null;
+        };
+        /**
          * SniffResult
          * @description Which registered importers recognize a source path.
          */
         SniffResult: {
             /** Format Ids */
             format_ids: string[];
+        };
+        /**
+         * Stage
+         * @description The pipeline stage names, as `run.json` wire values.
+         *
+         *     These key `run.json`'s stage table; changing one is a schema-version event.
+         *     They do not name the `stages/` cache files — the workdir layout pins
+         *     those separately, and only the model-calling stages have caches. Geometry is
+         *     deterministic and recomputed inside every assembly rather than cached; its
+         *     `run.json` entry completes inside every `assemble()`, tracked separately so
+         *     a failure in the build leaves an honest `geometry: completed`.
+         * @enum {string}
+         */
+        Stage: "preprocess" | "survey" | "content" | "monsters" | "geometry" | "assemble";
+        /**
+         * StageStatus
+         * @description One stage's status entry in `run.json`.
+         */
+        StageStatus: {
+            /**
+             * Status
+             * @default pending
+             * @enum {string}
+             */
+            status: "pending" | "running" | "completed" | "failed";
+            /** Error */
+            error?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            usage?: components["schemas"]["TokenUsage"] | null;
+        };
+        /**
+         * StatBlockOverride
+         * @description Patch fields of one name's extracted stat block, or supply a complete one.
+         *
+         *     Keyed by monster name like `monsters:`, matched under the same
+         *     normalization. Fields mirror the raw printed block
+         *     ([`RawStatBlock`][osrforge.contracts.stages.RawStatBlock]) — corrections
+         *     land *pre-mapping*, so one correction fixes a printed value once instead
+         *     of both derived forms. Absent means untouched; explicit `null` clears the
+         *     field back to unprinted. An entry on a name with no cached block supplies
+         *     the candidate block from its own fields alone; an entry on a name the
+         *     tiers resolved forces emission — the remedy for a flagless wrong LLM pick.
+         */
+        StatBlockOverride: {
+            /** Ac */
+            ac?: string | null;
+            /** Ac Notation */
+            ac_notation?: ("descending" | "ascending" | "dual") | null;
+            /** Thac0 */
+            thac0?: string | null;
+            /** Hit Dice */
+            hit_dice?: string | null;
+            /** Class Level */
+            class_level?: string | null;
+            /** Hp */
+            hp?: number | null;
+            /** Attacks */
+            attacks?: string[] | null;
+            /** Movement */
+            movement?: string | null;
+            /** Saves */
+            saves?: string | null;
+            /** Morale */
+            morale?: number | null;
+            /** Alignment */
+            alignment?: string | null;
+            /** Xp */
+            xp?: number | null;
+            /** Number Appearing */
+            number_appearing?: string | null;
+            /** Special */
+            special?: string[] | null;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * StatBlockPatch
+         * @description Forge's `StatBlockOverride` shape minus `reason`: printed notation, corrected pre-mapping.
+         *
+         *     Absent means untouched; explicit `null` clears the field back to unprinted —
+         *     the same semantics forge honors, carried through the request unchanged.
+         */
+        StatBlockPatch: {
+            /** Ac */
+            ac?: string | null;
+            /** Ac Notation */
+            ac_notation?: ("descending" | "ascending" | "dual") | null;
+            /** Thac0 */
+            thac0?: string | null;
+            /** Hit Dice */
+            hit_dice?: string | null;
+            /** Class Level */
+            class_level?: string | null;
+            /** Hp */
+            hp?: number | null;
+            /** Attacks */
+            attacks?: string[] | null;
+            /** Movement */
+            movement?: string | null;
+            /** Saves */
+            saves?: string | null;
+            /** Morale */
+            morale?: number | null;
+            /** Alignment */
+            alignment?: string | null;
+            /** Xp */
+            xp?: number | null;
+            /** Number Appearing */
+            number_appearing?: string | null;
+            /** Special */
+            special?: string[] | null;
         };
         /**
          * StatusResponse
@@ -2454,6 +3489,40 @@ export interface components {
          * @enum {string}
          */
         TimeUnit: "round" | "turn" | "day";
+        /**
+         * TokenUsage
+         * @description Model token consumption, as reported by the provider.
+         */
+        TokenUsage: {
+            /**
+             * Input Tokens
+             * @default 0
+             */
+            input_tokens: number;
+            /**
+             * Output Tokens
+             * @default 0
+             */
+            output_tokens: number;
+        };
+        /**
+         * TownOverride
+         * @description Replace base-town metadata fields ([`TownSpec`][osrlib.crawl.adventure.TownSpec] fields).
+         */
+        TownOverride: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Services */
+            services?: string[] | null;
+            /** Travel Turns */
+            travel_turns?: {
+                [key: string]: number;
+            } | null;
+            /** Reason */
+            reason: string;
+        };
         /**
          * TownSpec
          * @description The base town: safe rest, equipment purchase, and travel costs.
@@ -2631,6 +3700,21 @@ export interface components {
             /** Treasure Types */
             treasure_types: components["schemas"]["CatalogTreasureType"][];
         };
+        /**
+         * UndismissFlag
+         * @description Undo a flag dismissal.
+         */
+        UndismissFlag: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            patch: "undismiss_flag";
+            /** Address */
+            address: string;
+            /** Flag */
+            flag: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -2643,6 +3727,19 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * ValidationResult
+         * @description The `validate_adventure` outcome: a draft is allowed to be invalid.
+         */
+        ValidationResult: {
+            /** Passed */
+            passed: boolean;
+            /**
+             * Errors
+             * @default []
+             */
+            errors: string[];
         };
         /**
          * ValuableSpec
@@ -2671,6 +3768,29 @@ export interface components {
              * @default 0
              */
             weight_coins: number;
+        };
+        /**
+         * ViewState
+         * @description Where a correction session left off: active level, per-level view, selected review row.
+         *
+         *     Writes coalesce on navigation transitions, never per pointer frame — the
+         *     surface that finally earns the sidecar's view writes is resuming correction
+         *     work across sessions.
+         */
+        ViewState: {
+            /** Active Dungeon Id */
+            active_dungeon_id?: string | null;
+            /** Active Level Number */
+            active_level_number?: number | null;
+            /**
+             * Levels
+             * @default {}
+             */
+            levels: {
+                [key: string]: components["schemas"]["LevelViewState"];
+            };
+            /** Selected Review Row */
+            selected_review_row?: string | null;
         };
         /**
          * WanderingSpec
@@ -2899,6 +4019,242 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_forge_overrides_api_projects__project_id__forge_overrides_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverrideEditBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_forge_check_api_projects__project_id__forge_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_forge_rerun_api_projects__project_id__forge_rerun_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RerunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_forge_detach_api_projects__project_id__forge_detach_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetachRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_forge_page_api_projects__project_id__forge_pages__page_number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                page_number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_forge_preview_api_projects__project_id__forge_previews__dungeon_id___level_number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                dungeon_id: string;
+                level_number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_sidecar_api_projects__project_id__sidecar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SidecarPatchBatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectState"];
                 };
             };
             /** @description Validation Error */

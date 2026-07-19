@@ -1,7 +1,7 @@
 // Typed test fixtures mirroring the backend's starter project shape. tsc
 // checks these against the generated types, so a schema change breaks them
 // loudly here rather than silently drifting.
-import type { Adventure, ProjectState } from '@/types'
+import type { Adventure, EditorSidecar, ProjectState } from '@/types'
 
 export function makeDocument(overrides: Partial<Adventure> = {}): Adventure {
   return {
@@ -45,10 +45,29 @@ export function makeProjectState(overrides: Partial<ProjectState> = {}): Project
     type: 'native',
     document: makeDocument(),
     revision: 'r1',
-    diagnostics: { validation: [], lint: [] },
+    diagnostics: { validation: [], lint: [], forge: [] },
     dropped_fields: [],
     can_undo: false,
     can_redo: false,
+    sidecar: makeSidecar(),
+    forge: null,
+    ...overrides,
+  }
+}
+
+export function makeSidecar(overrides: Partial<EditorSidecar> = {}): EditorSidecar {
+  return {
+    schema_version: 1,
+    provenance: null,
+    view_state: {
+      active_dungeon_id: null,
+      active_level_number: null,
+      levels: {},
+      selected_review_row: null,
+    },
+    notes: {},
+    review: [],
+    auto_reasons: [],
     ...overrides,
   }
 }

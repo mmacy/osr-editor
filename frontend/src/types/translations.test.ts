@@ -15,17 +15,24 @@ import type {
   AddTransition,
   Alignment,
   AnyEditOp,
+  AnyOverrideEdit,
+  AnySidecarPatch,
   AreaTreasureSpec,
   CatalogMonster,
   Condition,
+  Diagnostics,
   Edge,
+  EditorSidecar,
   EncounterEntry,
   FeatureSpec,
+  Finding,
+  ForgeState,
   ImportedArea,
   ImportedGeometry,
   ImportedLevel,
   KeyedEncounter,
   LevelSpec,
+  ProjectState,
   PublishResult,
   ReactionResult,
   SaveCategory,
@@ -35,6 +42,7 @@ import type {
   SetTrap,
   SetTreasure,
   SetWandering,
+  StatBlockOverride,
   SubtreeChange,
   TimeUnit,
   TransitionSpec,
@@ -152,6 +160,43 @@ test('the enum option lists stay exhaustive', () => {
   expectTypeOf<
     Exclude<FeatureSpec['kind'], (typeof FEATURE_KINDS)[number]>
   >().toEqualTypeOf<never>()
+})
+
+test('the forge schema translations hold', () => {
+  // ProjectState grew the forge projection (nullable, optional) and an
+  // always-present sidecar.
+  expectTypeOf<ProjectState['forge']>().toEqualTypeOf<ForgeState | null | undefined>()
+  expectTypeOf<ProjectState['sidecar']>().toEqualTypeOf<EditorSidecar>()
+
+  // ForgeState is forge's own report/run/overrides projection.
+  expectTypeOf<ForgeState>().toHaveProperty('report')
+  expectTypeOf<ForgeState>().toHaveProperty('run')
+  expectTypeOf<ForgeState>().toHaveProperty('overrides')
+
+  // Diagnostics grew the forge tier.
+  expectTypeOf<Diagnostics['forge']>().toEqualTypeOf<Finding[]>()
+
+  // StatBlockOverride.attacks is a nullable string array (absent, cleared, or set).
+  expectTypeOf<StatBlockOverride['attacks']>().toEqualTypeOf<string[] | null | undefined>()
+
+  // The override-edit union discriminates on `edit`.
+  expectTypeOf<AnyOverrideEdit['edit']>().toEqualTypeOf<
+    | 'set_monster_remap'
+    | 'remove_monster_remap'
+    | 'set_template_patch'
+    | 'remove_template_patch'
+    | 'set_reason'
+    | 'remove_entry'
+  >()
+  expectTypeOf<Extract<AnyOverrideEdit, { edit: 'set_template_patch' }>>().toHaveProperty('patch')
+  expectTypeOf<Extract<AnyOverrideEdit, { edit: 'set_monster_remap' }>>().toHaveProperty(
+    'template_id',
+  )
+
+  // The sidecar-patch union discriminates on `patch`.
+  expectTypeOf<AnySidecarPatch['patch']>().toEqualTypeOf<
+    'set_view_state' | 'set_note' | 'remove_note' | 'dismiss_flag' | 'undismiss_flag'
+  >()
 })
 
 test('the importer payload translations hold', () => {

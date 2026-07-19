@@ -56,7 +56,7 @@ beforeEach(() => {
   projectStore.getState().clear()
   postOps.mockResolvedValue({
     revision: 'r2',
-    diagnostics: { validation: [], lint: [] },
+    diagnostics: { validation: [], lint: [], forge: [] },
     delta: [],
     can_undo: true,
     can_redo: false,
