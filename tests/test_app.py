@@ -192,6 +192,56 @@ def test_ops_commit_and_stale_revision(client: TestClient, tmp_path: Path) -> No
     assert body["details"] == {"current_revision": "r2"}
 
 
+def test_op_invariant_answers_the_envelope_without_offenders(client: TestClient, tmp_path: Path) -> None:
+    state = create_project(client, tmp_path / "demo.osr")
+    batch = {"revision": "r1", "ops": [{"op": "remove_dungeon", "dungeon_id": "dungeon-1"}]}
+    response = client.post(f"/api/projects/{state['id']}/ops", json=batch)
+    assert response.status_code == 422
+    body = response.json()["error"]
+    assert body["code"] == "op_invariant"
+    assert "last dungeon" in body["message"]
+    assert body["details"] is None
+
+
+def test_op_invariant_answers_offenders_in_the_details(client: TestClient, tmp_path: Path) -> None:
+    state = create_project(client, tmp_path / "demo.osr")
+    created = client.post(
+        f"/api/projects/{state['id']}/ops",
+        json={
+            "revision": "r1",
+            "ops": [
+                {
+                    "op": "create_area",
+                    "dungeon_id": "dungeon-1",
+                    "level_number": 1,
+                    "area_id": "1",
+                    "cells": [[5, 5]],
+                }
+            ],
+        },
+    )
+    assert created.status_code == 200
+    rejected = client.post(
+        f"/api/projects/{state['id']}/ops",
+        json={
+            "revision": "r2",
+            "ops": [{"op": "resize_level", "dungeon_id": "dungeon-1", "level_number": 1, "width": 3, "height": 3}],
+        },
+    )
+    assert rejected.status_code == 422
+    body = rejected.json()["error"]
+    assert body["code"] == "op_invariant"
+    # The exact wire shape the resize dialog renders click-to-navigate.
+    assert body["details"] == {
+        "offenders": [
+            {
+                "address": "dungeon:dungeon-1/level:1/area:1",
+                "message": "area '1' has 1 cell(s) outside the new bounds, e.g. (5, 5)",
+            }
+        ]
+    }
+
+
 def test_op_target_not_found_answers_422(client: TestClient, tmp_path: Path) -> None:
     state = create_project(client, tmp_path / "demo.osr")
     batch = {

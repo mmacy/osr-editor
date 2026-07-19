@@ -241,6 +241,15 @@ def test_load_normalizes_a_dirty_source_and_notes_every_repair(tmp_path: Path) -
     )
 
 
+def test_load_renames_an_empty_area_id(tmp_path: Path) -> None:
+    # CreateArea rejects empty ids, so load repairs them like duplicates — and
+    # the rename never steals a later area's legitimate id.
+    dirty = simple_adventure(areas=(AreaSpec(id="", cells=((0, 0),)), AreaSpec(id="1", cells=((1, 1),))))
+    level = ProjectImporter().load(write_project(tmp_path / "empty-id.osr", dirty)).levels[0]
+    assert [area.id for area in level.areas] == ["2", "1"]
+    assert level.notes == ("renamed area '' to '2' (empty id); geometry preserved",)
+
+
 def test_a_clean_source_loads_with_no_notes(tmp_path: Path) -> None:
     geometry = ProjectImporter().load(write_project(tmp_path / "clean.osr", simple_adventure(edges={"1,0:west": OPEN})))
     assert geometry.levels[0].notes == ()

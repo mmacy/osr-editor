@@ -127,6 +127,21 @@ def test_rename_dungeon_cascades_everywhere(service: DocumentService, tmp_path: 
     assert result.diagnostics.validation == ()
 
 
+def test_rename_dungeon_drops_a_dangling_travel_entry_named_new_id(service: DocumentService, tmp_path: Path) -> None:
+    # A dangling travel entry may already carry new_id (legal — it referenced
+    # no dungeon until now). The cascade drops it: one dungeon, one entry, the
+    # renamed key's authored cost, at the old key's position.
+    dungeons = (
+        DungeonSpec(id="b", levels=(level(entrance=(0, 0)),)),
+        DungeonSpec(id="c", levels=(level(entrance=(0, 0)),)),
+    )
+    town = TownSpec(name="", travel_turns={"x": 5, "b": 2, "c": 9})
+    project = make_project(service, tmp_path, *dungeons, town=town)
+    commit(service, project, RenameDungeon(old_id="b", new_id="x"))
+    assert project.adventure.town.travel_turns == {"x": 2, "c": 9}
+    assert list(project.adventure.town.travel_turns) == ["x", "c"]
+
+
 def test_rename_dungeon_rejects_empty_and_taken_ids(service: DocumentService, tmp_path: Path) -> None:
     dungeons = (
         DungeonSpec(id="a", levels=(level(entrance=(0, 0)),)),

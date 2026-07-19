@@ -307,14 +307,21 @@ function CellInspector({
   const removeTransition = () => {
     void projectStore
       .getState()
-      .commit([
-        {
-          op: 'remove_transition',
-          dungeon_id: dungeonId,
-          level_number: levelNumber,
-          position: cell,
-        },
-      ])
+      .commit((current) => {
+        const target = findLevel(current, dungeonId, levelNumber)
+        const present = target?.transitions.some(
+          (candidate) => candidate.position[0] === cell[0] && candidate.position[1] === cell[1],
+        )
+        if (!present) return []
+        return [
+          {
+            op: 'remove_transition',
+            dungeon_id: dungeonId,
+            level_number: levelNumber,
+            position: cell,
+          },
+        ]
+      })
       .then((committed) => {
         if (committed) onSelectionChange({ kind: 'cell', cell })
       })

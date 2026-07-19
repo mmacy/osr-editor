@@ -44,9 +44,11 @@ export function parseEdgeKey(key: string): ParsedEdgeKey | null {
 const EDGE_KEY_SHAPE = /^(-?[0-9]+),(-?[0-9]+):(north|south|east|west)$/
 
 // Python's repr for strings, mirrored: quote choice, backslash and control
-// escapes. Exotic unicode may diverge from CPython — acceptable, because the
-// one consumer (the remove-entry action) treats a render mismatch as "no
-// match, no ops", a safe decline.
+// escapes. Exotic unicode may diverge from CPython — as may keys whose
+// coordinates exceed Number.MAX_SAFE_INTEGER, where the classification below
+// differs from the backend's — acceptable, because the one consumer (the
+// remove-entry action) treats a render mismatch as "no match, no ops", a safe
+// decline.
 export function pyRepr(value: string): string {
   const quote = value.includes("'") && !value.includes('"') ? '"' : "'"
   let out = quote

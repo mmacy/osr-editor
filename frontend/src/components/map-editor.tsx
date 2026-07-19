@@ -206,9 +206,18 @@ export function MapEditor({
       }
       void projectStore
         .getState()
-        .commit([
-          { op: 'remove_area', dungeon_id: dungeonId, level_number: levelNumber, area_id: area.id },
-        ])
+        .commit((current) => {
+          const target = findLevel(current, dungeonId, levelNumber)
+          if (!target?.areas.some((candidate) => candidate.id === area.id)) return []
+          return [
+            {
+              op: 'remove_area',
+              dungeon_id: dungeonId,
+              level_number: levelNumber,
+              area_id: area.id,
+            },
+          ]
+        })
         .then((committed) => {
           if (committed) setSelection(null)
         })
@@ -234,14 +243,23 @@ export function MapEditor({
       (candidate) => candidate.position[0] === cell[0] && candidate.position[1] === cell[1],
     )
     if (transition) {
-      void projectStore.getState().commit([
-        {
-          op: 'remove_transition',
-          dungeon_id: dungeonId,
-          level_number: levelNumber,
-          position: cell,
-        },
-      ])
+      // The builder form: a queued duplicate Delete no-ops instead of posting
+      // a remove the op would reject.
+      void projectStore.getState().commit((current) => {
+        const target = findLevel(current, dungeonId, levelNumber)
+        const present = target?.transitions.some(
+          (candidate) => candidate.position[0] === cell[0] && candidate.position[1] === cell[1],
+        )
+        if (!present) return []
+        return [
+          {
+            op: 'remove_transition',
+            dungeon_id: dungeonId,
+            level_number: levelNumber,
+            position: cell,
+          },
+        ]
+      })
     }
   }
 

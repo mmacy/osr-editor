@@ -6,7 +6,7 @@
 // drawing happens in CSS px — the component scales the context for
 // devicePixelRatio.
 import type { Finding, LevelSpec, Position } from '@/types'
-import { edgeAt, parseEdgeKey, stepCell, type Direction } from '@/map/edge-key'
+import { edgeAt, parseEdgeKey, type Direction } from '@/map/edge-key'
 import type { HitTarget } from '@/map/hit-test'
 import type { Gesture } from '@/map/gestures'
 import { cellSizePx, gridToCanvas, type ViewTransform } from '@/map/view'
@@ -283,7 +283,6 @@ function drawDoor(
   const length = Math.hypot(dx, dy) || 1
   const px = (-dy / length) * size * 0.14
   const py = (dx / length) * size * 0.14
-  const mid = lerp(gapStart, gapEnd, 0.5)
   ctx.save()
   ctx.fillStyle = theme.door
   ctx.strokeStyle = theme.wall
@@ -297,7 +296,6 @@ function drawDoor(
   ctx.fill()
   ctx.stroke()
   ctx.restore()
-  void mid
 }
 
 function drawSecretGlyph(
@@ -519,6 +517,3 @@ export function targetRef(target: HitTarget | null): string {
   if (target.kind === 'cell') return `(${target.cell[0]}, ${target.cell[1]})`
   return target.key
 }
-
-// Re-exported for the component's neighbour math without importing two modules.
-export { stepCell }
