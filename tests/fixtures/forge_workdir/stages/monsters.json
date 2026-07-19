@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "resolutions": {
+    "drowned one": {
+      "template_id": null,
+      "method": "unresolved"
+    },
+    "skeleton": {
+      "template_id": "skeleton",
+      "method": "exact"
+    },
+    "vault warden": {
+      "template_id": null,
+      "method": "unresolved"
+    }
+  }
+}

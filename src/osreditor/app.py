@@ -46,18 +46,23 @@ from osreditor.config import RecentEntry, load_config, record_recent, save_confi
 from osreditor.documents import DocumentService, OpenProject, dump_adventure, json_pointer
 from osreditor.errors import (
     DocumentPayloadInvalidError,
+    ForgeOverrideInvalidError,
+    ForgePageNotFoundError,
+    ForgeRerunInvalidError,
+    ForgeWorkdirIncompleteError,
+    ForgeWorkdirInvalidError,
     ImporterNotFoundError,
     ImportSourceInvalidError,
     InvalidProjectError,
     OpInvariantError,
     OpRejectedError,
     OpTargetNotFoundError,
+    OpUnsupportedForgeError,
     OsrWebCheckoutInvalidError,
     OsrWebNotConfiguredError,
     ProjectExistsError,
     ProjectNotFoundError,
     ProjectPathNotFoundError,
-    ProjectTypeUnsupportedError,
     PublishBlockedError,
     PublishDestinationExistsError,
     RedoStackEmptyError,
@@ -65,9 +70,10 @@ from osreditor.errors import (
     UndoStackEmptyError,
 )
 from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
-from osreditor.ops import Diagnostics, OpBatch, OpBatchResult
+from osreditor.ops import Diagnostics, ForgeState, OpBatch, OpBatchResult
 from osreditor.projects import create_native_project, open_project, utc_now_iso
 from osreditor.publish import PublishMode, PublishResult, check_osr_web_checkout, publish_adventure
+from osreditor.sidecar import EditorSidecar
 from osreditor.store import LocalProjectStore, atomic_write_bytes
 
 __all__ = [
@@ -283,9 +289,12 @@ class ProjectListResponse(BaseModel):
 
 
 class ProjectState(BaseModel):
-    """One open project's full state: the document, revision, and diagnostics.
+    """One open project's full state: the document, revision, diagnostics, sidecar, and forge projection.
 
     The full document rides on open/get only; batches answer with deltas.
+    `sidecar` is always present — a default in-memory one for a project with no
+    `editor.json`. `forge` carries the report/run/overrides projection for a
+    forge-backed project, `None` for a native one.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -299,6 +308,8 @@ class ProjectState(BaseModel):
     dropped_fields: tuple[str, ...]
     can_undo: bool
     can_redo: bool
+    sidecar: EditorSidecar
+    forge: ForgeState | None = None
 
 
 def _error_response(
@@ -328,8 +339,19 @@ def _service(request: Request) -> DocumentService:
     return request.app.state.service
 
 
+def _forge_state(project: OpenProject) -> ForgeState | None:
+    """Build the forge projection from a forge project's working state, or `None` for native."""
+    if project.forge is None:
+        return None
+    return ForgeState(report=project.forge.report, run=project.forge.run, overrides=project.forge.overrides)
+
+
 def _project_state(project: OpenProject) -> ProjectState:
     with project.lock:
+        if project.forge is not None:
+            can_undo, can_redo = bool(project.forge.undo_stack), bool(project.forge.redo_stack)
+        else:
+            can_undo, can_redo = bool(project.undo_stack), bool(project.redo_stack)
         return ProjectState(
             id=project.id,
             path=str(project.path),
@@ -338,8 +360,10 @@ def _project_state(project: OpenProject) -> ProjectState:
             revision=project.revision,
             diagnostics=project.diagnostics,
             dropped_fields=project.dropped_fields,
-            can_undo=bool(project.undo_stack),
-            can_redo=bool(project.redo_stack),
+            can_undo=can_undo,
+            can_redo=can_redo,
+            sidecar=project.sidecar,
+            forge=_forge_state(project),
         )
 
 
@@ -734,6 +758,11 @@ def _details_op_invariant(error: Exception) -> dict[str, object] | None:
     return {"offenders": error.offenders}
 
 
+def _details_op_unsupported_forge(error: Exception) -> dict[str, object] | None:
+    assert isinstance(error, OpUnsupportedForgeError)
+    return {"op": error.op, "address": error.address}
+
+
 _MAX_REPORTED_LOCATIONS = 10
 
 
@@ -761,12 +790,22 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
     ),
     ProjectPathNotFoundError: (404, "project_path_not_found", None, _details_none),
     InvalidProjectError: (422, "not_a_project", None, _details_none),
-    ProjectTypeUnsupportedError: (
+    ForgeWorkdirInvalidError: (422, "forge_workdir_invalid", None, _details_none),
+    ForgeWorkdirIncompleteError: (
         422,
-        "project_type_unsupported",
-        "Forge-backed review arrives in a later release.",
+        "forge_workdir_incomplete",
+        "Finish the conversion with the osrforge CLI, then reopen the workdir.",
         _details_none,
     ),
+    ForgeOverrideInvalidError: (
+        422,
+        "forge_override_invalid",
+        "Repair overrides.yaml by hand — forge's message names the offending entry.",
+        _details_none,
+    ),
+    ForgeRerunInvalidError: (422, "forge_rerun_invalid", None, _details_none),
+    OpUnsupportedForgeError: (422, "op_unsupported_forge", None, _details_op_unsupported_forge),
+    ForgePageNotFoundError: (404, "forge_page_not_found", None, _details_none),
     ProjectExistsError: (409, "project_dir_not_empty", "Choose a new or empty directory.", _details_none),
     StaleRevisionError: (
         409,

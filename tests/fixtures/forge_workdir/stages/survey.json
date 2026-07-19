@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "title": "The Sunken Vault of Ashkar",
+  "description": "A flooded barrow beneath the salt marsh, where a drowned cult still keeps its vigil.",
+  "hooks": [
+    "A pilgrim's charm, lost to the vault, must be recovered before the new moon."
+  ],
+  "town": {
+    "name": "",
+    "description": "A shuttered marsh hamlet on stilts.",
+    "services": [
+      "provisioner"
+    ]
+  },
+  "dungeons": [
+    {
+      "id": "sunken-vault",
+      "name": "The Sunken Vault",
+      "levels": [
+        {
+          "number": 1,
+          "map_pages": [
+            1
+          ],
+          "areas": [
+            {
+              "key": "1",
+              "name": "Flooded antechamber",
+              "source_label": null,
+              "kind": "room",
+              "source_pages": [
+                1
+              ]
+            },
+            {
+              "key": "2",
+              "name": "Guardroom",
+              "source_label": null,
+              "kind": "room",
+              "source_pages": [
+                1
+              ]
+            },
+            {
+              "key": "3",
+              "name": "Silt-choked cell",
+              "source_label": null,
+              "kind": "cave",
+              "source_pages": [
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "number": 2,
+          "map_pages": [
+            2
+          ],
+          "areas": [
+            {
+              "key": "1",
+              "name": "The drowned shrine",
+              "source_label": null,
+              "kind": "cave",
+              "source_pages": [
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "monster_names": [
+    "skeleton",
+    "vault warden",
+    "drowned one"
+  ]
+}

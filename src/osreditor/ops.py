@@ -27,6 +27,9 @@ docstring for its pinned invariants.
 
 from typing import Annotated, Literal
 
+from osrforge.contracts.overrides import Overrides
+from osrforge.contracts.report import ExtractionReport
+from osrforge.contracts.run import RunMeta
 from osrlib.crawl.dungeon import (
     AreaTreasureSpec,
     Edge,
@@ -51,6 +54,7 @@ __all__ = [
     "EditOp",
     "FeatureContainerOp",
     "Finding",
+    "ForgeState",
     "LevelOp",
     "OpBatch",
     "OpBatchResult",
@@ -595,17 +599,19 @@ class Finding(BaseModel):
 class Diagnostics(BaseModel):
     """Live diagnostics, recomputed after every batch.
 
-    Two tiers here mirror the spec's diagnostics panel: `validation` is
-    `validate_adventure` output, `lint` the editor's structural lint. Tier 1,
-    model validity, is unrepresentable by construction — invalid batches are
-    rejected whole and never become state. Forge-check findings merge in
-    phase 5 via an additive `forge` field.
+    Three tiers here mirror the spec's diagnostics panel: `validation` is
+    `validate_adventure` output, `lint` the editor's structural lint, and `forge`
+    the playability findings a forge `check` run merged into `report.json` (empty
+    for native projects, and emptied on every forge commit — re-assembly wipes
+    findings by forge's design). Tier 1, model validity, is unrepresentable by
+    construction — invalid batches are rejected whole and never become state.
     """
 
     model_config = ConfigDict(frozen=True)
 
     validation: tuple[Finding, ...] = ()
     lint: tuple[Finding, ...] = ()
+    forge: tuple[Finding, ...] = ()
 
 
 class SubtreeChange(BaseModel):
@@ -622,6 +628,22 @@ class SubtreeChange(BaseModel):
     value: object = None
 
 
+class ForgeState(BaseModel):
+    """The forge-only projection of an open project: the report, run metadata, and overrides.
+
+    Forge's own pydantic models ride the OpenAPI surface into the generated
+    types — the same source-of-truth discipline as osrlib's models, no
+    hand-written mirror. `None` on a native project; refreshed on every forge
+    commit, undo, and redo.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    report: ExtractionReport
+    run: RunMeta
+    overrides: Overrides
+
+
 class OpBatchResult(BaseModel):
     """A committed batch's answer: the new revision, the delta, and refreshed diagnostics.
 
@@ -630,7 +652,9 @@ class OpBatchResult(BaseModel):
     `delta` entries apply in order and are coalesced so no entry's path is a
     descendant of another's; undo and redo answer with the degenerate
     whole-document delta (`path=""`). `can_undo`/`can_redo` track the stacks so
-    the frontend's buttons never need a second request.
+    the frontend's buttons never need a second request. `forge` carries the
+    refreshed forge projection on a forge commit (a translated batch, an
+    override-level edit, an undo, or a redo); `None` for native projects.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -640,3 +664,4 @@ class OpBatchResult(BaseModel):
     delta: tuple[SubtreeChange, ...]
     can_undo: bool
     can_redo: bool
+    forge: ForgeState | None = None

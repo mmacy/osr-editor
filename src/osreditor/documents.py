@@ -36,9 +36,12 @@ import re
 import secrets
 import threading
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
+from osrforge.contracts.overrides import Overrides
+from osrforge.contracts.report import ExtractionReport
 from osrlib.crawl.adventure import Adventure
 from osrlib.crawl.dungeon import (
     AreaSpec,
@@ -63,6 +66,14 @@ from osreditor.errors import (
     StaleRevisionError,
     UndoStackEmptyError,
 )
+from osreditor.forge import (
+    OVERRIDES_ARTIFACT,
+    ForgeAssembly,
+    ForgeProjectState,
+    ForgeSnapshot,
+    assemble_workdir,
+    forge_findings,
+)
 from osreditor.ops import (
     AddDungeon,
     AddFeature,
@@ -71,6 +82,7 @@ from osreditor.ops import (
     AnyEditOp,
     CreateArea,
     Diagnostics,
+    ForgeState,
     OpBatch,
     OpBatchResult,
     RemoveArea,
@@ -95,17 +107,21 @@ from osreditor.ops import (
     SetWandering,
     SubtreeChange,
 )
+from osreditor.overrides import serialize_overrides
+from osreditor.serialize import canonical_json_bytes
+from osreditor.sidecar import EditorSidecar, write_sidecar
 from osreditor.store import ProjectStore
 
 __all__ = [
     "ADVENTURE_ARTIFACT",
     "DocumentService",
+    "LoadedProject",
     "OpenProject",
     "ProjectType",
     "canonical_edge_cells",
-    "canonical_json_bytes",
     "dropped_pointers",
     "dump_adventure",
+    "forge_diagnostics",
     "json_pointer",
     "load_adventure",
 ]
@@ -114,19 +130,6 @@ ADVENTURE_ARTIFACT = "adventure.json"
 MAX_UNDO_DEPTH = 100
 
 ProjectType = Literal["native", "forge"]
-
-
-def canonical_json_bytes(data: Mapping[str, object]) -> bytes:
-    """Serialize a mapping in the canonical byte format.
-
-    Args:
-        data: The JSON-ready mapping (typically a stamped document).
-
-    Returns:
-        UTF-8 bytes: 2-space indent, `ensure_ascii=False`, keys in insertion
-        order, trailing newline.
-    """
-    return (json.dumps(data, ensure_ascii=False, indent=2, sort_keys=False) + "\n").encode("utf-8")
 
 
 def dump_adventure(adventure: Adventure) -> bytes:
@@ -246,12 +249,51 @@ def dropped_pointers(source: object, reserialized: object, prefix: str = "") -> 
     return tuple(dropped)
 
 
+def forge_diagnostics(adventure: Adventure, report: ExtractionReport) -> Diagnostics:
+    """Compute a forge project's diagnostics: the native tiers plus the forge tier.
+
+    The forge tier is the report's playability findings — empty straight from
+    `assemble` (re-assembly wipes findings by forge's design), populated only by
+    a `check` run.
+
+    Args:
+        adventure: The assembled document.
+        report: The extraction report.
+
+    Returns:
+        The diagnostics with `validation`, `lint`, and `forge` tiers.
+    """
+    base = compute_diagnostics(adventure)
+    return base.model_copy(update={"forge": forge_findings(report)})
+
+
+@dataclass(frozen=True)
+class LoadedProject:
+    """Everything a loader resolves for one project, before the service mints its id.
+
+    The loader (in `projects.py`) knows whether the directory is native or forge
+    and resolves the right working state; the service assigns the id, registers
+    it, and returns the [`OpenProject`][osreditor.documents.OpenProject].
+    """
+
+    adventure: Adventure
+    project_type: ProjectType
+    dropped_fields: tuple[str, ...]
+    diagnostics: Diagnostics
+    sidecar: EditorSidecar
+    forge: ForgeProjectState | None
+
+
 class OpenProject:
     """One open project: the document, its revision stream, and its history.
 
     Mutable by design — this is the working state the service guards with the
     per-project lock, created eagerly here so it exists before the object is
-    ever published to another thread.
+    ever published to another thread. A native project's history is the
+    `undo_stack`/`redo_stack` of prior documents; a forge project's document is
+    derived state, so its history is the `overrides.yaml`+`auto_reasons` snapshot
+    pairs on [`forge`][osreditor.forge.ForgeProjectState], and the native stacks
+    stay empty.
     """
 
     def __init__(
@@ -262,6 +304,8 @@ class OpenProject:
         adventure: Adventure,
         dropped_fields: tuple[str, ...],
         diagnostics: Diagnostics,
+        sidecar: EditorSidecar,
+        forge: ForgeProjectState | None = None,
     ) -> None:
         """Bundle a just-loaded project's working state.
 
@@ -269,9 +313,12 @@ class OpenProject:
             project_id: The server-minted opaque id.
             path: The resolved project directory path.
             project_type: The detected project shape.
-            adventure: The loaded document.
-            dropped_fields: The open-time fidelity diff's pointers.
+            adventure: The loaded (native) or assembled (forge) document.
+            dropped_fields: The open-time fidelity diff's pointers — `()` for a
+                forge project, whose document arrives as forge's in-memory models.
             diagnostics: The diagnostics computed at open.
+            sidecar: The project's editor sidecar (a default when there is none).
+            forge: The forge working state, or `None` for a native project.
         """
         self.id = project_id
         self.path = path
@@ -279,6 +326,8 @@ class OpenProject:
         self.adventure = adventure
         self.dropped_fields = dropped_fields
         self.diagnostics = diagnostics
+        self.sidecar = sidecar
+        self.forge = forge
         self.revision_number = 1
         self.undo_stack: list[Adventure] = []
         self.redo_stack: list[Adventure] = []
@@ -328,9 +377,7 @@ class DocumentService:
             raise ProjectNotFoundError(f"no open project with id {project_id!r}")
         return project
 
-    def get_or_open(
-        self, path: Path, loader: Callable[[], tuple[Adventure, ProjectType, tuple[str, ...]]]
-    ) -> OpenProject:
+    def get_or_open(self, path: Path, loader: Callable[[], LoadedProject]) -> OpenProject:
         """Return the already-open project for a resolved path, or admit a new one.
 
         The whole open — `loader` included — runs under the registry lock:
@@ -340,9 +387,8 @@ class DocumentService:
 
         Args:
             path: The resolved project directory path (the registry index).
-            loader: Classifies and loads the document; called only on a miss.
-                Returns the adventure, the project type, and the fidelity diff's
-                dropped-field pointers.
+            loader: Classifies and loads the project; called only on a miss.
+                Returns the resolved working state, diagnostics and all.
 
         Returns:
             The open project.
@@ -351,14 +397,16 @@ class DocumentService:
             existing = self._by_path.get(str(path))
             if existing is not None:
                 return existing
-            adventure, project_type, dropped = loader()
+            loaded = loader()
             project = OpenProject(
                 project_id=secrets.token_hex(8),
                 path=path,
-                project_type=project_type,
-                adventure=adventure,
-                dropped_fields=dropped,
-                diagnostics=compute_diagnostics(adventure),
+                project_type=loaded.project_type,
+                adventure=loaded.adventure,
+                dropped_fields=loaded.dropped_fields,
+                diagnostics=loaded.diagnostics,
+                sidecar=loaded.sidecar,
+                forge=loaded.forge,
             )
             self._by_id[project.id] = project
             self._by_path[str(path)] = project
@@ -437,6 +485,8 @@ class DocumentService:
         Raises:
             UndoStackEmptyError: If there is nothing to undo.
         """
+        if project.forge is not None:
+            return self._forge_undo(project)
         with project.lock:
             if not project.undo_stack:
                 raise UndoStackEmptyError("there is nothing to undo")
@@ -458,6 +508,8 @@ class DocumentService:
         Raises:
             RedoStackEmptyError: If there is nothing to redo.
         """
+        if project.forge is not None:
+            return self._forge_redo(project)
         with project.lock:
             if not project.redo_stack:
                 raise RedoStackEmptyError("there is nothing to redo")
@@ -488,6 +540,142 @@ class DocumentService:
             delta=delta,
             can_undo=bool(project.undo_stack),
             can_redo=bool(project.redo_stack),
+        )
+
+    # --- The forge commit protocol -------------------------------------------------
+    #
+    # A forge project never writes `adventure.json`, `report.json`, or previews —
+    # those bytes are written only inside forge's own `assemble`. The editor writes
+    # `overrides.yaml` (and the sidecar's `auto_reasons`), re-assembles, and adopts
+    # forge's own in-memory models. The commit is snapshot → write → assemble → on
+    # failure restore, so forge's fail-before-write guarantee means a rejected
+    # commit never leaves the workdir inconsistent.
+
+    def commit_forge_overrides(
+        self, project: OpenProject, revision: str, overrides: Overrides, auto_reasons: tuple[str, ...]
+    ) -> OpBatchResult:
+        """Commit a new overrides value at a named revision — the override-level edit path.
+
+        Shared by the override-level edit route (item 4). A translated op batch
+        folds its ops into the new overrides first (item 3) and calls the same
+        locked commit.
+
+        Args:
+            project: The open forge project.
+            revision: The revision the edit was computed against.
+            overrides: The next `Overrides` value.
+            auto_reasons: The next machine-draft key set.
+
+        Returns:
+            The refreshed result, carrying the forge projection.
+
+        Raises:
+            StaleRevisionError: If `revision` is not current.
+            ForgeOverrideInvalidError: If forge refuses the overrides at assembly
+                (the workdir is restored first).
+        """
+        with project.lock:
+            self._require_revision(project, revision)
+            return self._commit_forge_locked(project, overrides, auto_reasons)
+
+    def _require_revision(self, project: OpenProject, revision: str) -> None:
+        if revision != project.revision:
+            raise StaleRevisionError(
+                f"the edit was computed against revision {revision}, but the current revision is {project.revision}",
+                current_revision=project.revision,
+            )
+
+    def _commit_forge_locked(
+        self, project: OpenProject, overrides: Overrides, auto_reasons: tuple[str, ...]
+    ) -> OpBatchResult:
+        """Snapshot, write the YAML and sidecar, re-assemble, and adopt — or restore and re-raise.
+
+        The lock is held by the caller; the returned result carries the whole-
+        document delta (an assembly can move anything, including derived level
+        dimensions) and the refreshed forge projection.
+        """
+        forge = project.forge
+        assert forge is not None
+        project_id = str(project.path)
+        previous = ForgeSnapshot(overrides_yaml=forge.overrides_yaml, auto_reasons=project.sidecar.auto_reasons)
+        new_sidecar = project.sidecar.model_copy(update={"auto_reasons": auto_reasons})
+        self.store.write_artifact(project_id, OVERRIDES_ARTIFACT, serialize_overrides(overrides))
+        write_sidecar(self.store, project_id, new_sidecar)
+        try:
+            assembly = assemble_workdir(self.store, project_id)
+        except Exception:
+            # Forge's fail-before-write guarantee means the workdir artifacts
+            # never saw the bad file; restore the correction file and sidecar so
+            # a later read is consistent, then re-raise.
+            self.store.write_artifact(project_id, OVERRIDES_ARTIFACT, previous.overrides_yaml)
+            write_sidecar(self.store, project_id, project.sidecar)
+            raise
+        self._adopt_forge(project, assembly, new_sidecar)
+        forge.undo_stack.append(previous)
+        if len(forge.undo_stack) > MAX_UNDO_DEPTH:
+            forge.undo_stack.pop(0)
+        forge.redo_stack.clear()
+        return self._forge_result(project)
+
+    def _forge_undo(self, project: OpenProject) -> OpBatchResult:
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            if not forge.undo_stack:
+                raise UndoStackEmptyError("there is nothing to undo")
+            current = ForgeSnapshot(overrides_yaml=forge.overrides_yaml, auto_reasons=project.sidecar.auto_reasons)
+            self._restore_forge_snapshot(project, forge.undo_stack[-1])
+            forge.undo_stack.pop()
+            forge.redo_stack.append(current)
+            return self._forge_result(project)
+
+    def _forge_redo(self, project: OpenProject) -> OpBatchResult:
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            if not forge.redo_stack:
+                raise RedoStackEmptyError("there is nothing to redo")
+            current = ForgeSnapshot(overrides_yaml=forge.overrides_yaml, auto_reasons=project.sidecar.auto_reasons)
+            self._restore_forge_snapshot(project, forge.redo_stack[-1])
+            forge.redo_stack.pop()
+            forge.undo_stack.append(current)
+            return self._forge_result(project)
+
+    def _restore_forge_snapshot(self, project: OpenProject, snapshot: ForgeSnapshot) -> None:
+        """Write a snapshot's YAML and sidecar, re-assemble (pure and deterministic), and adopt.
+
+        Re-assembly of a previously-valid overrides file is exact, so the restored
+        document, report, and reason flags come back byte-for-byte.
+        """
+        project_id = str(project.path)
+        restored_sidecar = project.sidecar.model_copy(update={"auto_reasons": snapshot.auto_reasons})
+        self.store.write_artifact(project_id, OVERRIDES_ARTIFACT, snapshot.overrides_yaml)
+        write_sidecar(self.store, project_id, restored_sidecar)
+        self._adopt_forge(project, assemble_workdir(self.store, project_id), restored_sidecar)
+
+    def _adopt_forge(self, project: OpenProject, assembly: ForgeAssembly, sidecar: EditorSidecar) -> None:
+        """Install a fresh assembly: the document, report, run, overrides, sidecar, revision, diagnostics."""
+        forge = project.forge
+        assert forge is not None
+        project.adventure = assembly.adventure
+        project.sidecar = sidecar
+        forge.report = assembly.report
+        forge.run = assembly.run
+        forge.overrides = assembly.overrides
+        forge.overrides_yaml = assembly.overrides_yaml
+        project.revision_number += 1
+        project.diagnostics = forge_diagnostics(assembly.adventure, assembly.report)
+
+    def _forge_result(self, project: OpenProject) -> OpBatchResult:
+        forge = project.forge
+        assert forge is not None
+        return OpBatchResult(
+            revision=project.revision,
+            diagnostics=project.diagnostics,
+            delta=_whole_document_delta(project.adventure),
+            can_undo=bool(forge.undo_stack),
+            can_redo=bool(forge.redo_stack),
+            forge=ForgeState(report=forge.report, run=forge.run, overrides=forge.overrides),
         )
 
 

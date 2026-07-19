@@ -125,6 +125,32 @@ class ProjectStore(Protocol):
         """
         ...
 
+    def materialize(self, project_id: str) -> Path:
+        """Return a local directory holding the project's artifacts, for file-based tools.
+
+        The forge bridge — and only the forge bridge (the seam rule) — calls this
+        to hand osr-forge a real directory it can read and write directly:
+        `assemble`, `check`, and `rerun` are file-based and take a workdir path,
+        not a byte stream. The returned directory *is* the project for the
+        duration of a forge operation; forge's own writes (`run.json`, artifacts,
+        previews) land in it.
+
+        For [`LocalProjectStore`][osreditor.store.LocalProjectStore] this is the
+        identity — the project id already names a local directory — so every forge
+        write is a live project write. A remote store implements the contract by
+        syncing the project down to a local scratch directory before returning it,
+        and re-ingesting forge's writes afterward (the archive-the-workdir pattern
+        the spec names); the sync-back is a hosted future, and the local store
+        satisfies the contract trivially.
+
+        Args:
+            project_id: The project to materialize.
+
+        Returns:
+            A local directory holding the project's artifacts.
+        """
+        ...
+
 
 class LocalProjectStore:
     """The shipped store: a project is a directory on the local filesystem.
@@ -233,3 +259,20 @@ class LocalProjectStore:
             data: The artifact's full contents.
         """
         atomic_write_bytes(self._artifact_path(project_id, name), data, self._umask)
+
+    def materialize(self, project_id: str) -> Path:
+        """Return the project directory itself — materialization is the identity here.
+
+        The project id already names a local directory, so there is nothing to
+        sync: forge reads and writes the live project directory directly.
+
+        Args:
+            project_id: The absolute project directory path.
+
+        Returns:
+            The project directory as a `Path`.
+        """
+        root = Path(project_id)
+        if not root.is_absolute():
+            raise ValueError(f"project id must be an absolute directory path, got {project_id!r}")
+        return root

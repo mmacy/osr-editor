@@ -20,7 +20,8 @@ from osrlib.data import load_equipment, load_monsters
 from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION
 
-from osreditor.documents import canonical_json_bytes, dropped_pointers, dump_adventure, load_adventure
+from osreditor.documents import dropped_pointers, dump_adventure, load_adventure
+from osreditor.serialize import canonical_json_bytes
 
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "golden_adventure.json"
 

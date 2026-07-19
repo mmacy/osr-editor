@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "custom_monsters": "emit",
+  "blocks": {
+    "drowned one": null,
+    "vault warden": {
+      "ac": "4",
+      "ac_notation": "descending",
+      "thac0": null,
+      "hit_dice": "4+1",
+      "class_level": null,
+      "hp": 19,
+      "attacks": [
+        "1 slam (1d8)"
+      ],
+      "movement": "90' (30')",
+      "saves": "D10 W11 P12 B13 S14 (4)",
+      "morale": 10,
+      "alignment": "Chaotic",
+      "xp": 125,
+      "number_appearing": "1 (1)",
+      "special": [
+        "Immune to sleep and charm; regenerates 2 hp per round in water."
+      ],
+      "confidence": 1.0,
+      "source_pages": [
+        2
+      ]
+    }
+  }
+}

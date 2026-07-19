@@ -18,9 +18,10 @@ from osrlib.crawl.dungeon import (
 from osrlib.data import load_equipment, load_monsters
 
 from osreditor.diagnostics import compute_diagnostics
-from osreditor.documents import canonical_json_bytes, dump_adventure, load_adventure
+from osreditor.documents import dump_adventure, load_adventure
 from osreditor.lint import SEVERITY, lint_adventure
 from osreditor.ops import Finding
+from osreditor.serialize import canonical_json_bytes
 
 TORTURE_PATH = Path(__file__).parent / "fixtures" / "torture_geometry.json"
 

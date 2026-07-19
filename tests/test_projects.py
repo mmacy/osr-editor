@@ -9,18 +9,18 @@ from osrlib.data import load_equipment, load_monsters
 
 from osreditor.documents import DocumentService, load_adventure
 from osreditor.errors import (
+    ForgeWorkdirInvalidError,
     InvalidProjectError,
     ProjectExistsError,
     ProjectPathNotFoundError,
-    ProjectTypeUnsupportedError,
 )
 from osreditor.projects import (
-    SIDECAR_ARTIFACT,
     create_native_project,
     detect_project_type,
     open_project,
     starter_adventure,
 )
+from osreditor.sidecar import SIDECAR_ARTIFACT
 from osreditor.store import LocalProjectStore
 
 
@@ -76,7 +76,11 @@ def test_create_writes_a_loadable_document_and_the_sidecar(tmp_path: Path) -> No
     assert provenance["created_by"].startswith("osr-editor ")
     assert provenance["osrlib_version"]
     assert provenance["created_at"]
-    assert set(sidecar) == {"schema_version", "provenance"}
+    # The phase 5 additive fields default empty on a native create; detach fills
+    # provenance's source_workdir/osrforge_version, empty here.
+    assert provenance["source_workdir"] is None
+    assert provenance["osrforge_version"] is None
+    assert set(sidecar) == {"schema_version", "provenance", "view_state", "notes", "review", "auto_reasons"}
 
 
 def test_create_refuses_a_non_empty_directory(tmp_path: Path) -> None:
@@ -122,14 +126,19 @@ def test_open_non_project_raises_invalid_project(tmp_path: Path) -> None:
         open_project(DocumentService(LocalProjectStore()), tmp_path)
 
 
-def test_open_forge_workdir_is_recognized_and_refused(tmp_path: Path) -> None:
+def test_open_forge_workdir_with_unparseable_run_json_is_invalid(tmp_path: Path) -> None:
+    # `make_forge_workdir` writes a placeholder run.json ("{}") that does not
+    # parse as RunMeta — the first open gate refuses it.
     workdir = tmp_path / "demo.forge"
     make_forge_workdir(workdir)
-    with pytest.raises(ProjectTypeUnsupportedError):
+    with pytest.raises(ForgeWorkdirInvalidError):
         open_project(DocumentService(LocalProjectStore()), workdir)
 
 
-def test_open_never_writes(tmp_path: Path) -> None:
+def test_open_never_writes_for_native(tmp_path: Path) -> None:
+    # The open-never-writes invariant is scoped to native projects, where the
+    # document is the user's source of truth. A forge open re-assembles, and that
+    # is forge's own write (see the forge open suite).
     service = DocumentService(LocalProjectStore())
     project_dir = tmp_path / "demo.osr"
     create_native_project(service.store, str(project_dir), "Demo")

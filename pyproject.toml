@@ -30,6 +30,8 @@ classifiers = [
 ]
 dependencies = [
     "osrlib>=1.2,<2",
+    "osr-forge>=0.1,<0.2",
+    "pyyaml>=6",
     "pydantic>=2",
     "fastapi>=0.139",
     "uvicorn>=0.51",
@@ -57,7 +59,14 @@ dev = [
     "ruff>=0.11",
     "pyright>=1.1",
     "httpx2>=2.7.0",
+    "types-pyyaml>=6",
 ]
+
+# osr-forge is a published dependency (>=0.1,<0.2) in wheel metadata; until it
+# lands on PyPI the sibling checkout is the local-dev override — the same
+# posture osrlib had before its own release, and stripped from the built wheel.
+[tool.uv.sources]
+osr-forge = { path = "../osr-forge", editable = true }
 
 [build-system]
 requires = ["uv_build>=0.8.22,<0.9.0"]

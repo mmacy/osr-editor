@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "dungeon_id": "sunken-vault",
+  "level_number": 2,
+  "areas": [
+    {
+      "key": "1",
+      "description": "A drowned altar rises from black water; a single drowned acolyte keeps its watch.",
+      "encounters": [
+        {
+          "monster": "drowned one",
+          "count_fixed": 1,
+          "count_dice": null,
+          "count_note": null
+        }
+      ],
+      "trap": null,
+      "treasure": [],
+      "features": [],
+      "connections": [
+        {
+          "to_key": null,
+          "direction": "up",
+          "via": "stairs",
+          "door_stuck": false,
+          "door_locked": false,
+          "to_level": 1
+        }
+      ],
+      "source_pages": [
+        2
+      ],
+      "confidence": 0.7
+    }
+  ]
+}

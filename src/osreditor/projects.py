@@ -18,16 +18,18 @@ from pathlib import Path
 from osrlib.crawl.adventure import Adventure, TownSpec
 from osrlib.crawl.dungeon import DungeonSpec, LevelSpec
 from osrlib.versioning import engine_version
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import ValidationError
 
+from osreditor.diagnostics import compute_diagnostics
 from osreditor.documents import (
     ADVENTURE_ARTIFACT,
     DocumentService,
+    LoadedProject,
     OpenProject,
     ProjectType,
-    canonical_json_bytes,
     dropped_pointers,
     dump_adventure,
+    forge_diagnostics,
     json_pointer,
     load_adventure,
 )
@@ -36,14 +38,12 @@ from osreditor.errors import (
     InvalidProjectError,
     ProjectExistsError,
     ProjectPathNotFoundError,
-    ProjectTypeUnsupportedError,
 )
+from osreditor.forge import ForgeProjectState, open_workdir_state
+from osreditor.sidecar import EditorSidecar, SidecarProvenance, read_sidecar, write_sidecar
 from osreditor.store import ProjectStore
 
 __all__ = [
-    "SIDECAR_ARTIFACT",
-    "EditorSidecar",
-    "SidecarProvenance",
     "create_native_project",
     "detect_project_type",
     "open_project",
@@ -51,35 +51,7 @@ __all__ = [
     "utc_now_iso",
 ]
 
-SIDECAR_ARTIFACT = "editor.json"
-SIDECAR_SCHEMA_VERSION = 1
 _MAX_REPORTED_LOCATIONS = 10
-
-
-class SidecarProvenance(BaseModel):
-    """Who created the project and against which engine — written once at create."""
-
-    model_config = ConfigDict(frozen=True)
-
-    created_by: str
-    osrlib_version: str
-    created_at: str
-
-
-class EditorSidecar(BaseModel):
-    """The `editor.json` envelope: editor-only data beside the deliverable.
-
-    The envelope is a shipped contract, additive-only within its schema version.
-    Phase 1 writes only provenance; per-entity author notes, stocking seeds, and
-    view state are sidecar fields that arrive with their consuming features.
-    Open tolerates a missing sidecar (foreign native projects open fine) and
-    never rewrites an existing one.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    schema_version: int = SIDECAR_SCHEMA_VERSION
-    provenance: SidecarProvenance
 
 
 def utc_now_iso() -> str:
@@ -171,7 +143,7 @@ def create_native_project(store: ProjectStore, project_id: str, name: str) -> Ad
         )
     )
     store.write_artifact(project_id, ADVENTURE_ARTIFACT, dump_adventure(adventure))
-    store.write_artifact(project_id, SIDECAR_ARTIFACT, canonical_json_bytes(sidecar.model_dump(mode="json")))
+    write_sidecar(store, project_id, sidecar)
     return adventure
 
 
@@ -195,17 +167,22 @@ def open_project(service: DocumentService, path: Path) -> OpenProject:
     Raises:
         ProjectPathNotFoundError: If the path names no directory.
         InvalidProjectError: If the directory matches neither project shape.
-        ProjectTypeUnsupportedError: If the directory is a forge workdir.
-        osrlib.errors.SaveVersionError: If the document's schema is newer than
-            the installed osrlib understands.
-        osrlib.errors.ContentValidationError: If the document envelope is
+        ForgeWorkdirInvalidError: If a forge workdir's `run.json` does not parse,
+            or a stage cache is missing or stale.
+        ForgeWorkdirIncompleteError: If a forge workdir's monsters stage is not
+            completed.
+        ForgeOverrideInvalidError: If a forge workdir's `overrides.yaml` cannot be
+            loaded or applied.
+        osrlib.errors.SaveVersionError: If a native document's schema is newer
+            than the installed osrlib understands.
+        osrlib.errors.ContentValidationError: If a native document envelope is
             malformed.
-        DocumentPayloadInvalidError: If the document payload fails model
+        DocumentPayloadInvalidError: If a native document payload fails model
             validation, with the first offending locations attached.
     """
     resolved = path.resolve()
 
-    def load() -> tuple[Adventure, ProjectType, tuple[str, ...]]:
+    def load() -> LoadedProject:
         store = service.store
         store_key = str(resolved)
         if not store.project_exists(store_key):
@@ -214,20 +191,54 @@ def open_project(service: DocumentService, path: Path) -> OpenProject:
         if project_type is None:
             raise InvalidProjectError(f"{resolved} is not a project: no adventure.json and no forge workdir markers")
         if project_type == "forge":
-            raise ProjectTypeUnsupportedError(f"{resolved} is an osr-forge workdir")
-        data = store.read_artifact(store_key, ADVENTURE_ARTIFACT)
-        try:
-            adventure = load_adventure(data)
-        except ValidationError as error:
-            reported = [
-                {"path": json_pointer(detail["loc"]), "message": detail["msg"]}
-                for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
-            ]
-            raise DocumentPayloadInvalidError(
-                f"the document at {resolved} does not match the installed osrlib's models", errors=reported
-            ) from error
-        source_payload = json.loads(data)["payload"]
-        dropped = dropped_pointers(source_payload, adventure.model_dump(mode="json"))
-        return adventure, project_type, dropped
+            return _load_forge(store, store_key)
+        return _load_native(store, store_key, resolved)
 
     return service.get_or_open(resolved, load)
+
+
+def _load_native(store: ProjectStore, store_key: str, resolved: Path) -> LoadedProject:
+    """Load a native project: parse the document, run the fidelity diff, read the sidecar."""
+    data = store.read_artifact(store_key, ADVENTURE_ARTIFACT)
+    try:
+        adventure = load_adventure(data)
+    except ValidationError as error:
+        reported = [
+            {"path": json_pointer(detail["loc"]), "message": detail["msg"]}
+            for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
+        ]
+        raise DocumentPayloadInvalidError(
+            f"the document at {resolved} does not match the installed osrlib's models", errors=reported
+        ) from error
+    source_payload = json.loads(data)["payload"]
+    dropped = dropped_pointers(source_payload, adventure.model_dump(mode="json"))
+    return LoadedProject(
+        adventure=adventure,
+        project_type="native",
+        dropped_fields=dropped,
+        diagnostics=compute_diagnostics(adventure),
+        sidecar=read_sidecar(store, store_key),
+        forge=None,
+    )
+
+
+def _load_forge(store: ProjectStore, store_key: str) -> LoadedProject:
+    """Load a forge project: gate and assemble the workdir, then build the forge working state.
+
+    The open-time fidelity guard does not apply — the document arrives as forge's
+    in-memory models, not a foreign parse — so `dropped_fields` is `()`.
+    """
+    state = open_workdir_state(store, store_key)
+    return LoadedProject(
+        adventure=state.adventure,
+        project_type="forge",
+        dropped_fields=(),
+        diagnostics=forge_diagnostics(state.adventure, state.report),
+        sidecar=read_sidecar(store, store_key),
+        forge=ForgeProjectState(
+            report=state.report,
+            run=state.run,
+            overrides=state.overrides,
+            overrides_yaml=state.overrides_yaml,
+        ),
+    )
