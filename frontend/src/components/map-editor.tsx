@@ -304,6 +304,15 @@ export function MapEditor({
       ) {
         return
       }
+      // Keys pressed inside an open popover, menu, or dialog belong to that
+      // surface — Escape closes the picker, it never clears the map selection.
+      if (
+        target?.closest(
+          '[data-slot="popover-content"], [data-slot="context-menu-content"], [role="dialog"]',
+        )
+      ) {
+        return
+      }
       if (dialog !== null || transitionCell !== null) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'Escape') {
