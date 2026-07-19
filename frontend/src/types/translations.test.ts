@@ -5,11 +5,17 @@ import { expectTypeOf, test } from 'vitest'
 
 import type { components } from '@/types/generated/api'
 import type {
+  AddTransition,
   AnyEditOp,
   Edge,
+  ImportedArea,
+  ImportedGeometry,
+  ImportedLevel,
   LevelSpec,
+  SetEdges,
   SetWandering,
   SubtreeChange,
+  TransitionSpec,
   WanderingSpec,
 } from '@/types'
 
@@ -33,9 +39,27 @@ test('the pinned schema translations hold', () => {
 })
 
 test('the op vocabulary translations hold', () => {
-  // The edit-op union discriminates on op.
+  // The edit-op union discriminates over the full phase 2 vocabulary.
   expectTypeOf<AnyEditOp['op']>().toEqualTypeOf<
-    'set_adventure_field' | 'set_town_field' | 'set_wandering'
+    | 'set_adventure_field'
+    | 'set_town_field'
+    | 'set_wandering'
+    | 'set_edges'
+    | 'set_entrance'
+    | 'create_area'
+    | 'set_area_cells'
+    | 'set_area_field'
+    | 'remove_area'
+    | 'add_transition'
+    | 'remove_transition'
+    | 'add_dungeon'
+    | 'set_dungeon_field'
+    | 'rename_dungeon'
+    | 'remove_dungeon'
+    | 'add_level'
+    | 'renumber_level'
+    | 'resize_level'
+    | 'remove_level'
   >()
   expectTypeOf<Extract<AnyEditOp, { op: 'set_adventure_field' }>>().toHaveProperty('field')
   expectTypeOf<Extract<AnyEditOp, { op: 'set_wandering' }>>().toHaveProperty('dungeon_id')
@@ -43,6 +67,24 @@ test('the op vocabulary translations hold', () => {
   // SetWandering carries the full WanderingSpec, inline table included.
   expectTypeOf<SetWandering['wandering']>().toEqualTypeOf<WanderingSpec>()
 
+  // SetEdges values admit null — the delete-means-wall assignment.
+  expectTypeOf<SetEdges['edges']>().toEqualTypeOf<Record<string, Edge | null>>()
+
+  // AddTransition carries the full TransitionSpec; the target facing keeps
+  // osrlib's exact wire values.
+  expectTypeOf<AddTransition['transition']>().toEqualTypeOf<TransitionSpec>()
+  expectTypeOf<TransitionSpec['to_facing']>().toEqualTypeOf<'north' | 'east' | 'south' | 'west'>()
+
   // SubtreeChange.value is loose JSON by design.
   expectTypeOf<SubtreeChange['value']>().toEqualTypeOf<unknown>()
+})
+
+test('the importer payload translations hold', () => {
+  // ImportedLevel.edges is a Record of canonical keys to Edge — no nulls; the
+  // importer owns normalization.
+  expectTypeOf<ImportedLevel['edges']>().toEqualTypeOf<Record<string, Edge>>()
+  expectTypeOf<NonNullable<ImportedLevel['entrance']>>().toEqualTypeOf<[number, number]>()
+  expectTypeOf<ImportedLevel['notes']>().toEqualTypeOf<string[]>()
+  expectTypeOf<ImportedGeometry['levels']>().toEqualTypeOf<ImportedLevel[]>()
+  expectTypeOf<ImportedArea['cells']>().toEqualTypeOf<[number, number][]>()
 })

@@ -43,6 +43,7 @@ test('a diagnostics finding navigates by its address', () => {
           {
             source: 'validation',
             code: 'travel_unknown_dungeon',
+            severity: 'error',
             message: "town travel names unknown dungeon 'nowhere'",
             address: 'town',
           },
@@ -66,6 +67,7 @@ test('an unnavigable address renders as plain text', () => {
           {
             source: 'validation',
             code: 'entrance_out_of_bounds',
+            severity: 'error',
             message: 'somewhere: entrance (9, 9) is out of bounds',
             address: null,
           },
