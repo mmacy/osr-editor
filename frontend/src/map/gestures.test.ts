@@ -40,7 +40,10 @@ test('the wall tool cycles wall to open to door to wall', () => {
     door: { kind: 'normal', stuck: false, locked: false, starts_open: false },
   })
   expect(
-    cycleAssignment({ kind: 'door', door: { kind: 'secret', stuck: false, locked: false, starts_open: false } }),
+    cycleAssignment({
+      kind: 'door',
+      door: { kind: 'secret', stuck: false, locked: false, starts_open: false },
+    }),
   ).toBeNull()
 })
 
@@ -88,8 +91,26 @@ test('a single-cell room opens no edges', () => {
 test('the room key is the next free integer over existing areas', () => {
   const level = makeLevel({
     areas: [
-      { id: '1', name: '', description: '', cells: [[9, 9]], encounter: null, features: [], trap: null, treasure: null },
-      { id: '2', name: '', description: '', cells: [[8, 9]], encounter: null, features: [], trap: null, treasure: null },
+      {
+        id: '1',
+        name: '',
+        description: '',
+        cells: [[9, 9]],
+        encounter: null,
+        features: [],
+        trap: null,
+        treasure: null,
+      },
+      {
+        id: '2',
+        name: '',
+        description: '',
+        cells: [[8, 9]],
+        encounter: null,
+        features: [],
+        trap: null,
+        treasure: null,
+      },
     ],
   })
   const ops = roomOps(rectFrom([0, 0], [0, 0]), level, 'd', 1)
@@ -272,11 +293,25 @@ test('gesture begin and update track each tool shape', () => {
 
   const wall = beginGesture(
     'wall',
-    { kind: 'edge', key: '2,1:west', cells: [[2, 1], [1, 1]] },
+    {
+      kind: 'edge',
+      key: '2,1:west',
+      cells: [
+        [2, 1],
+        [1, 1],
+      ],
+    },
     level,
   )
   expect(wall).toEqual({ tool: 'wall', assignment: OPEN, keys: ['2,1:west'] })
-  const painted = updateGesture(wall!, { kind: 'edge', key: '3,1:west', cells: [[3, 1], [2, 1]] })
+  const painted = updateGesture(wall!, {
+    kind: 'edge',
+    key: '3,1:west',
+    cells: [
+      [3, 1],
+      [2, 1],
+    ],
+  })
   expect(painted).toMatchObject({ keys: ['2,1:west', '3,1:west'] })
 
   // The select tool starts no drag gesture.

@@ -243,7 +243,12 @@ function drawWallsAndDoors(ctx: CanvasRenderingContext2D, input: RenderInput): v
   }
 }
 
-function strokeSegment(ctx: CanvasRenderingContext2D, segment: Segment, color: string, width: number): void {
+function strokeSegment(
+  ctx: CanvasRenderingContext2D,
+  segment: Segment,
+  color: string,
+  width: number,
+): void {
   ctx.strokeStyle = color
   ctx.lineWidth = width
   ctx.lineCap = 'square'
@@ -253,7 +258,11 @@ function strokeSegment(ctx: CanvasRenderingContext2D, segment: Segment, color: s
   ctx.stroke()
 }
 
-function lerp(a: { x: number; y: number }, b: { x: number; y: number }, t: number): { x: number; y: number } {
+function lerp(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  t: number,
+): { x: number; y: number } {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
 }
 
@@ -291,7 +300,12 @@ function drawDoor(
   void mid
 }
 
-function drawSecretGlyph(ctx: CanvasRenderingContext2D, segment: Segment, theme: MapTheme, size: number): void {
+function drawSecretGlyph(
+  ctx: CanvasRenderingContext2D,
+  segment: Segment,
+  theme: MapTheme,
+  size: number,
+): void {
   const mid = lerp(segment.from, segment.to, 0.5)
   ctx.save()
   ctx.fillStyle = theme.paper
@@ -332,9 +346,23 @@ function drawTransitionGlyph(
     }
   } else if (kind === 'trapdoor') {
     ctx.strokeRect(point.x + size * 0.25, point.y + size * 0.25, size * 0.5, size * 0.5)
-    drawArrow(ctx, point.x + size * 0.5, point.y + size * 0.35, point.x + size * 0.5, point.y + size * 0.68, size)
+    drawArrow(
+      ctx,
+      point.x + size * 0.5,
+      point.y + size * 0.35,
+      point.x + size * 0.5,
+      point.y + size * 0.68,
+      size,
+    )
   } else {
-    drawArrow(ctx, point.x + size * 0.3, point.y + size * 0.3, point.x + size * 0.72, point.y + size * 0.72, size)
+    drawArrow(
+      ctx,
+      point.x + size * 0.3,
+      point.y + size * 0.3,
+      point.x + size * 0.72,
+      point.y + size * 0.72,
+      size,
+    )
   }
   ctx.restore()
 }
@@ -398,7 +426,12 @@ function drawMarker(ctx: CanvasRenderingContext2D, input: RenderInput, marker: M
   ctx.restore()
 }
 
-function strokeCell(ctx: CanvasRenderingContext2D, view: ViewTransform, cell: Position, inset: number): void {
+function strokeCell(
+  ctx: CanvasRenderingContext2D,
+  view: ViewTransform,
+  cell: Position,
+  inset: number,
+): void {
   const size = cellSizePx(view)
   const point = gridToCanvas(view, cell[0], cell[1])
   ctx.strokeRect(point.x + inset, point.y + inset, size - 2 * inset, size - 2 * inset)

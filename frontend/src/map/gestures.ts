@@ -39,7 +39,11 @@ export function beginGesture(tool: Tool, target: HitTarget, level: LevelSpec): G
     return { tool: 'corridor', path: [target.cell] }
   }
   if (tool === 'wall' && target.kind === 'edge') {
-    return { tool: 'wall', assignment: cycleAssignment(level.edges[target.key]), keys: [target.key] }
+    return {
+      tool: 'wall',
+      assignment: cycleAssignment(level.edges[target.key]),
+      keys: [target.key],
+    }
   }
   if (tool === 'area' && target.kind === 'cell') {
     return { tool: 'area', cells: [target.cell] }
@@ -57,7 +61,11 @@ export function updateGesture(gesture: Gesture, target: HitTarget): Gesture {
   if (gesture.tool === 'wall' && target.kind === 'edge' && !gesture.keys.includes(target.key)) {
     return { ...gesture, keys: [...gesture.keys, target.key] }
   }
-  if (gesture.tool === 'area' && target.kind === 'cell' && !containsCell(gesture.cells, target.cell)) {
+  if (
+    gesture.tool === 'area' &&
+    target.kind === 'cell' &&
+    !containsCell(gesture.cells, target.cell)
+  ) {
     return { ...gesture, cells: [...gesture.cells, target.cell] }
   }
   return gesture
@@ -215,7 +223,13 @@ export function areaPaintOps(
     if (!containsCell(union, cell)) union.push(cell)
   }
   return [
-    { op: 'set_area_cells', dungeon_id: dungeonId, level_number: levelNumber, area_id: areaId, cells: union },
+    {
+      op: 'set_area_cells',
+      dungeon_id: dungeonId,
+      level_number: levelNumber,
+      area_id: areaId,
+      cells: union,
+    },
   ]
 }
 
