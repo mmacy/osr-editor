@@ -46,14 +46,19 @@ OverrideKind = Literal["monsters", "monster_templates", "areas", "geometry", "to
 
 
 class SetMonsterRemap(BaseModel):
-    """Remap an extracted monster name to a catalog (or emitted custom) template."""
+    """Remap an extracted monster name to a catalog (or emitted custom) template.
+
+    `template_id` and any supplied `reason` mirror forge's own non-empty
+    constraints (`MonsterOverride`), so a malformed empty value is rejected at
+    request parse (`request_invalid`) rather than surfacing at the commit.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     edit: Literal["set_monster_remap"] = "set_monster_remap"
     name: str
-    template_id: str
-    reason: str | None = None
+    template_id: Annotated[str, Field(min_length=1)]
+    reason: Annotated[str, Field(min_length=1)] | None = None
 
 
 class RemoveMonsterRemap(BaseModel):
@@ -98,7 +103,7 @@ class SetTemplatePatch(BaseModel):
     edit: Literal["set_template_patch"] = "set_template_patch"
     name: str
     patch: StatBlockPatch
-    reason: str | None = None
+    reason: Annotated[str, Field(min_length=1)] | None = None
 
 
 class RemoveTemplatePatch(BaseModel):

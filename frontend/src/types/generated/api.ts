@@ -3133,6 +3133,10 @@ export interface components {
         /**
          * SetMonsterRemap
          * @description Remap an extracted monster name to a catalog (or emitted custom) template.
+         *
+         *     `template_id` and any supplied `reason` mirror forge's own non-empty
+         *     constraints (`MonsterOverride`), so a malformed empty value is rejected at
+         *     request parse (`request_invalid`) rather than surfacing at the commit.
          */
         SetMonsterRemap: {
             /**

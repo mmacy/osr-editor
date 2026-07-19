@@ -188,3 +188,24 @@ def test_route_applies_and_guards_native(tmp_path: Path) -> None:
     guarded = client.post(f"/api/projects/{native['id']}/forge/overrides", json=body)
     assert guarded.status_code == 422
     assert guarded.json()["error"]["code"] == "not_a_forge_project"
+
+
+def test_route_rejects_malformed_empty_fields_as_request_invalid(tmp_path: Path) -> None:
+    # The request models mirror forge's non-empty constraints, so an empty
+    # template_id or reason is a malformed request (422 request_invalid), never a
+    # 500 at the commit.
+    client = TestClient(create_app())
+    workdir = tmp_path / "vault.forge"
+    shutil.copytree(FIXTURE, workdir)
+    opened = client.post("/api/projects/open", json={"path": str(workdir)}).json()
+    for edit in (
+        {"edit": "set_monster_remap", "name": "drowned one", "template_id": ""},
+        {"edit": "set_monster_remap", "name": "drowned one", "template_id": "goblin", "reason": ""},
+        {"edit": "set_template_patch", "name": "vault warden", "patch": {"ac": "4"}, "reason": ""},
+    ):
+        response = client.post(
+            f"/api/projects/{opened['id']}/forge/overrides",
+            json={"revision": opened["revision"], "edits": [edit]},
+        )
+        assert response.status_code == 422, edit
+        assert response.json()["error"]["code"] == "request_invalid", edit
