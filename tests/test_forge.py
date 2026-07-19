@@ -193,3 +193,24 @@ def test_stale_revision_is_a_409(tmp_path: Path) -> None:
     service.commit_forge_overrides(project, project.revision, _module_override("First."), ("module",))
     with pytest.raises(StaleRevisionError):
         service.commit_forge_overrides(project, "r1", _module_override("Second."), ("module",))
+
+
+def test_reproducibility_invariant(tmp_path: Path) -> None:
+    # The definition of done, proven literally: after an editor session, running
+    # forge's own assemble() over the workdir reproduces the session's
+    # adventure.json, report.json, and previews byte-for-byte — the editor added
+    # corrections, never hand-edits.
+    from osrforge import assemble
+
+    service, project = open_forge(tmp_path)
+    service.commit_forge_overrides(project, project.revision, _module_override("A corrected pitch."), ("module",))
+    workdir = Path(project.path)
+    adventure = (workdir / "adventure.json").read_bytes()
+    report = (workdir / "report.json").read_bytes()
+    previews = {path.name: path.read_bytes() for path in (workdir / "previews").glob("*.svg")}
+
+    assemble(workdir)
+
+    assert (workdir / "adventure.json").read_bytes() == adventure
+    assert (workdir / "report.json").read_bytes() == report
+    assert {path.name: path.read_bytes() for path in (workdir / "previews").glob("*.svg")} == previews

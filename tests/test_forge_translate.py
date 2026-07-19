@@ -59,12 +59,14 @@ def _candidate(assembled: Adventure, ops: tuple) -> Adventure:
 
 
 def _normalize(adventure: Adventure) -> dict:
-    """Project a document to the derivation-aware equivalence: drop derived dimensions and bundled monsters.
+    """Project a document to the derivation-aware equivalence.
 
-    The round-trip theorem holds modulo level `width`/`height` (forge recomputes
-    them as the plan's bounding box) and `Adventure.monsters` (assembly bundles
-    only the custom templates the built encounters still reference); everything
-    else must match exactly.
+    The round-trip theorem holds modulo edge representation (an absent entry and
+    an explicit `Edge(kind="wall")` are the same wall — the native model expresses
+    by absence what forge's merge stores as a seal), level `width`/`height` (forge
+    recomputes them as the plan's bounding box), and `Adventure.monsters` (assembly
+    bundles only the custom templates the built encounters still reference);
+    everything else must match exactly.
     """
     data = adventure.model_dump(mode="json")
     data["monsters"] = "<bundled>"
@@ -72,6 +74,8 @@ def _normalize(adventure: Adventure) -> dict:
         for level in dungeon["levels"]:
             level["width"] = "<derived>"
             level["height"] = "<derived>"
+            # Strip explicit-wall entries so absence and a wall seal compare equal.
+            level["edges"] = {key: edge for key, edge in level["edges"].items() if edge["kind"] != "wall"}
     return data
 
 
@@ -150,12 +154,37 @@ def test_round_trip_remove_survey_area(tmp_path: Path) -> None:
     assert fstate(project).overrides.areas[f"{DUNGEON}/1/3"].remove is True
 
 
-def test_round_trip_set_edges_and_seal(tmp_path: Path) -> None:
+def test_round_trip_draw_open_edge(tmp_path: Path) -> None:
     service, project = open_forge(tmp_path)
-    # Draw an open edge, then a wall seal — the wall gesture over a synthesized
-    # opening lands as an explicit Edge(kind=wall).
     ops = (SetEdges(dungeon_id=DUNGEON, level_number=1, edges={"1,1:north": Edge(kind=EdgeKind.OPEN)}),)
     assert_round_trip(service, project, ops)
+
+
+def _first_open_edge(project) -> str:
+    level = next(lvl for d in project.adventure.dungeons for lvl in d.levels if lvl.number == 1)
+    return next(key for key, edge in level.edges.items() if edge.kind is EdgeKind.OPEN)
+
+
+def test_wall_gesture_over_a_synthesized_opening_lands_an_explicit_wall_seal(tmp_path: Path) -> None:
+    # Deleting a synthesized-open edge (the native wall gesture) must translate to
+    # an explicit Edge(kind=wall) — the seal forge's merge stores over synthesis.
+    service, project = open_forge(tmp_path)
+    open_key = _first_open_edge(project)
+    ops = (SetEdges(dungeon_id=DUNGEON, level_number=1, edges={open_key: None}),)
+    assert_round_trip(service, project, ops)
+    edges = fstate(project).overrides.geometry[f"{DUNGEON}/1"].edges
+    assert edges[open_key].kind is EdgeKind.WALL
+
+
+def test_edge_edit_matching_the_assembled_state_is_a_no_op(tmp_path: Path) -> None:
+    # Re-asserting an edge the assembled document already holds emits no entry —
+    # the semantic diff detects the no-op.
+    service, project = open_forge(tmp_path)
+    open_key = _first_open_edge(project)
+    ops = (SetEdges(dungeon_id=DUNGEON, level_number=1, edges={open_key: Edge(kind=EdgeKind.OPEN)}),)
+    service.apply_batch(project, OpBatch(revision=project.revision, ops=ops))
+    geometry = fstate(project).overrides.geometry.get(f"{DUNGEON}/1")
+    assert geometry is None or open_key not in geometry.edges
 
 
 def test_round_trip_set_entrance(tmp_path: Path) -> None:

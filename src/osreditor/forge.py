@@ -30,6 +30,7 @@ from osreditor.addresses import area_address, dungeon_address, level_address
 from osreditor.errors import (
     ForgeOverrideInvalidError,
     ForgeRerunInvalidError,
+    ForgeSettingsInvalidError,
     ForgeWorkdirIncompleteError,
     ForgeWorkdirInvalidError,
 )
@@ -50,6 +51,7 @@ __all__ = [
 ]
 
 OVERRIDES_ARTIFACT = "overrides.yaml"
+_MAX_REPORTED_LOCATIONS = 10
 
 
 @dataclass(frozen=True)
@@ -275,17 +277,28 @@ def rerun_assemble(store: ProjectStore, project_id: str, settings_updates: dict[
         The conversion result carrying the refreshed run, adventure, and report.
 
     Raises:
+        ForgeSettingsInvalidError: An unknown knob or an out-of-range value
+            (mapped to `request_invalid`).
+        ForgeOverrideInvalidError: A broken `overrides.yaml` surfaced by the
+            re-assembly (unreachable in practice — the editor only writes valid
+            overrides — but mapped for completeness).
         ForgeRerunInvalidError: A knob→owning-stage drift, a stage precondition,
             or a missing cache — forge's message verbatim.
-        pydantic.ValidationError: An unknown knob or an out-of-range value.
     """
     try:
         return rerun(store.materialize(project_id), Stage.ASSEMBLE, settings_updates=settings_updates)
-    except ValidationError:
+    except ValidationError as error:
         # An unknown knob or an out-of-range value — pydantic.ValidationError is a
-        # subclass of ValueError, so it must be caught first and propagated to the
-        # request_invalid handler, never folded into forge_rerun_invalid.
-        raise
+        # subclass of ValueError, so it must be caught first and typed here, never
+        # folded into forge_rerun_invalid nor mapped app-wide (which would let an
+        # internal validation bug masquerade as a bad request).
+        reported = [
+            {"path": "/".join(str(part) for part in detail["loc"]), "message": str(detail["msg"])}
+            for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
+        ]
+        raise ForgeSettingsInvalidError("the rerun settings are invalid", errors=reported) from error
+    except OverrideError as error:
+        raise ForgeOverrideInvalidError(str(error)) from error
     except ValueError as error:
         raise ForgeRerunInvalidError(str(error)) from error
 

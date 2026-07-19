@@ -12,6 +12,7 @@ __all__ = [
     "ForgeOverrideInvalidError",
     "ForgePageNotFoundError",
     "ForgeRerunInvalidError",
+    "ForgeSettingsInvalidError",
     "ForgeWorkdirIncompleteError",
     "ForgeWorkdirInvalidError",
     "ImportSourceInvalidError",
@@ -173,6 +174,29 @@ class ForgeRerunInvalidError(OsrEditorError):
     guard's message already carries its remedy, and the editor never
     discriminates forge's errors by message-sniffing.
     """
+
+
+class ForgeSettingsInvalidError(OsrEditorError):
+    """A rerun's settings update names an unknown knob or an out-of-range value.
+
+    Typed at the bridge rather than mapping `pydantic.ValidationError` app-wide,
+    so an internal validation bug elsewhere can never masquerade as a bad request
+    (the same posture [`DocumentPayloadInvalidError`][osreditor.errors.DocumentPayloadInvalidError]
+    keeps for document loads).
+
+    Attributes:
+        errors: One `{"path", "message"}` entry per offending field.
+    """
+
+    def __init__(self, message: str, *, errors: list[dict[str, str]]) -> None:
+        """Build the error.
+
+        Args:
+            message: What went wrong.
+            errors: One `{"path", "message"}` entry per offending field.
+        """
+        super().__init__(message)
+        self.errors = errors
 
 
 class OpUnsupportedForgeError(OsrEditorError):

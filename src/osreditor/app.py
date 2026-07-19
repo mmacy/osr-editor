@@ -30,7 +30,7 @@ from fastapi.staticfiles import StaticFiles
 from osrlib.crawl.adventure import Adventure
 from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION, engine_version
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from osreditor.catalogs import (
     EncounterTableCatalogResponse,
@@ -50,6 +50,7 @@ from osreditor.errors import (
     ForgeOverrideInvalidError,
     ForgePageNotFoundError,
     ForgeRerunInvalidError,
+    ForgeSettingsInvalidError,
     ForgeWorkdirIncompleteError,
     ForgeWorkdirInvalidError,
     ImporterNotFoundError,
@@ -960,6 +961,11 @@ def _details_op_unsupported_forge(error: Exception) -> dict[str, object] | None:
     return {"op": error.op, "address": error.address}
 
 
+def _details_forge_settings_invalid(error: Exception) -> dict[str, object] | None:
+    assert isinstance(error, ForgeSettingsInvalidError)
+    return {"errors": error.errors}
+
+
 _MAX_REPORTED_LOCATIONS = 10
 
 
@@ -1001,6 +1007,7 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
         _details_none,
     ),
     ForgeRerunInvalidError: (422, "forge_rerun_invalid", None, _details_none),
+    ForgeSettingsInvalidError: (422, "request_invalid", "the request is malformed", _details_forge_settings_invalid),
     OpUnsupportedForgeError: (422, "op_unsupported_forge", None, _details_op_unsupported_forge),
     ForgePageNotFoundError: (404, "forge_page_not_found", None, _details_none),
     NotAForgeProjectError: (422, "not_a_forge_project", None, _details_none),
@@ -1076,21 +1083,6 @@ def _request_validation_error_handler(request: Request, error: Exception) -> JSO
     return _error_response(422, "request_invalid", "the request is malformed", details={"errors": reported})
 
 
-def _validation_error_handler(request: Request, error: Exception) -> JSONResponse:
-    """Map a pydantic `ValidationError` raised inside a handler into the one envelope.
-
-    Forge's own settings validation raises this on an unknown rerun knob or an
-    out-of-range value — the spec's `request_invalid` channel for a bad forge
-    settings update.
-    """
-    assert isinstance(error, ValidationError)
-    reported = [
-        {"path": json_pointer(detail.get("loc", ())), "message": str(detail.get("msg", ""))}
-        for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
-    ]
-    return _error_response(422, "request_invalid", "the request is malformed", details={"errors": reported})
-
-
 def create_app(open_at_launch: Path | None = None) -> FastAPI:
     """Build the FastAPI app: state, API routes, error handlers, then the static mount.
 
@@ -1112,7 +1104,6 @@ def create_app(open_at_launch: Path | None = None) -> FastAPI:
     for error_type, (status, code, remedy, details) in _ERROR_MAPPINGS.items():
         app.add_exception_handler(error_type, _make_handler(status, code, remedy, details))
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)
-    app.add_exception_handler(ValidationError, _validation_error_handler)
     app.include_router(router)
     # Mounted last so API routes always win; guarded so a dev backend without a
     # built frontend still boots and serves /api.
