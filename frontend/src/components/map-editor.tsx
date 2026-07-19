@@ -169,6 +169,7 @@ export function MapEditor({
     setSelection(null)
     setGesture(null)
     setHover(null)
+    setCardIntent(null)
   }
 
   // Fit-level-on-open, derived: user interactions set the view state; until
@@ -463,7 +464,7 @@ export function MapEditor({
       return
     }
     intentToken.current += 1
-    setCardIntent({ card: entry.card, action: entry.action, token: intentToken.current })
+    setCardIntent({ areaId, card: entry.card, action: entry.action, token: intentToken.current })
   }
 
   // The hover line: the cell/edge ref plus the hovered area's one-line

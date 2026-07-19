@@ -69,6 +69,14 @@ export const REACTION_RESULTS = [
   'friendly',
 ] as const satisfies readonly ReactionResult[]
 
+export const ALIGNMENTS = ['lawful', 'neutral', 'chaotic'] as const satisfies readonly Alignment[]
+
+export const FEATURE_KINDS = [
+  'treasure_cache',
+  'construction_trick',
+  'custom',
+] as const satisfies readonly FeatureSpec['kind'][]
+
 export interface AreaTarget {
   dungeonId: string
   levelNumber: number
@@ -157,15 +165,19 @@ export function encounterAddLineOps(
   return encounterOps(target, { ...current, monsters: [...current.monsters, line] })
 }
 
-export function encounterSetLineOps(
+// Patch one line against its committed value — a count edit must not revert a
+// concurrent edit to the same line's other fields.
+export function encounterLinePatchOps(
   document: Adventure,
   target: AreaTarget,
   index: number,
-  line: KeyedMonster,
+  patch: Partial<KeyedMonster>,
 ): AnyEditOp[] {
   const current = findArea(document, target)?.encounter
   if (!current || index < 0 || index >= current.monsters.length) return []
-  const monsters = current.monsters.map((existing, at) => (at === index ? line : existing))
+  const monsters = current.monsters.map((existing, at) =>
+    at === index ? { ...existing, ...patch } : existing,
+  )
   return encounterOps(target, { ...current, monsters })
 }
 
@@ -184,8 +196,6 @@ export function encounterRemoveLineOps(
   return encounterOps(target, { ...current, monsters })
 }
 
-const ALL_ALIGNMENTS: Alignment[] = ['lawful', 'neutral', 'chaotic']
-
 // The alignment select's options: the intersection of every line's template
 // options. A dangling template constrains nothing (its options are unknown),
 // so the intersection runs over the resolvable lines only.
@@ -193,7 +203,7 @@ export function alignmentIntersection(
   lines: readonly KeyedMonster[],
   optionsFor: (templateId: string) => readonly Alignment[] | null,
 ): Alignment[] {
-  let options = ALL_ALIGNMENTS
+  let options: Alignment[] = [...ALIGNMENTS]
   for (const line of lines) {
     const templateOptions = optionsFor(line.template_id)
     if (templateOptions === null) continue
@@ -264,6 +274,16 @@ export function areaTrapPatchOps(
   const current = findArea(document, target)?.trap
   if (!current) return []
   return areaTrapOps(target, { ...current, ...patch })
+}
+
+export function areaTrapEffectPatchOps(
+  document: Adventure,
+  target: AreaTarget,
+  patch: Partial<TrapEffect>,
+): AnyEditOp[] {
+  const current = findArea(document, target)?.trap
+  if (!current) return []
+  return areaTrapOps(target, { ...current, effect: patchTrapEffect(current.effect, patch) })
 }
 
 // --- treasure ---
@@ -343,17 +363,21 @@ export function featureAddOps(scope: FeatureScope, feature: FeatureSpec): AnyEdi
   ]
 }
 
-// Whole-value replacement with the patch merged over the committed feature —
-// the spec's SetFeatureField slot at the card's commit grain. The trap-kind
-// pin rides the patch: cache trap builders always pass kind "treasure" traps.
-export function featurePatchOps(
+// Whole-value replacement with an update computed from the committed feature —
+// the spec's SetFeatureField slot at the card's commit grain. Collection edits
+// (items, coins, valuables, the cache trap) must compute their next value
+// inside the queue, or a payload built from the render-time feature queued
+// behind an in-flight commit silently reverts it. `null` skips the batch.
+export function featureUpdateOps(
   document: Adventure,
   scope: FeatureScope,
   featureId: string,
-  patch: Partial<FeatureSpec>,
+  update: (committed: FeatureSpec) => Partial<FeatureSpec> | null,
 ): AnyEditOp[] {
   const current = scopeFeatures(document, scope)?.find((feature) => feature.id === featureId)
   if (!current) return []
+  const patch = update(current)
+  if (patch === null) return []
   return [
     {
       op: 'set_feature',
@@ -364,6 +388,17 @@ export function featurePatchOps(
       feature: { ...current, ...patch },
     },
   ]
+}
+
+// The state-independent form: a patch whose values don't derive from the
+// current feature (kind, description, cell, a rename).
+export function featurePatchOps(
+  document: Adventure,
+  scope: FeatureScope,
+  featureId: string,
+  patch: Partial<FeatureSpec>,
+): AnyEditOp[] {
+  return featureUpdateOps(document, scope, featureId, () => patch)
 }
 
 export function featureRemoveOps(scope: FeatureScope, featureId: string): AnyEditOp[] {

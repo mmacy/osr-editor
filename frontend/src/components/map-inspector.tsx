@@ -101,11 +101,14 @@ function AreaInspector({
   onSelectionChange: (selection: MapSelection | null) => void
   cardIntent: CardIntent | null
 }) {
-  // The context menu's description intent lands focus in the prose field.
+  // The context menu's description intent lands focus in the prose field —
+  // only the intent raised on this very area; a stale one focuses nothing.
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
   useEffect(() => {
-    if (cardIntent?.card === 'description') descriptionRef.current?.focus()
-  }, [cardIntent])
+    if (cardIntent?.card === 'description' && cardIntent.areaId === area.id) {
+      descriptionRef.current?.focus()
+    }
+  }, [cardIntent, area.id])
   const commitField = (field: 'id' | 'name' | 'description', value: string) => {
     void projectStore
       .getState()

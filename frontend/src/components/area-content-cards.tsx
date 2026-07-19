@@ -13,6 +13,7 @@ import { MonsterPicker } from '@/components/monster-picker'
 import { TrapBuilder } from '@/components/trap-builder'
 import { TreasureTypePicker } from '@/components/treasure-type-picker'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -20,23 +21,28 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
 import { effectiveMonsterCatalog, loadMonsterCatalog, useCatalog } from '@/lib/catalogs'
 import {
+  FEATURE_KINDS,
   REACTION_RESULTS,
   alignmentIntersection,
+  areaTrapEffectPatchOps,
   areaTrapOps,
   areaTrapPatchOps,
   emptyFeature,
   emptyTrap,
   encounterAddLineOps,
+  encounterLinePatchOps,
   encounterOps,
   encounterPatchOps,
   encounterRemoveLineOps,
-  encounterSetLineOps,
   featureAddOps,
   featurePatchOps,
   featureRemoveOps,
+  featureUpdateOps,
+  findArea,
   findLevel,
   nextFreeFeatureKey,
   parseCount,
+  patchTrapEffect,
   toggleTreasureLetter,
   treasureOps,
   type AreaTarget,
@@ -67,9 +73,12 @@ const SELECT_CLASS = 'h-8 rounded-md border border-input bg-transparent px-2 tex
 
 // The one-shot intent the stocking context menu sets: which card to expand
 // and, for an add action, which flow to start. `token` distinguishes repeated
-// intents for the same card.
+// intents for the same card; `areaId` pins the intent to the area it was
+// raised on — the inspector remounts per area, so without the pin a stale
+// intent would replay its add on whatever area is selected next.
 export type ContentCardKind = 'encounter' | 'treasure' | 'trap' | 'features'
 export interface CardIntent {
+  areaId: string
   card: ContentCardKind | 'description'
   action: 'edit' | 'add'
   token: number
@@ -168,7 +177,7 @@ export function AreaContentCards({
   // effect. Encounter and treasure start adding through their expanded empty
   // state (the picker, the letters radio), no commit needed here.
   const [seenToken, setSeenToken] = useState<number | null>(null)
-  if (intent && intent.token !== seenToken) {
+  if (intent && intent.areaId === area.id && intent.token !== seenToken) {
     setSeenToken(intent.token)
     if (intent.card !== 'description') {
       setExpanded((current) => new Set(current).add(intent.card as ContentCardKind))
@@ -176,7 +185,7 @@ export function AreaContentCards({
   }
   const committedToken = useRef<number | null>(null)
   useEffect(() => {
-    if (!intent || intent.token === committedToken.current) return
+    if (!intent || intent.areaId !== area.id || intent.token === committedToken.current) return
     committedToken.current = intent.token
     if (intent.action !== 'add') return
     if (intent.card === 'trap' && !area.trap) {
@@ -275,9 +284,7 @@ function EncounterCard({
                   if (!count) return
                   void projectStore
                     .getState()
-                    .commit((current) =>
-                      encounterSetLineOps(current, target, index, { ...line, ...count }),
-                    )
+                    .commit((current) => encounterLinePatchOps(current, target, index, count))
                 }}
                 onRemove={() => {
                   void projectStore
@@ -325,11 +332,10 @@ function EncounterCard({
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={encounter.aware}
-              onChange={(event) => {
-                const aware = event.target.checked
+              onCheckedChange={(checked) => {
+                const aware = checked === true
                 void projectStore
                   .getState()
                   .commit((current) => encounterPatchOps(current, target, { aware }))
@@ -483,8 +489,14 @@ function TreasureCard({
             <TreasureTypePicker
               selected={treasure && !treasure.unguarded ? treasure.letters : []}
               onToggle={(letter) => {
-                const next = toggleTreasureLetter(treasure, letter)
-                if (next) commitTreasure(next)
+                // The picker stays open across toggles, so the next tuple must
+                // compute inside the queue against the committed spec — a
+                // render-time value would drop a rapid earlier pick.
+                void projectStore.getState().commit((current) => {
+                  const committed = findArea(current, target)?.treasure ?? null
+                  const next = toggleTreasureLetter(committed, letter)
+                  return next ? treasureOps(target, next) : []
+                })
               }}
             />
             {!treasure && (
@@ -546,10 +558,15 @@ function TrapCard({
             document={document}
             sourceCell={area.cells[0]}
             idPrefix="area-trap"
-            onCommit={(next) => {
+            onPatch={(patch) => {
               void projectStore
                 .getState()
-                .commit((current) => areaTrapPatchOps(current, target, next))
+                .commit((current) => areaTrapPatchOps(current, target, patch))
+            }}
+            onEffectPatch={(patch) => {
+              void projectStore
+                .getState()
+                .commit((current) => areaTrapEffectPatchOps(current, target, patch))
             }}
           />
           <Button
@@ -619,7 +636,6 @@ export function FeaturesCard({
   )
 }
 
-const FEATURE_KINDS: FeatureSpec['kind'][] = ['treasure_cache', 'construction_trick', 'custom']
 const COIN_KEYS = ['pp', 'gp', 'ep', 'sp', 'cp'] as const
 
 export function FeatureEditor({
@@ -641,6 +657,14 @@ export function FeatureEditor({
     void projectStore
       .getState()
       .commit((current) => featurePatchOps(current, scope, feature.id, value))
+  }
+  // Collection edits (items, coins, valuables, the cache trap) compute their
+  // next value from the committed feature inside the queue — never from the
+  // render-time prop.
+  const update = (build: (committed: FeatureSpec) => Partial<FeatureSpec> | null) => {
+    void projectStore
+      .getState()
+      .commit((current) => featureUpdateOps(current, scope, feature.id, build))
   }
   const commitId = (value: string) => {
     setIdError(null)
@@ -770,7 +794,13 @@ export function FeatureEditor({
                       type="button"
                       aria-label={`Remove ${itemId}`}
                       onClick={() =>
-                        patch({ item_ids: feature.item_ids.filter((_, at) => at !== index) })
+                        update((committed) => {
+                          const at = committed.item_ids.indexOf(itemId)
+                          if (at === -1) return null
+                          return {
+                            item_ids: committed.item_ids.filter((_, index) => index !== at),
+                          }
+                        })
                       }
                     >
                       <XIcon className="size-3" />
@@ -780,17 +810,26 @@ export function FeatureEditor({
               </ul>
             )}
             <EquipmentPicker
-              onPick={(itemId) => patch({ item_ids: [...feature.item_ids, itemId] })}
+              onPick={(itemId) =>
+                update((committed) => ({ item_ids: [...committed.item_ids, itemId] }))
+              }
             />
           </div>
           <CoinsEditor
             idPrefix={`feature-${feature.id}`}
             coins={feature.coins}
-            onCommit={(coins) => patch({ coins })}
+            onCommitDenomination={(denomination, value) =>
+              update((committed) => ({ coins: { ...committed.coins, [denomination]: value } }))
+            }
           />
           <ValuablesEditor
             valuables={feature.valuables}
-            onCommit={(valuables) => patch({ valuables })}
+            onUpdate={(build) =>
+              update((committed) => {
+                const next = build(committed.valuables)
+                return next === null ? null : { valuables: next }
+              })
+            }
           />
           {feature.kind === 'treasure_cache' && (
             <div className="flex flex-col gap-2">
@@ -802,7 +841,23 @@ export function FeatureEditor({
                     document={document}
                     sourceCell={feature.cell ?? cellHint ?? [0, 0]}
                     idPrefix={`feature-${feature.id}-trap`}
-                    onCommit={(trap) => patch({ trap })}
+                    onPatch={(trapPatch) =>
+                      update((committed) =>
+                        committed.trap ? { trap: { ...committed.trap, ...trapPatch } } : null,
+                      )
+                    }
+                    onEffectPatch={(effectPatch) =>
+                      update((committed) =>
+                        committed.trap
+                          ? {
+                              trap: {
+                                ...committed.trap,
+                                effect: patchTrapEffect(committed.trap.effect, effectPatch),
+                              },
+                            }
+                          : null,
+                      )
+                    }
                   />
                   <Button
                     variant="outline"
@@ -844,11 +899,11 @@ export function FeatureEditor({
 function CoinsEditor({
   idPrefix,
   coins,
-  onCommit,
+  onCommitDenomination,
 }: {
   idPrefix: string
   coins: Coins
-  onCommit: (coins: Coins) => void
+  onCommitDenomination: (denomination: (typeof COIN_KEYS)[number], value: number) => void
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -860,7 +915,7 @@ function CoinsEditor({
             id={`${idPrefix}-${denomination}`}
             label={denomination}
             value={coins[denomination]}
-            onCommit={(value) => onCommit({ ...coins, [denomination]: value })}
+            onCommit={(value) => onCommitDenomination(denomination, value)}
           />
         ))}
       </div>
@@ -896,10 +951,10 @@ function CoinField({
 
 function ValuablesEditor({
   valuables,
-  onCommit,
+  onUpdate,
 }: {
   valuables: readonly ValuableSpec[]
-  onCommit: (valuables: ValuableSpec[]) => void
+  onUpdate: (build: (committed: readonly ValuableSpec[]) => ValuableSpec[] | null) => void
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -908,10 +963,20 @@ function ValuablesEditor({
         <ValuableRow
           key={index}
           valuable={valuable}
-          onCommit={(next) =>
-            onCommit(valuables.map((existing, at) => (at === index ? next : existing)))
+          onPatch={(rowPatch) =>
+            onUpdate((committed) =>
+              index < committed.length
+                ? committed.map((existing, at) =>
+                    at === index ? { ...existing, ...rowPatch } : existing,
+                  )
+                : null,
+            )
           }
-          onRemove={() => onCommit(valuables.filter((_, at) => at !== index))}
+          onRemove={() =>
+            onUpdate((committed) =>
+              index < committed.length ? committed.filter((_, at) => at !== index) : null,
+            )
+          }
         />
       ))}
       <Button
@@ -919,7 +984,10 @@ function ValuablesEditor({
         size="sm"
         className="self-start"
         onClick={() =>
-          onCommit([...valuables, { kind: 'gem', name: '', value_gp: 0, weight_coins: 0 }])
+          onUpdate((committed) => [
+            ...committed,
+            { kind: 'gem', name: '', value_gp: 0, weight_coins: 0 },
+          ])
         }
       >
         Add valuable
@@ -930,22 +998,22 @@ function ValuablesEditor({
 
 function ValuableRow({
   valuable,
-  onCommit,
+  onPatch,
   onRemove,
 }: {
   valuable: ValuableSpec
-  onCommit: (valuable: ValuableSpec) => void
+  onPatch: (patch: Partial<ValuableSpec>) => void
   onRemove: () => void
 }) {
-  const name = useCommittedField(valuable.name, (value) => onCommit({ ...valuable, name: value }))
+  const name = useCommittedField(valuable.name, (value) => onPatch({ name: value }))
   const value = useCommittedField(
     String(valuable.value_gp),
-    (draft) => onCommit({ ...valuable, value_gp: Number(draft) }),
+    (draft) => onPatch({ value_gp: Number(draft) }),
     nonNegativeInteger,
   )
   const weight = useCommittedField(
     String(valuable.weight_coins),
-    (draft) => onCommit({ ...valuable, weight_coins: Number(draft) }),
+    (draft) => onPatch({ weight_coins: Number(draft) }),
     nonNegativeInteger,
   )
   return (
@@ -954,9 +1022,7 @@ function ValuableRow({
         className={SELECT_CLASS}
         aria-label="Valuable kind"
         value={valuable.kind}
-        onChange={(event) =>
-          onCommit({ ...valuable, kind: event.target.value as ValuableSpec['kind'] })
-        }
+        onChange={(event) => onPatch({ kind: event.target.value as ValuableSpec['kind'] })}
       >
         <option value="gem">gem</option>
         <option value="jewellery">jewellery</option>

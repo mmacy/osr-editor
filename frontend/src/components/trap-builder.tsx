@@ -1,17 +1,19 @@
 // The composable TrapSpec builder, shared by the area trap card (kind pinned
 // "room") and the treasure-cache trap (kind pinned "treasure") — the kind is
-// never asked for; where the trap lives decides it. Every field change
-// commits the whole next TrapSpec through the owner's onCommit, and the
-// validators' implications hold by construction: volley enables only with
-// damage, duration only with a condition (patchTrapEffect clears dependents).
+// never asked for; where the trap lives decides it. Every field change emits
+// a patch through onPatch/onEffectPatch; the owner merges it against the
+// committed trap inside the store's queue (patchTrapEffect holding the
+// validators' implications: volley only with damage, duration only with a
+// condition), so a queued edit never reverts an in-flight one.
 import { useState } from 'react'
 
 import { MiniLevelPicker } from '@/components/mini-level-picker'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
-import { CONDITIONS, SAVE_CATEGORIES, TIME_UNITS, patchTrapEffect } from '@/lib/content-builders'
+import { CONDITIONS, SAVE_CATEGORIES, TIME_UNITS } from '@/lib/content-builders'
 import { parseDice } from '@/lib/notation'
 import type {
   Adventure,
@@ -74,16 +76,17 @@ export function TrapBuilder({
   document,
   sourceCell,
   idPrefix,
-  onCommit,
+  onPatch,
+  onEffectPatch,
 }: {
   trap: TrapSpec
   document: Adventure
   sourceCell: Position
   idPrefix: string
-  onCommit: (trap: TrapSpec) => void
+  onPatch: (patch: Partial<TrapSpec>) => void
+  onEffectPatch: (patch: Partial<TrapEffect>) => void
 }) {
-  const patchEffect = (patch: Partial<TrapEffect>) =>
-    onCommit({ ...trap, effect: patchTrapEffect(trap.effect, patch) })
+  const patchEffect = onEffectPatch
   const effect = trap.effect
   const duration = useCommittedField(
     effect.condition_duration_dice ??
@@ -129,9 +132,7 @@ export function TrapBuilder({
             id={`${idPrefix}-trigger`}
             className={SELECT_CLASS}
             value={trap.trigger}
-            onChange={(event) =>
-              onCommit({ ...trap, trigger: event.target.value as TrapSpec['trigger'] })
-            }
+            onChange={(event) => onPatch({ trigger: event.target.value as TrapSpec['trigger'] })}
           >
             <option value="enter">enter</option>
             <option value="open">open</option>
@@ -143,9 +144,7 @@ export function TrapBuilder({
             id={`${idPrefix}-affects`}
             className={SELECT_CLASS}
             value={trap.affects}
-            onChange={(event) =>
-              onCommit({ ...trap, affects: event.target.value as TrapSpec['affects'] })
-            }
+            onChange={(event) => onPatch({ affects: event.target.value as TrapSpec['affects'] })}
           >
             <option value="triggerer">triggerer</option>
             <option value="party">party</option>
@@ -236,10 +235,9 @@ export function TrapBuilder({
         )}
       </div>
       <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={effect.kills}
-          onChange={(event) => patchEffect({ kills: event.target.checked })}
+          onCheckedChange={(checked) => patchEffect({ kills: checked === true })}
         />
         Save or die
       </label>

@@ -3,9 +3,17 @@
 // time and under vitest — instead of silently loosening types.
 import { expectTypeOf, test } from 'vitest'
 
-import { CONDITIONS, REACTION_RESULTS, SAVE_CATEGORIES, TIME_UNITS } from '@/lib/content-builders'
+import {
+  ALIGNMENTS,
+  CONDITIONS,
+  FEATURE_KINDS,
+  REACTION_RESULTS,
+  SAVE_CATEGORIES,
+  TIME_UNITS,
+} from '@/lib/content-builders'
 import type {
   AddTransition,
+  Alignment,
   AnyEditOp,
   AreaTreasureSpec,
   CatalogMonster,
@@ -140,6 +148,10 @@ test('the enum option lists stay exhaustive', () => {
   expectTypeOf<Exclude<SaveCategory, (typeof SAVE_CATEGORIES)[number]>>().toEqualTypeOf<never>()
   expectTypeOf<Exclude<TimeUnit, (typeof TIME_UNITS)[number]>>().toEqualTypeOf<never>()
   expectTypeOf<Exclude<ReactionResult, (typeof REACTION_RESULTS)[number]>>().toEqualTypeOf<never>()
+  expectTypeOf<Exclude<Alignment, (typeof ALIGNMENTS)[number]>>().toEqualTypeOf<never>()
+  expectTypeOf<
+    Exclude<FeatureSpec['kind'], (typeof FEATURE_KINDS)[number]>
+  >().toEqualTypeOf<never>()
 })
 
 test('the importer payload translations hold', () => {

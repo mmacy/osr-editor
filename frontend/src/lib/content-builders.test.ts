@@ -2,14 +2,16 @@ import { describe, expect, test } from 'vitest'
 
 import {
   alignmentIntersection,
+  areaTrapEffectPatchOps,
   areaTrapPatchOps,
   emptyFeature,
   emptyTrap,
   encounterAddLineOps,
+  encounterLinePatchOps,
   encounterPatchOps,
   encounterRemoveLineOps,
-  encounterSetLineOps,
   featurePatchOps,
+  featureUpdateOps,
   nextFreeFeatureKey,
   parseCount,
   patchTrapEffect,
@@ -95,20 +97,6 @@ describe('encounter builders patch only their own field', () => {
     const existing = { monsters: [LINE], alignment: null, aware: false, stance: null }
     const ops = encounterPatchOps(withArea({ encounter: existing }), TARGET, { aware: true })
     expect(ops[0]).toMatchObject({ encounter: { ...existing, aware: true } })
-  })
-
-  test('setting a line replaces exactly that index', () => {
-    const second: KeyedMonster = { template_id: 'skeleton', count_dice: null, count_fixed: 6 }
-    const document = withArea({
-      encounter: { monsters: [LINE, second], alignment: null, aware: false, stance: null },
-    })
-    const replacement: KeyedMonster = {
-      template_id: 'skeleton',
-      count_dice: '2d4',
-      count_fixed: null,
-    }
-    const ops = encounterSetLineOps(document, TARGET, 1, replacement)
-    expect(ops[0]).toMatchObject({ encounter: { monsters: [LINE, replacement] } })
   })
 
   test('the last line never removes — monsters has min_length 1', () => {
@@ -308,5 +296,47 @@ describe('the wandering table seed', () => {
     expect(next.rows[4].name).toBe('Ghouls')
     expect(next.rows.map((row) => row.roll)).toEqual(seeded.rows.map((row) => row.roll))
     expect(next.id).toBe(seeded.id)
+  })
+})
+
+describe('the queue-time update builders', () => {
+  test('encounterLinePatchOps patches the committed line, not a render-time copy', () => {
+    const second: KeyedMonster = { template_id: 'skeleton', count_dice: null, count_fixed: 6 }
+    const document = withArea({
+      encounter: { monsters: [LINE, second], alignment: null, aware: false, stance: null },
+    })
+    const ops = encounterLinePatchOps(document, TARGET, 1, { count_dice: '2d4', count_fixed: null })
+    expect(ops[0]).toMatchObject({
+      encounter: {
+        monsters: [LINE, { template_id: 'skeleton', count_dice: '2d4', count_fixed: null }],
+      },
+    })
+    expect(encounterLinePatchOps(document, TARGET, 9, { count_fixed: 1 })).toEqual([])
+  })
+
+  test('featureUpdateOps hands the committed feature to the update and skips on null', () => {
+    const existing = feature('feature-1', { item_ids: ['sword'] })
+    const document = withArea({ features: [existing] })
+    const scope = { dungeonId: 'dungeon-1', levelNumber: 1, areaId: '1' }
+    const ops = featureUpdateOps(document, scope, 'feature-1', (committed) => ({
+      item_ids: [...committed.item_ids, 'torch'],
+    }))
+    expect(ops[0]).toMatchObject({ feature: { item_ids: ['sword', 'torch'] } })
+    expect(featureUpdateOps(document, scope, 'feature-1', () => null)).toEqual([])
+    expect(featureUpdateOps(document, scope, 'gone', () => ({}))).toEqual([])
+  })
+
+  test('areaTrapEffectPatchOps merges into the committed effect under the implications', () => {
+    const trap = {
+      ...emptyTrap('room'),
+      effect: { ...emptyTrap('room').effect, damage_dice: '1d4', volley_dice: '1d6' },
+    }
+    const ops = areaTrapEffectPatchOps(withArea({ trap }), TARGET, { damage_dice: null })
+    // Clearing damage clears the volley in the same committed value.
+    expect(ops[0]).toMatchObject({
+      op: 'set_trap',
+      trap: { effect: { damage_dice: null, volley_dice: null } },
+    })
+    expect(areaTrapEffectPatchOps(withArea({}), TARGET, { damage_dice: '1d6' })).toEqual([])
   })
 })

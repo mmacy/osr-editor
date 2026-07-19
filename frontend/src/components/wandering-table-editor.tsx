@@ -119,12 +119,17 @@ export function WanderingTableEditor({
             key={row.roll}
             document={document}
             row={row}
-            onCommit={(next) =>
-              commitSpec((current) =>
-                current.table
-                  ? { ...current, table: replaceEncounterTableRow(current.table, index, next) }
-                  : null,
-              )
+            onUpdate={(build) =>
+              // The next row computes from the committed row inside the queue
+              // — a payload built from the render-time row queued behind an
+              // in-flight commit would silently revert it.
+              commitSpec((current) => {
+                const committed = current.table?.rows[index]
+                if (!current.table || !committed) return null
+                const next = build(committed)
+                if (next === null) return null
+                return { ...current, table: replaceEncounterTableRow(current.table, index, next) }
+              })
             }
           />
         ))}
@@ -158,21 +163,21 @@ function TableLabelField({
 function WanderingRowEditor({
   document,
   row,
-  onCommit,
+  onUpdate,
 }: {
   document: Adventure
   row: EncounterTableRow
-  onCommit: (row: EncounterTableRow) => void
+  onUpdate: (build: (committed: EncounterTableRow) => EncounterTableRow | null) => void
 }) {
   const [open, setOpen] = useState(false)
   const name = useCommittedField(row.name, (value) => {
     if (value.trim() === '') return
-    onCommit({ ...row, name: value })
+    onUpdate((committed) => ({ ...committed, name: value }))
   })
   const count = useCommittedField(formatCount(row.count_dice, row.count_fixed), (text) => {
     const parsed = parseCount(text)
     if (!parsed) return
-    onCommit({ ...row, ...parsed })
+    onUpdate((committed) => ({ ...committed, ...parsed }))
   })
   const entrySummary =
     row.entry.kind === 'monster'
@@ -216,7 +221,10 @@ function WanderingRowEditor({
                 onChange={(event) => {
                   const kind = event.target.value
                   if (kind === 'basic' || kind === 'expert') {
-                    onCommit({ ...row, entry: { kind: 'npc_party', party_kind: kind } })
+                    onUpdate((committed) => ({
+                      ...committed,
+                      entry: { kind: 'npc_party', party_kind: kind },
+                    }))
                   }
                 }}
               >
@@ -226,7 +234,7 @@ function WanderingRowEditor({
               </select>
             </div>
           </div>
-          <MonsterEntryEditor document={document} row={row} onCommit={onCommit} />
+          <MonsterEntryEditor document={document} row={row} onUpdate={onUpdate} />
         </div>
       )}
     </div>
@@ -240,22 +248,33 @@ function WanderingRowEditor({
 function MonsterEntryEditor({
   document,
   row,
-  onCommit,
+  onUpdate,
 }: {
   document: Adventure
   row: EncounterTableRow
-  onCommit: (row: EncounterTableRow) => void
+  onUpdate: (build: (committed: EncounterTableRow) => EncounterTableRow | null) => void
 }) {
   const entry = row.entry.kind === 'monster' ? row.entry : null
+  const updateEntry = (build: (committed: MonsterEncounterEntry) => MonsterEncounterEntry | null) =>
+    onUpdate((committed) => {
+      if (committed.entry.kind !== 'monster') return null
+      const next = build(committed.entry)
+      return next === null ? null : { ...committed, entry: next }
+    })
   const variantField = useCommittedField(entry?.variant_dice ?? '', (draft) => {
     if (!entry) return
     if (draft === '') {
-      onCommit({ ...row, entry: { ...entry, variant_dice: null } })
+      updateEntry((committed) => ({ ...committed, variant_dice: null }))
       return
     }
-    // Only a span-matching expression commits — valid by construction.
+    // Only a span-matching expression commits — valid by construction; the
+    // span rule re-checks against the committed pool inside the queue.
     if (variantDiceSpan(draft) === entry.monster_ids.length) {
-      onCommit({ ...row, entry: { ...entry, variant_dice: draft } })
+      updateEntry((committed) =>
+        variantDiceSpan(draft) === committed.monster_ids.length
+          ? { ...committed, variant_dice: draft }
+          : null,
+      )
     }
   })
   if (!entry) {
@@ -265,12 +284,14 @@ function MonsterEntryEditor({
         selected={[]}
         triggerLabel="Replace with monsters…"
         onToggle={(id) =>
-          onCommit({ ...row, entry: { kind: 'monster', monster_ids: [id], variant_dice: null } })
+          onUpdate((committed) => ({
+            ...committed,
+            entry: { kind: 'monster', monster_ids: [id], variant_dice: null },
+          }))
         }
       />
     )
   }
-  const commitEntry = (next: MonsterEncounterEntry) => onCommit({ ...row, entry: next })
   const draftSpan = variantField.value === '' ? null : variantDiceSpan(variantField.value)
   const spanMismatch = variantField.value !== '' && draftSpan !== entry.monster_ids.length
   const poolLocked = entry.variant_dice != null
@@ -295,10 +316,16 @@ function MonsterEntryEditor({
                     : undefined
               }
               onClick={() =>
-                commitEntry({
-                  ...entry,
-                  monster_ids: entry.monster_ids.filter((_, at) => at !== index),
-                })
+                updateEntry((committed) =>
+                  committed.monster_ids.length > 1 && committed.variant_dice == null
+                    ? {
+                        ...committed,
+                        monster_ids: committed.monster_ids.filter(
+                          (existing, at) => !(existing === id && at === index),
+                        ),
+                      }
+                    : null,
+                )
               }
             >
               <XIcon className="size-3" />
@@ -313,11 +340,15 @@ function MonsterEntryEditor({
           triggerLabel="Edit pool…"
           disabled={poolLocked}
           onToggle={(id) => {
-            const next = entry.monster_ids.includes(id)
-              ? entry.monster_ids.filter((existing) => existing !== id)
-              : [...entry.monster_ids, id]
-            if (next.length === 0) return
-            commitEntry({ ...entry, monster_ids: next })
+            // The picker stays open across toggles — the next pool computes
+            // against the committed entry, never the render-time one.
+            updateEntry((committed) => {
+              if (committed.variant_dice != null) return null
+              const next = committed.monster_ids.includes(id)
+                ? committed.monster_ids.filter((existing) => existing !== id)
+                : [...committed.monster_ids, id]
+              return next.length === 0 ? null : { ...committed, monster_ids: next }
+            })
           }}
         />
         <div className="flex flex-col gap-1">
