@@ -13,7 +13,9 @@ it (an in-memory default). The file is written on the first sidecar-bearing
 write, never at open.
 """
 
-from pydantic import BaseModel, ConfigDict
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from osreditor.errors import ArtifactNotFoundError
 from osreditor.serialize import canonical_json_bytes
@@ -22,11 +24,19 @@ from osreditor.store import ProjectStore
 __all__ = [
     "SIDECAR_ARTIFACT",
     "SIDECAR_SCHEMA_VERSION",
+    "AnySidecarPatch",
+    "DismissFlag",
     "EditorSidecar",
     "LevelViewState",
+    "RemoveNote",
     "ReviewMark",
+    "SetNote",
+    "SetViewState",
+    "SidecarPatchBatch",
     "SidecarProvenance",
+    "UndismissFlag",
     "ViewState",
+    "apply_sidecar_patches",
     "read_sidecar",
     "write_sidecar",
 ]
@@ -109,6 +119,106 @@ class EditorSidecar(BaseModel):
     notes: dict[str, str] = {}
     review: tuple[ReviewMark, ...] = ()
     auto_reasons: tuple[str, ...] = ()
+
+
+class SetViewState(BaseModel):
+    """Replace the whole view state — the frontend flushes it on navigation transitions."""
+
+    model_config = ConfigDict(frozen=True)
+
+    patch: Literal["set_view_state"] = "set_view_state"
+    view_state: ViewState
+
+
+class SetNote(BaseModel):
+    """Set a per-entity author note by address; an empty note clears the entry."""
+
+    model_config = ConfigDict(frozen=True)
+
+    patch: Literal["set_note"] = "set_note"
+    address: str
+    note: str
+
+
+class RemoveNote(BaseModel):
+    """Remove a per-entity author note by address."""
+
+    model_config = ConfigDict(frozen=True)
+
+    patch: Literal["remove_note"] = "remove_note"
+    address: str
+
+
+class DismissFlag(BaseModel):
+    """Dismiss one review flag — one mark, keyed by the exact flag string."""
+
+    model_config = ConfigDict(frozen=True)
+
+    patch: Literal["dismiss_flag"] = "dismiss_flag"
+    address: str
+    flag: str
+
+
+class UndismissFlag(BaseModel):
+    """Undo a flag dismissal."""
+
+    model_config = ConfigDict(frozen=True)
+
+    patch: Literal["undismiss_flag"] = "undismiss_flag"
+    address: str
+    flag: str
+
+
+AnySidecarPatch = Annotated[
+    SetViewState | SetNote | RemoveNote | DismissFlag | UndismissFlag,
+    Field(discriminator="patch"),
+]
+"""Any sidecar patch, discriminated by `patch`."""
+
+
+class SidecarPatchBatch(BaseModel):
+    """One batch of sidecar patches, applied and saved atomically.
+
+    Deliberately not revision-guarded: annotation state is single-user,
+    last-write-wins — the document's 409 discipline exists to prevent silent
+    content destruction, which annotations are not.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    patches: tuple[AnySidecarPatch, ...] = Field(min_length=1)
+
+
+def apply_sidecar_patches(patches: tuple[AnySidecarPatch, ...], sidecar: EditorSidecar) -> EditorSidecar:
+    """Fold a batch of sidecar patches into a new sidecar value.
+
+    Args:
+        patches: The patches to apply.
+        sidecar: The current sidecar.
+
+    Returns:
+        The next sidecar.
+    """
+    view_state = sidecar.view_state
+    notes = dict(sidecar.notes)
+    review = list(sidecar.review)
+    for patch in patches:
+        if isinstance(patch, SetViewState):
+            view_state = patch.view_state
+        elif isinstance(patch, SetNote):
+            if patch.note:
+                notes[patch.address] = patch.note
+            else:
+                notes.pop(patch.address, None)
+        elif isinstance(patch, RemoveNote):
+            notes.pop(patch.address, None)
+        elif isinstance(patch, DismissFlag):
+            mark = ReviewMark(address=patch.address, flag=patch.flag)
+            if mark not in review:
+                review.append(mark)
+        else:  # UndismissFlag
+            review = [m for m in review if not (m.address == patch.address and m.flag == patch.flag)]
+    return sidecar.model_copy(update={"view_state": view_state, "notes": notes, "review": tuple(review)})
 
 
 def read_sidecar(store: ProjectStore, project_id: str) -> EditorSidecar:

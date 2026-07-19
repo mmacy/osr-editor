@@ -56,7 +56,7 @@ from osrlib.crawl.dungeon import (
 from osrlib.versioning import check_document, stamp_document
 from pydantic import ValidationError
 
-from osreditor.addresses import area_address, cell_address
+from osreditor.addresses import area_address, cell_address, encode_value
 from osreditor.diagnostics import compute_diagnostics
 from osreditor.errors import (
     OpInvariantError,
@@ -113,7 +113,7 @@ from osreditor.ops import (
 )
 from osreditor.overrides import check_forge_ops, serialize_overrides, translate_batch
 from osreditor.serialize import canonical_json_bytes
-from osreditor.sidecar import EditorSidecar, write_sidecar
+from osreditor.sidecar import AnySidecarPatch, EditorSidecar, apply_sidecar_patches, write_sidecar
 from osreditor.store import ProjectStore
 
 __all__ = [
@@ -333,8 +333,11 @@ class OpenProject:
         self.sidecar = sidecar
         self.forge = forge
         self.revision_number = 1
-        self.undo_stack: list[Adventure] = []
-        self.redo_stack: list[Adventure] = []
+        # Each native-history entry pairs the prior document with the note
+        # key-remap the commit performed, so undo replays the remap inversely and
+        # redo forward — the note-cascade contract.
+        self.undo_stack: list[tuple[Adventure, dict[str, str]]] = []
+        self.redo_stack: list[tuple[Adventure, dict[str, str]]] = []
         self.lock = threading.Lock()
 
     @property
@@ -466,8 +469,10 @@ class DocumentService:
                     ],
                 ) from error
             previous = project.adventure
+            forward_remap = _note_remap_for_batch(batch.ops, project.sidecar.notes)
             self._commit(project, validated)
-            project.undo_stack.append(previous)
+            self._cascade_notes(project, forward_remap)
+            project.undo_stack.append((previous, forward_remap))
             if len(project.undo_stack) > MAX_UNDO_DEPTH:
                 project.undo_stack.pop(0)
             project.redo_stack.clear()
@@ -498,10 +503,12 @@ class DocumentService:
         with project.lock:
             if not project.undo_stack:
                 raise UndoStackEmptyError("there is nothing to undo")
-            previous = project.adventure
-            self._commit(project, project.undo_stack[-1])
+            document, forward_remap = project.undo_stack[-1]
+            current = project.adventure
+            self._commit(project, document)
+            self._cascade_notes(project, {new: old for old, new in forward_remap.items()})
             project.undo_stack.pop()
-            project.redo_stack.append(previous)
+            project.redo_stack.append((current, forward_remap))
             return self._result(project, _whole_document_delta(project.adventure))
 
     def redo(self, project: OpenProject) -> OpBatchResult:
@@ -521,11 +528,28 @@ class DocumentService:
         with project.lock:
             if not project.redo_stack:
                 raise RedoStackEmptyError("there is nothing to redo")
-            previous = project.adventure
-            self._commit(project, project.redo_stack[-1])
+            document, forward_remap = project.redo_stack[-1]
+            current = project.adventure
+            self._commit(project, document)
+            self._cascade_notes(project, forward_remap)
             project.redo_stack.pop()
-            project.undo_stack.append(previous)
+            project.undo_stack.append((current, forward_remap))
             return self._result(project, _whole_document_delta(project.adventure))
+
+    def _cascade_notes(self, project: OpenProject, remap: Mapping[str, str]) -> None:
+        """Re-key the sidecar's notes through a remap and persist, when a re-key op moved any.
+
+        A no-op when `remap` is empty (the common case) — the note cascade touches
+        the sidecar only when a `RenameDungeon`, `RenumberLevel`, or `SetAreaField
+        field="id"` actually moved a note.
+        """
+        if not remap:
+            return
+        new_notes = _apply_note_remap(project.sidecar.notes, remap)
+        if new_notes == project.sidecar.notes:
+            return
+        project.sidecar = project.sidecar.model_copy(update={"notes": new_notes})
+        write_sidecar(self.store, str(project.path), project.sidecar)
 
     def _commit(self, project: OpenProject, document: Adventure) -> None:
         """Persist a document, then install it: revision bump, diagnostics refresh.
@@ -595,6 +619,22 @@ class DocumentService:
                 project.sidecar.auto_reasons,
             )
             return self._commit_forge_locked(project, overrides, auto_reasons)
+
+    def apply_sidecar_patch(self, project: OpenProject, patches: tuple[AnySidecarPatch, ...]) -> None:
+        """Apply and persist a batch of sidecar patches atomically.
+
+        Not revision-guarded — annotation state is single-user, last-write-wins.
+        The first sidecar-bearing write persists a sidecar (a foreign project's
+        first note lands one with `provenance=None`).
+
+        Args:
+            project: The open project (native or forge).
+            patches: The sidecar patches.
+        """
+        with project.lock:
+            new_sidecar = apply_sidecar_patches(patches, project.sidecar)
+            write_sidecar(self.store, str(project.path), new_sidecar)
+            project.sidecar = new_sidecar
 
     def close(self, project: OpenProject) -> None:
         """Drop a project from the open registry — used by detach to release the workdir.
@@ -1458,3 +1498,75 @@ def _is_ancestor(ancestor: str, path: str) -> bool:
 
 def _whole_document_delta(adventure: Adventure) -> tuple[SubtreeChange, ...]:
     return (SubtreeChange(path="", value=adventure.model_dump(mode="json")),)
+
+
+def _note_key_transform(op: AnyEditOp) -> Callable[[str], str] | None:
+    """Return an address→address rewrite for a re-key op, or `None` for any other op.
+
+    The re-keying ops (`RenameDungeon`, `RenumberLevel`, `SetAreaField field="id"`)
+    are all native-mode ops (forge blocks every one), so the note cascade is
+    native-only. Each rewrites the note address whose entity it re-keyed, leaving
+    every other address untouched.
+    """
+    if isinstance(op, RenameDungeon):
+        old_segment = f"dungeon:{encode_value(op.old_id)}"
+        new_segment = f"dungeon:{encode_value(op.new_id)}"
+
+        def rename(address: str) -> str:
+            segments = address.split("/")
+            if segments[0] == old_segment:
+                return "/".join([new_segment, *segments[1:]])
+            return address
+
+        return rename
+    if isinstance(op, RenumberLevel):
+        dungeon_segment = f"dungeon:{encode_value(op.dungeon_id)}"
+
+        def renumber(address: str) -> str:
+            segments = address.split("/")
+            if len(segments) >= 2 and segments[0] == dungeon_segment and segments[1] == f"level:{op.old_number}":
+                segments[1] = f"level:{op.new_number}"
+                return "/".join(segments)
+            return address
+
+        return renumber
+    if isinstance(op, SetAreaField) and op.field == "id":
+        prefix = [
+            f"dungeon:{encode_value(op.dungeon_id)}",
+            f"level:{op.level_number}",
+            f"area:{encode_value(op.area_id)}",
+        ]
+
+        def rekey(address: str) -> str:
+            if address.split("/") == prefix:
+                return "/".join([prefix[0], prefix[1], f"area:{encode_value(op.value)}"])
+            return address
+
+        return rekey
+    return None
+
+
+def _note_remap_for_batch(ops: Sequence[AnyEditOp], notes: Mapping[str, str]) -> dict[str, str]:
+    """Compute the forward note key-remap a batch's re-key ops perform on the current notes.
+
+    Maps each moved note's old address to its new one. Undo replays this inversely,
+    redo forward.
+    """
+    transforms = [transform for op in ops if (transform := _note_key_transform(op)) is not None]
+    forward: dict[str, str] = {}
+    for key in notes:
+        moved = key
+        for transform in transforms:
+            moved = transform(moved)
+        if moved != key:
+            forward[key] = moved
+    return forward
+
+
+def _apply_note_remap(notes: Mapping[str, str], remap: Mapping[str, str]) -> dict[str, str]:
+    """Re-key notes through a remap, live-entity-wins: a moved note overwrites a dormant one at its key."""
+    new_notes = {key: value for key, value in notes.items() if key not in remap}
+    for old_key, new_key in remap.items():
+        if old_key in notes:
+            new_notes[new_key] = notes[old_key]
+    return new_notes

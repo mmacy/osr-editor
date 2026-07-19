@@ -76,7 +76,7 @@ from osreditor.importers import GeometryImporter, ImportedGeometry, discover_imp
 from osreditor.ops import Diagnostics, ForgeState, OpBatch, OpBatchResult
 from osreditor.projects import create_native_project, detach_to_native, open_project, utc_now_iso
 from osreditor.publish import PublishMode, PublishResult, check_osr_web_checkout, publish_adventure
-from osreditor.sidecar import EditorSidecar
+from osreditor.sidecar import EditorSidecar, SidecarPatchBatch
 from osreditor.store import LocalProjectStore, atomic_write_bytes
 
 __all__ = [
@@ -664,6 +664,28 @@ def get_forge_preview(
     except ArtifactNotFoundError as error:
         raise ForgePageNotFoundError(f"the workdir has no preview for {dungeon_id} level {level_number}") from error
     return Response(content=data, media_type="image/svg+xml")
+
+
+@router.post("/api/projects/{project_id}/sidecar")
+def post_sidecar(request: Request, project_id: str, body: SidecarPatchBatch, user: CurrentUser) -> ProjectState:
+    """Apply a batch of sidecar patches: view state, author notes, review dismissals.
+
+    Not revision-guarded — annotation state is single-user, last-write-wins.
+    Available for both project types.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The sidecar patches.
+        user: The authenticated caller.
+
+    Returns:
+        The project's full state, its sidecar refreshed.
+    """
+    service = _service(request)
+    project = service.get(project_id)
+    service.apply_sidecar_patch(project, body.patches)
+    return _project_state(project)
 
 
 @router.post("/api/projects/{project_id}/undo")
