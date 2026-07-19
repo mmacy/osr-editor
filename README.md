@@ -2,7 +2,13 @@
 
 A local GUI application for creating and modifying adventure modules playable by [osrlib](https://github.com/mmacy/osrlib-python)-powered games. osr-editor authors the same stamped `adventure.json` documents that [osr-forge](https://github.com/mmacy/osr-forge) produces and [osr-web](https://github.com/mmacy/osr-web) plays: a FastAPI backend that holds the working document as real osrlib model objects, serving a React frontend to the browser.
 
-**Development status: pre-alpha.** Phases 0 and 1 of [the spec](docs/spec.md) are in place — the two-toolchain skeleton, canonical document serialization, the locked API contracts, and the first editing surface: create and open native projects, edit adventure and town prose with undo/redo, watch content validation react live, and export a stamped document osr-web lists. The map editor and keyed-content surfaces arrive in later phases.
+**Development status: pre-alpha.** Phases 0–2 of [the spec](docs/spec.md) are in place — the two-toolchain skeleton, canonical document serialization, the locked API contracts, the project/prose surface (create and open native projects, edit adventure and town prose with undo/redo, live content validation, export), and the map editor: a graph-paper canvas with the full geometry tool set (rooms, corridors, walls and doors in every state, areas, entrance, transitions with auto-reciprocal stairs), multi-level and multi-dungeon management, live structural lint rendered on the map with click-to-navigate diagnostics, and geometry import through the `GeometryImporter` plugin seam (import-from-project ships built in). Keyed content, the monster editor, and forge-backed review arrive in later phases.
+
+### The map tools
+
+On a level's map: **select** (V) inspects anything — areas, door edges, transitions; **room** (R) drags a rectangle into a keyed area with opened interior edges; **corridor** (C) opens passages along a dragged path; **wall/door** (W) click-cycles an edge wall → open → door and drags to paint (the door inspector sets normal/secret, stuck, locked, starts open); **area** (A) paints cells into the selected area or a new one; **entrance** (E) places the level entrance; **transition** (T) places stairs, trapdoors, and chutes with a target-level picker — stairs offer reciprocal creation in the same undo step. Pan with space-drag or middle-drag, zoom with the wheel, reset to 100% with `0`. Delete removes the selection; Esc cancels a gesture.
+
+**Import geometry** (in the map chrome) brings a level in from another project — or any format with an installed importer plugin: importers register through the `osreditor.importers` entry-point group and land their geometry as one ordinary, undoable op batch.
 
 ## Requirements
 
