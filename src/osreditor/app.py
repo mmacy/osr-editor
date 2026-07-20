@@ -25,12 +25,12 @@ from typing import Annotated
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from osrlib.crawl.adventure import Adventure
 from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION, engine_version
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from osreditor.catalogs import (
     EncounterTableCatalogResponse,
@@ -45,6 +45,7 @@ from osreditor.catalogs import (
 from osreditor.config import RecentEntry, load_config, record_recent, save_config
 from osreditor.documents import DocumentService, OpenProject, dump_adventure, forge_state_model, json_pointer
 from osreditor.errors import (
+    ArtifactNotFoundError,
     DocumentPayloadInvalidError,
     ForgeOverrideInvalidError,
     ForgePageNotFoundError,
@@ -72,9 +73,10 @@ from osreditor.errors import (
 )
 from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
 from osreditor.ops import Diagnostics, ForgeState, OpBatch, OpBatchResult
-from osreditor.projects import create_native_project, open_project, utc_now_iso
+from osreditor.overrides import AnyOverrideEdit, apply_override_edits
+from osreditor.projects import create_native_project, detach_project, open_project, utc_now_iso
 from osreditor.publish import PublishMode, PublishResult, check_osr_web_checkout, publish_adventure
-from osreditor.sidecar import EditorSidecar
+from osreditor.sidecar import AnySidecarPatch, EditorSidecar
 from osreditor.store import LocalProjectStore, atomic_write_bytes
 
 __all__ = [
@@ -262,6 +264,35 @@ class PublishRequest(BaseModel):
         if value is not None and not Path(value).is_absolute():
             raise ValueError(f"checkout_path must be absolute, got {value!r}")
         return value
+
+
+class ForgeOverridesRequest(BaseModel):
+    """A batch of override-level edits, computed against a named revision."""
+
+    model_config = ConfigDict(frozen=True)
+
+    revision: str
+    edits: tuple[AnyOverrideEdit, ...] = Field(min_length=1)
+
+
+class ForgeRerunRequest(BaseModel):
+    """Assemble-stage rerun knobs — assembly-owned only in phase 5 (forge's guard is the backstop)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    settings: dict[str, object] = {}
+
+
+class DetachRequest(_AbsolutePathRequest):
+    """The detach destination: a new native project directory."""
+
+
+class SidecarPatchRequest(BaseModel):
+    """A batch of sidecar patches — applied and saved atomically, deliberately not revision-guarded."""
+
+    model_config = ConfigDict(frozen=True)
+
+    patches: tuple[AnySidecarPatch, ...] = Field(min_length=1)
 
 
 class RecentProject(BaseModel):
@@ -515,6 +546,185 @@ def post_redo(request: Request, project_id: str, user: CurrentUser) -> OpBatchRe
     return service.redo(service.get(project_id))
 
 
+def _require_forge(project: OpenProject) -> None:
+    if project.forge is None:
+        raise ProjectNotForgeError(f"project {project.id} is not forge-backed")
+
+
+@router.post("/api/projects/{project_id}/forge/overrides")
+def post_forge_overrides(
+    request: Request, project_id: str, body: ForgeOverridesRequest, user: CurrentUser
+) -> OpBatchResult:
+    """Apply a batch of override-level edits through the forge commit protocol.
+
+    Monster remaps, printed-notation stat-block patches, reason editing, and
+    entry removal — the corrections that address extracted names or the
+    overrides file itself rather than the document. One atomic batch, one undo
+    step; forge's cache-membership checks are the honest backstop, surfaced
+    verbatim on failure with the snapshot restored.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The edits and the revision they were computed against.
+        user: The authenticated caller.
+
+    Returns:
+        The envelope with the whole-document delta and refreshed forge state.
+    """
+    service = _service(request)
+    project = service.get(project_id)
+    _require_forge(project)
+    with project.lock:
+        forge = project.forge
+        assert forge is not None
+        translation = apply_override_edits(body.edits, forge.overrides, frozenset(project.sidecar.auto_reasons))
+    return service.commit_forge_translation(project, body.revision, translation)
+
+
+@router.post("/api/projects/{project_id}/forge/check")
+def post_forge_check(request: Request, project_id: str, user: CurrentUser) -> OpBatchResult:
+    """Run forge's on-demand playability check and refresh the forge tier.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        user: The authenticated caller.
+
+    Returns:
+        The envelope — same revision (the document is unchanged), refreshed
+        forge tier and `checked` state.
+    """
+    service = _service(request)
+    project = service.get(project_id)
+    _require_forge(project)
+    return service.apply_check(project)
+
+
+@router.post("/api/projects/{project_id}/forge/rerun")
+def post_forge_rerun(request: Request, project_id: str, body: ForgeRerunRequest, user: CurrentUser) -> OpBatchResult:
+    """Re-run the assemble stage with optional assembly-owned knob updates.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The knob updates (empty for a plain re-assembly).
+        user: The authenticated caller.
+
+    Returns:
+        The envelope with the whole-document delta and refreshed forge state.
+    """
+    service = _service(request)
+    project = service.get(project_id)
+    _require_forge(project)
+    try:
+        return service.apply_rerun(project, body.settings)
+    except ValidationError as error:
+        # Forge's own settings validation: an unknown knob or a bad value is a
+        # malformed request, answered in the one envelope.
+        raise RequestValidationError(error.errors()) from error
+
+
+@router.post("/api/projects/{project_id}/forge/detach")
+def post_forge_detach(request: Request, project_id: str, body: DetachRequest, user: CurrentUser) -> ProjectState:
+    """Detach: write the assembled document as a new native project and open it.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The new native project directory, absolute.
+        user: The authenticated caller.
+
+    Returns:
+        The new native project's full state; the workdir is untouched and
+        drops from the open registry.
+    """
+    service = _service(request)
+    project = service.get(project_id)
+    _require_forge(project)
+    detached = detach_project(service, project, Path(body.path))
+    _record_recent(detached)
+    return _project_state(detached)
+
+
+_PAGE_MEDIA_TYPE = "image/png"
+_PREVIEW_MEDIA_TYPE = "image/svg+xml"
+
+
+@router.get("/api/projects/{project_id}/forge/pages/{page_number}")
+def get_forge_page(request: Request, project_id: str, page_number: int, user: CurrentUser) -> Response:
+    """Serve one workdir page render through the store.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        page_number: The 1-based page number.
+        user: The authenticated caller.
+
+    Returns:
+        The PNG bytes.
+    """
+    service = _service(request)
+    project = service.get(project_id)
+    _require_forge(project)
+    if page_number < 1:
+        raise ForgePageNotFoundError(f"the workdir has no page render {page_number}")
+    try:
+        data = service.store.read_artifact(str(project.path), f"pages/{page_number:04d}.png")
+    except ArtifactNotFoundError as error:
+        # A licensed subset or lean workdir is normal — the pane renders the
+        # absence, never an error toast.
+        raise ForgePageNotFoundError(f"the workdir has no page render {page_number}") from error
+    return Response(content=data, media_type=_PAGE_MEDIA_TYPE)
+
+
+@router.get("/api/projects/{project_id}/forge/previews/{dungeon_id}/{level_number}")
+def get_forge_preview(
+    request: Request, project_id: str, dungeon_id: str, level_number: int, user: CurrentUser
+) -> Response:
+    """Serve one level's SVG preview through the store.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        dungeon_id: The dungeon id (forge's canonical slug).
+        level_number: The 1-based level number.
+        user: The authenticated caller.
+
+    Returns:
+        The SVG bytes — forge's own rendering of the corrected plan.
+    """
+    service = _service(request)
+    project = service.get(project_id)
+    _require_forge(project)
+    if not dungeon_id or "/" in dungeon_id or "\\" in dungeon_id or dungeon_id in (".", ".."):
+        raise ForgePageNotFoundError(f"the workdir has no preview for dungeon {dungeon_id!r}")
+    try:
+        data = service.store.read_artifact(str(project.path), f"previews/{dungeon_id}.{level_number}.svg")
+    except ArtifactNotFoundError as error:
+        raise ForgePageNotFoundError(f"the workdir has no preview for {dungeon_id} level {level_number}") from error
+    return Response(content=data, media_type=_PREVIEW_MEDIA_TYPE)
+
+
+@router.post("/api/projects/{project_id}/sidecar")
+def post_sidecar_patch(
+    request: Request, project_id: str, body: SidecarPatchRequest, user: CurrentUser
+) -> EditorSidecar:
+    """Apply typed sidecar patches — view state, notes, review marks — atomically.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The patches, in order.
+        user: The authenticated caller.
+
+    Returns:
+        The new sidecar state.
+    """
+    service = _service(request)
+    return service.apply_sidecar_patch(service.get(project_id), body.patches)
+
+
 @router.post("/api/projects/{project_id}/export")
 def export_project(request: Request, project_id: str, body: ExportRequest, user: CurrentUser) -> ExportResult:
     """Write the current document's stamped bytes to a user-chosen path.
@@ -536,11 +746,24 @@ def export_project(request: Request, project_id: str, body: ExportRequest, user:
     Returns:
         The written path.
     """
-    project = _service(request).get(project_id)
+    service = _service(request)
+    project = service.get(project_id)
     with project.lock:
-        data = dump_adventure(project.adventure)
+        data = _document_bytes(service, project)
     atomic_write_bytes(Path(body.path), data)
     return ExportResult(path=body.path)
+
+
+def _document_bytes(service: DocumentService, project: OpenProject) -> bytes:
+    """The current document's stamped bytes — forge's verbatim, the editor's canonical.
+
+    A workdir's `adventure.json` is forge's byte contract (stamped,
+    byte-stable); re-serializing it through the editor's canonical serializer
+    would claim authorship of bytes forge owns. Callers hold the project lock.
+    """
+    if project.forge is not None:
+        return service.store.read_artifact(str(project.path), "adventure.json")
+    return dump_adventure(project.adventure)
 
 
 @router.post("/api/projects/{project_id}/publish")
@@ -565,7 +788,8 @@ def publish_project(request: Request, project_id: str, body: PublishRequest, use
     Returns:
         The published path and mode.
     """
-    project = _service(request).get(project_id)
+    service = _service(request)
+    project = service.get(project_id)
     config = load_config()
     checkout_value = body.checkout_path or config.osr_web_checkout
     if checkout_value is None:
@@ -582,7 +806,7 @@ def publish_project(request: Request, project_id: str, body: PublishRequest, use
                 "the document has validation findings; publish requires a clean validation tier",
                 findings=[finding.model_dump(mode="json") for finding in findings],
             )
-        document = dump_adventure(project.adventure)
+        document = _document_bytes(service, project)
     return publish_adventure(
         checkout=checkout,
         project_path=project.path,

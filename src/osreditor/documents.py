@@ -67,7 +67,7 @@ from osreditor.errors import (
     StaleRevisionError,
     UndoStackEmptyError,
 )
-from osreditor.forge import assemble_workdir, read_overrides_value, read_run_meta
+from osreditor.forge import assemble_workdir, check_workdir, read_overrides_value, read_run_meta, rerun_assemble
 from osreditor.ops import (
     AddDungeon,
     AddFeature,
@@ -102,7 +102,7 @@ from osreditor.ops import (
     SubtreeChange,
 )
 from osreditor.overrides import ForgeTranslationState, TranslationResult, ensure_forge_supported, translate_batch
-from osreditor.sidecar import SIDECAR_ARTIFACT, EditorSidecar
+from osreditor.sidecar import SIDECAR_ARTIFACT, AnySidecarPatch, EditorSidecar, apply_sidecar_patches
 from osreditor.store import ProjectStore
 
 __all__ = [
@@ -694,6 +694,55 @@ class DocumentService:
             project.undo_stack.append(HistoryEntry(document=previous, note_remap=entry.note_remap))
             return self._result(project, _whole_document_delta(project.adventure))
 
+    def apply_check(self, project: OpenProject) -> OpBatchResult:
+        """Run forge's on-demand `check()` and refresh the forge tier.
+
+        Not part of the per-commit loop: re-assembly wipes findings by forge's
+        explicit design, the editor's own live lint already mirrors the five
+        static checks per commit, and the delve is a deliberate, whole-dungeon
+        act. The revision does not bump — the document is unchanged.
+
+        Args:
+            project: The open project (must be forge-backed; callers guard).
+
+        Returns:
+            The envelope with the refreshed forge tier and `checked` state.
+        """
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            findings = check_workdir(forge.workdir)
+            # check() rewrote report.json with exactly this merge — mirror it
+            # in memory rather than re-reading forge's own write.
+            forge.report = forge.report.model_copy(update={"findings": findings})
+            forge.checked = True
+            project.diagnostics = project.diagnostics.model_copy(update={"forge": forge_findings(findings)})
+            return self._result(project, ())
+
+    def apply_rerun(self, project: OpenProject, settings_updates: Mapping[str, object] | None) -> OpBatchResult:
+        """Re-run the assemble stage, optionally updating assembly-owned knobs.
+
+        Not an undo step: the snapshot stack captures `overrides.yaml` and the
+        reason ledger, and a knob change lives in `run.json`'s settings echo —
+        pipeline state, not correction history. The revision bumps because the
+        document may change.
+
+        Args:
+            project: The open project (must be forge-backed; callers guard).
+            settings_updates: Knob updates, or `None`/empty for a plain
+                re-assembly.
+
+        Returns:
+            The envelope with the whole-document delta and refreshed forge
+            state.
+        """
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            result = rerun_assemble(forge.workdir, settings_updates if settings_updates else None)
+            self._adopt_assembly(project, result.adventure, result.report)
+            return self._result(project, _whole_document_delta(project.adventure))
+
     def _restore_forge_snapshot(self, project: OpenProject, entry: HistoryEntry) -> None:
         """Write a snapshot pair back and re-assemble; restore the current pair on failure."""
         forge = project.forge
@@ -735,6 +784,25 @@ class DocumentService:
         project.sidecar = project.sidecar.model_copy(update={"notes": notes})
         self.persist_sidecar(project)
         return tuple(applied)
+
+    def apply_sidecar_patch(self, project: OpenProject, patches: tuple[AnySidecarPatch, ...]) -> EditorSidecar:
+        """Apply typed sidecar patches and save atomically, answering the new state.
+
+        Deliberately not revision-guarded: annotation state, single-user,
+        last-write-wins — the document's 409 discipline exists to prevent
+        silent *content* destruction, which annotations are not.
+
+        Args:
+            project: The open project.
+            patches: The patches, in order.
+
+        Returns:
+            The new sidecar.
+        """
+        with project.lock:
+            project.sidecar = apply_sidecar_patches(project.sidecar, patches)
+            self.persist_sidecar(project)
+            return project.sidecar
 
     def persist_sidecar(self, project: OpenProject) -> None:
         """Write the project's sidecar — the first sidecar-bearing write creates the file.

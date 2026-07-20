@@ -48,6 +48,7 @@ __all__ = [
     "EditorSidecar",
     "SidecarProvenance",
     "create_native_project",
+    "detach_project",
     "detect_project_type",
     "open_project",
     "starter_adventure",
@@ -148,6 +149,58 @@ def create_native_project(store: ProjectStore, project_id: str, name: str) -> Ad
     store.write_artifact(project_id, ADVENTURE_ARTIFACT, dump_adventure(adventure))
     store.write_artifact(project_id, SIDECAR_ARTIFACT, canonical_json_bytes(sidecar.model_dump(mode="json")))
     return adventure
+
+
+def detach_project(service: DocumentService, project: OpenProject, target: Path) -> OpenProject:
+    """The explicit, recorded crossing from the reproducible world to the native one.
+
+    Writes the current assembled adventure as a new native project through the
+    canonical serializer, with provenance recording the source workdir and the
+    forge version that converted it. Author notes carry over (addresses are
+    stable across the crossing); review marks and `auto_reasons` stay behind —
+    they are forge-review state with no native meaning. The workdir is
+    untouched and drops from the open registry.
+
+    Args:
+        service: The document service.
+        project: The open forge-backed project.
+        target: The new native project directory, absolute.
+
+    Returns:
+        The new native project, opened.
+
+    Raises:
+        ValueError: If `project` is not forge-backed (programmer misuse — the
+            route guards).
+        ProjectExistsError: If the target exists and is not empty.
+    """
+    forge = project.forge
+    if forge is None:
+        raise ValueError("detach requires a forge-backed project")
+    resolved = target.resolve()
+    store = service.store
+    store_key = str(resolved)
+    if store.project_exists(store_key) and store.list_artifacts(store_key):
+        raise ProjectExistsError(f"directory {resolved} already exists and is not empty")
+    with project.lock:
+        adventure = project.adventure
+        notes = dict(project.sidecar.notes)
+        osrforge_version = forge.run.osrforge_version
+        source_workdir = str(project.path)
+    sidecar = EditorSidecar(
+        provenance=SidecarProvenance(
+            created_by=f"osr-editor {metadata.version('osr-editor')}",
+            osrlib_version=engine_version(),
+            created_at=utc_now_iso(),
+            source_workdir=source_workdir,
+            osrforge_version=osrforge_version,
+        ),
+        notes=notes,
+    )
+    store.write_artifact(store_key, ADVENTURE_ARTIFACT, dump_adventure(adventure))
+    store.write_artifact(store_key, SIDECAR_ARTIFACT, canonical_json_bytes(sidecar.model_dump(mode="json")))
+    service.close(project)
+    return open_project(service, resolved)
 
 
 def _load_native(store: ProjectStore, resolved: Path) -> LoadedProject:

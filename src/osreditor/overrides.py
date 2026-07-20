@@ -16,7 +16,7 @@ detach offer, before any translation side effect.
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import cast
+from typing import Annotated, Literal, cast
 
 import yaml
 from osrforge.contracts.overrides import (
@@ -24,17 +24,22 @@ from osrforge.contracts.overrides import (
     AreaOverride,
     GeometryOverride,
     ModuleOverride,
+    MonsterOverride,
     Overrides,
+    StatBlockOverride,
     TownOverride,
 )
 from osrforge.contracts.report import ExtractionReport
+from osrforge.contracts.stages import AcNotation
+from osrforge.monsters import normalize_monster_name
 from osrforge.overrides import canonicalize_edge_key
 from osrlib.crawl.adventure import Adventure
 from osrlib.crawl.dungeon import Edge, EdgeKind, LevelSpec, Position
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import Field as PydanticField
 
 from osreditor.addresses import area_address, dungeon_address, level_address
-from osreditor.errors import OpUnsupportedForgeError
+from osreditor.errors import OpTargetNotFoundError, OpUnsupportedForgeError
 from osreditor.ops import (
     AddDungeon,
     AddFeature,
@@ -65,8 +70,17 @@ from osreditor.ops import (
 )
 
 __all__ = [
+    "AnyOverrideEdit",
     "ForgeTranslationState",
+    "RemoveEntry",
+    "RemoveMonsterRemap",
+    "RemoveTemplatePatch",
+    "SetMonsterRemap",
+    "SetReason",
+    "SetTemplatePatch",
+    "StatBlockPatch",
     "TranslationResult",
+    "apply_override_edits",
     "ensure_forge_supported",
     "serialize_overrides",
     "translate_batch",
@@ -625,3 +639,301 @@ def serialize_overrides(overrides: Overrides) -> bytes:
             data[kind] = _entry_data(entry)
     text = yaml.dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False, width=100)
     return text.encode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Override-level edits: not every correction is an op translation — monster
+# remaps and stat-block patches address extracted *names*, and reason editing
+# addresses the overrides file itself.
+# ---------------------------------------------------------------------------
+
+_Reason = Annotated[str, StringConstraints(min_length=1)]
+
+OverrideKind = Literal["monsters", "monster_templates", "areas", "geometry", "town", "module"]
+"""The corrections panel's entry-kind vocabulary — `Overrides`' own field names."""
+
+
+class StatBlockPatch(BaseModel):
+    """Forge's `StatBlockOverride` shape minus `reason` — the printed-notation form's payload.
+
+    Printed notation verbatim, absent-vs-null preserved: absent leaves the
+    extracted value, explicit `null` clears it back to unprinted. The field
+    set is pinned to forge's contract by a drift test
+    (`test_statblock_patch_mirrors_forge`), because the reason travels on the
+    edit, not the patch.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    ac: str | None = None
+    ac_notation: AcNotation | None = None
+    thac0: str | None = None
+    hit_dice: str | None = None
+    class_level: str | None = None
+    hp: Annotated[int, PydanticField(ge=1)] | None = None
+    attacks: tuple[str, ...] | None = None
+    movement: str | None = None
+    saves: str | None = None
+    morale: Annotated[int, PydanticField(ge=2, le=12)] | None = None
+    alignment: str | None = None
+    xp: Annotated[int, PydanticField(ge=0)] | None = None
+    number_appearing: str | None = None
+    special: tuple[str, ...] | None = None
+
+
+class SetMonsterRemap(BaseModel):
+    """Remap one extracted name to a catalog template — forge's `monsters:` kind.
+
+    The route accepts any name: forge's cache-membership check is the honest
+    backstop (an unknown name fails the commit loudly, listing the cache's
+    unresolved names), and forge *accepts* a remap on a resolved name — its
+    documented remedy for a flagless wrong pick.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    edit: Literal["set_monster_remap"] = "set_monster_remap"
+    name: Annotated[str, StringConstraints(min_length=1)]
+    template_id: Annotated[str, StringConstraints(min_length=1)]
+    reason: _Reason | None = None
+
+
+class RemoveMonsterRemap(BaseModel):
+    """Remove one name's remap entry."""
+
+    model_config = ConfigDict(frozen=True)
+
+    edit: Literal["remove_monster_remap"] = "remove_monster_remap"
+    name: Annotated[str, StringConstraints(min_length=1)]
+
+
+class SetTemplatePatch(BaseModel):
+    """Patch one name's printed stat block — forge's `monster_templates:` kind."""
+
+    model_config = ConfigDict(frozen=True)
+
+    edit: Literal["set_template_patch"] = "set_template_patch"
+    name: Annotated[str, StringConstraints(min_length=1)]
+    patch: StatBlockPatch
+    reason: _Reason | None = None
+
+
+class RemoveTemplatePatch(BaseModel):
+    """Remove one name's stat-block patch."""
+
+    model_config = ConfigDict(frozen=True)
+
+    edit: Literal["remove_template_patch"] = "remove_template_patch"
+    name: Annotated[str, StringConstraints(min_length=1)]
+
+
+class SetReason(BaseModel):
+    """Compose one entry's reason — the corrections panel's inline editing.
+
+    Marks the entry human-composed: its key drops from the `auto_reasons`
+    ledger, so later machine drafts never overwrite it.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    edit: Literal["set_reason"] = "set_reason"
+    kind: OverrideKind
+    key: str
+    reason: _Reason
+
+
+class RemoveEntry(BaseModel):
+    """Remove one override entry at entry grain (a geometry entry removes whole, per level)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    edit: Literal["remove_entry"] = "remove_entry"
+    kind: OverrideKind
+    key: str
+
+
+AnyOverrideEdit = Annotated[
+    SetMonsterRemap | RemoveMonsterRemap | SetTemplatePatch | RemoveTemplatePatch | SetReason | RemoveEntry,
+    PydanticField(discriminator="edit"),
+]
+"""Any override-level edit, discriminated by `edit`."""
+
+
+def _normalized_key(entries: dict[str, object], name: str) -> str | None:
+    """The existing entry key matching a name under forge's normalization, or `None`."""
+    target = normalize_monster_name(name)
+    for key in entries:
+        if normalize_monster_name(key) == target:
+            return key
+    return None
+
+
+def _ledger_key(kind: OverrideKind, key: str) -> str:
+    return kind if kind in ("town", "module") else f"{kind}:{key}"
+
+
+def apply_override_edits(
+    edits: Sequence[AnyOverrideEdit], overrides: Overrides, auto_reasons: frozenset[str]
+) -> TranslationResult:
+    """Fold a batch of override-level edits into the next overrides value — pure.
+
+    Exclusivity is resolved at the edit: committing a remap for a name deletes
+    any template patch for the same normalized name and vice versa — one
+    correction per name, the choice the panel states, never forge's
+    contradictory-corrections error discovered at assemble.
+
+    Args:
+        edits: The typed edits, in order.
+        overrides: The current overrides value.
+        auto_reasons: The current machine-draft ledger.
+
+    Returns:
+        The next overrides value with its ledger and serialized bytes.
+
+    Raises:
+        OpTargetNotFoundError: If `set_reason` or `remove_entry` names an
+            entry the overrides file does not have.
+    """
+    monsters = dict(overrides.monsters)
+    templates = dict(overrides.monster_templates)
+    areas = dict(overrides.areas)
+    geometry = dict(overrides.geometry)
+    town = overrides.town
+    module = overrides.module
+    ledger = set(auto_reasons)
+
+    for edit in edits:
+        if isinstance(edit, SetMonsterRemap):
+            key = _normalized_key(cast(dict[str, object], monsters), edit.name) or edit.name
+            patch_key = _normalized_key(cast(dict[str, object], templates), edit.name)
+            if patch_key is not None:
+                del templates[patch_key]
+                ledger.discard(_ledger_key("monster_templates", patch_key))
+            reason = edit.reason if edit.reason is not None else f"remapped to {edit.template_id}"
+            monsters[key] = MonsterOverride(template_id=edit.template_id, reason=reason)
+            if edit.reason is None:
+                ledger.add(_ledger_key("monsters", key))
+            else:
+                ledger.discard(_ledger_key("monsters", key))
+        elif isinstance(edit, RemoveMonsterRemap):
+            key = _normalized_key(cast(dict[str, object], monsters), edit.name)
+            if key is None:
+                raise OpTargetNotFoundError(f"the overrides file has no monsters entry for {edit.name!r}")
+            del monsters[key]
+            ledger.discard(_ledger_key("monsters", key))
+        elif isinstance(edit, SetTemplatePatch):
+            key = _normalized_key(cast(dict[str, object], templates), edit.name) or edit.name
+            remap_key = _normalized_key(cast(dict[str, object], monsters), edit.name)
+            if remap_key is not None:
+                del monsters[remap_key]
+                ledger.discard(_ledger_key("monsters", remap_key))
+            reason = edit.reason if edit.reason is not None else "printed stat block corrected"
+            fields = {name: getattr(edit.patch, name) for name in edit.patch.model_fields_set}
+            templates[key] = StatBlockOverride(**fields, reason=reason)  # pyright: ignore[reportArgumentType] — field-typed values
+            if edit.reason is None:
+                ledger.add(_ledger_key("monster_templates", key))
+            else:
+                ledger.discard(_ledger_key("monster_templates", key))
+        elif isinstance(edit, RemoveTemplatePatch):
+            key = _normalized_key(cast(dict[str, object], templates), edit.name)
+            if key is None:
+                raise OpTargetNotFoundError(f"the overrides file has no monster_templates entry for {edit.name!r}")
+            del templates[key]
+            ledger.discard(_ledger_key("monster_templates", key))
+        elif isinstance(edit, SetReason):
+            entry = _resolve_entry(monsters, templates, areas, geometry, town, module, edit.kind, edit.key)
+            recomposed = entry.model_copy(update={"reason": edit.reason})
+            _install_entry(monsters, templates, areas, geometry, edit.kind, edit.key, recomposed)
+            if edit.kind == "town":
+                town = cast(TownOverride, recomposed)
+            elif edit.kind == "module":
+                module = cast(ModuleOverride, recomposed)
+            ledger.discard(_ledger_key(edit.kind, edit.key))
+        else:
+            _resolve_entry(monsters, templates, areas, geometry, town, module, edit.kind, edit.key)
+            if edit.kind == "town":
+                town = None
+            elif edit.kind == "module":
+                module = None
+            else:
+                _delete_entry(monsters, templates, areas, geometry, edit.kind, edit.key)
+            ledger.discard(_ledger_key(edit.kind, edit.key))
+
+    result = Overrides(
+        monsters=monsters,
+        monster_templates=templates,
+        areas=areas,
+        geometry=geometry,
+        town=town,
+        module=module,
+    )
+    return TranslationResult(
+        overrides=result,
+        auto_reasons=frozenset(ledger),
+        serialized=serialize_overrides(result),
+    )
+
+
+def _resolve_entry(
+    monsters: dict[str, MonsterOverride],
+    templates: dict[str, StatBlockOverride],
+    areas: dict[str, AreaOverride],
+    geometry: dict[str, GeometryOverride],
+    town: TownOverride | None,
+    module: ModuleOverride | None,
+    kind: OverrideKind,
+    key: str,
+) -> BaseModel:
+    """The named entry, or the targeting miss — the panel only offers existing entries."""
+    if kind == "town":
+        entry: BaseModel | None = town
+    elif kind == "module":
+        entry = module
+    else:
+        table: dict[str, BaseModel] = {
+            "monsters": cast(dict[str, BaseModel], monsters),
+            "monster_templates": cast(dict[str, BaseModel], templates),
+            "areas": cast(dict[str, BaseModel], areas),
+            "geometry": cast(dict[str, BaseModel], geometry),
+        }[kind]
+        entry = table.get(key)
+    if entry is None:
+        raise OpTargetNotFoundError(f"the overrides file has no {kind} entry {key!r}")
+    return entry
+
+
+def _install_entry(
+    monsters: dict[str, MonsterOverride],
+    templates: dict[str, StatBlockOverride],
+    areas: dict[str, AreaOverride],
+    geometry: dict[str, GeometryOverride],
+    kind: OverrideKind,
+    key: str,
+    entry: BaseModel,
+) -> None:
+    if kind == "monsters":
+        monsters[key] = cast(MonsterOverride, entry)
+    elif kind == "monster_templates":
+        templates[key] = cast(StatBlockOverride, entry)
+    elif kind == "areas":
+        areas[key] = cast(AreaOverride, entry)
+    elif kind == "geometry":
+        geometry[key] = cast(GeometryOverride, entry)
+
+
+def _delete_entry(
+    monsters: dict[str, MonsterOverride],
+    templates: dict[str, StatBlockOverride],
+    areas: dict[str, AreaOverride],
+    geometry: dict[str, GeometryOverride],
+    kind: OverrideKind,
+    key: str,
+) -> None:
+    if kind == "monsters":
+        del monsters[key]
+    elif kind == "monster_templates":
+        del templates[key]
+    elif kind == "areas":
+        del areas[key]
+    elif kind == "geometry":
+        del geometry[key]

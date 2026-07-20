@@ -9,8 +9,9 @@ the project layer.
 """
 
 import json
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 from osreditor.errors import ArtifactNotFoundError, DocumentPayloadInvalidError
 from osreditor.store import ProjectStore
@@ -18,11 +19,18 @@ from osreditor.store import ProjectStore
 __all__ = [
     "SIDECAR_ARTIFACT",
     "SIDECAR_SCHEMA_VERSION",
+    "AnySidecarPatch",
+    "DismissFlag",
     "EditorSidecar",
+    "RemoveNote",
     "ReviewMark",
+    "SetNote",
+    "SetViewState",
     "SidecarProvenance",
+    "UndismissFlag",
     "ViewState",
     "ZoomPan",
+    "apply_sidecar_patches",
     "load_sidecar",
 ]
 
@@ -120,6 +128,94 @@ class EditorSidecar(BaseModel):
     notes: dict[str, str] = {}
     review: tuple[ReviewMark, ...] = ()
     auto_reasons: tuple[str, ...] = ()
+
+
+class SetViewState(BaseModel):
+    """Replace the view state whole — the frontend flushes on navigation transitions."""
+
+    model_config = ConfigDict(frozen=True)
+
+    action: Literal["set_view_state"] = "set_view_state"
+    view_state: ViewState
+
+
+class SetNote(BaseModel):
+    """Set one entity's author note by address."""
+
+    model_config = ConfigDict(frozen=True)
+
+    action: Literal["set_note"] = "set_note"
+    address: Annotated[str, StringConstraints(min_length=1)]
+    text: Annotated[str, StringConstraints(min_length=1)]
+
+
+class RemoveNote(BaseModel):
+    """Remove one entity's author note by address."""
+
+    model_config = ConfigDict(frozen=True)
+
+    action: Literal["remove_note"] = "remove_note"
+    address: Annotated[str, StringConstraints(min_length=1)]
+
+
+class DismissFlag(BaseModel):
+    """Dismiss one review flag: the `{address, flag}` mark grain (`""` for module scope)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    action: Literal["dismiss_flag"] = "dismiss_flag"
+    address: str
+    flag: Annotated[str, StringConstraints(min_length=1)]
+
+
+class UndismissFlag(BaseModel):
+    """Withdraw one dismissal mark."""
+
+    model_config = ConfigDict(frozen=True)
+
+    action: Literal["undismiss_flag"] = "undismiss_flag"
+    address: str
+    flag: Annotated[str, StringConstraints(min_length=1)]
+
+
+AnySidecarPatch = Annotated[
+    SetViewState | SetNote | RemoveNote | DismissFlag | UndismissFlag,
+    Field(discriminator="action"),
+]
+"""Any sidecar patch, discriminated by `action`."""
+
+
+def apply_sidecar_patches(sidecar: EditorSidecar, patches: tuple[AnySidecarPatch, ...]) -> EditorSidecar:
+    """Fold typed patches into a new sidecar value — pure; the service persists.
+
+    Deliberately tolerant where the document's 409 discipline is strict:
+    annotation state is single-user, last-write-wins — removing an absent note
+    or re-dismissing a dismissed flag is a no-op, never an error.
+
+    Args:
+        sidecar: The current sidecar.
+        patches: The patches, in order.
+
+    Returns:
+        The new sidecar value.
+    """
+    view_state = sidecar.view_state
+    notes = dict(sidecar.notes)
+    review = list(sidecar.review)
+    for patch in patches:
+        if isinstance(patch, SetViewState):
+            view_state = patch.view_state
+        elif isinstance(patch, SetNote):
+            notes[patch.address] = patch.text
+        elif isinstance(patch, RemoveNote):
+            notes.pop(patch.address, None)
+        elif isinstance(patch, DismissFlag):
+            mark = ReviewMark(address=patch.address, flag=patch.flag)
+            if mark not in review:
+                review.append(mark)
+        else:
+            review = [mark for mark in review if not (mark.address == patch.address and mark.flag == patch.flag)]
+    return sidecar.model_copy(update={"view_state": view_state, "notes": notes, "review": tuple(review)})
 
 
 def load_sidecar(store: ProjectStore, project_id: str) -> EditorSidecar:
