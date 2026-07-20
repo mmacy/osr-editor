@@ -9,10 +9,10 @@ from osrlib.data import load_equipment, load_monsters
 
 from osreditor.documents import DocumentService, load_adventure
 from osreditor.errors import (
+    ForgeWorkdirInvalidError,
     InvalidProjectError,
     ProjectExistsError,
     ProjectPathNotFoundError,
-    ProjectTypeUnsupportedError,
 )
 from osreditor.projects import (
     SIDECAR_ARTIFACT,
@@ -76,7 +76,9 @@ def test_create_writes_a_loadable_document_and_the_sidecar(tmp_path: Path) -> No
     assert provenance["created_by"].startswith("osr-editor ")
     assert provenance["osrlib_version"]
     assert provenance["created_at"]
-    assert set(sidecar) == {"schema_version", "provenance"}
+    # Schema version 1, additive-only: phase 5 grew the empty-defaulted fields.
+    assert set(sidecar) == {"schema_version", "provenance", "view_state", "notes", "review", "auto_reasons"}
+    assert sidecar["notes"] == {} and sidecar["review"] == [] and sidecar["auto_reasons"] == []
 
 
 def test_create_refuses_a_non_empty_directory(tmp_path: Path) -> None:
@@ -122,10 +124,12 @@ def test_open_non_project_raises_invalid_project(tmp_path: Path) -> None:
         open_project(DocumentService(LocalProjectStore()), tmp_path)
 
 
-def test_open_forge_workdir_is_recognized_and_refused(tmp_path: Path) -> None:
+def test_open_forge_shaped_directory_with_bad_run_json_fails_the_first_gate(tmp_path: Path) -> None:
+    # The fake shape passes detection but its run.json is not a RunMeta — the
+    # first open gate names it. Real workdir opens live in test_forge.
     workdir = tmp_path / "demo.forge"
     make_forge_workdir(workdir)
-    with pytest.raises(ProjectTypeUnsupportedError):
+    with pytest.raises(ForgeWorkdirInvalidError):
         open_project(DocumentService(LocalProjectStore()), workdir)
 
 

@@ -43,21 +43,27 @@ from osreditor.catalogs import (
     treasure_type_catalog,
 )
 from osreditor.config import RecentEntry, load_config, record_recent, save_config
-from osreditor.documents import DocumentService, OpenProject, dump_adventure, json_pointer
+from osreditor.documents import DocumentService, OpenProject, dump_adventure, forge_state_model, json_pointer
 from osreditor.errors import (
     DocumentPayloadInvalidError,
+    ForgeOverrideInvalidError,
+    ForgePageNotFoundError,
+    ForgeRerunInvalidError,
+    ForgeWorkdirIncompleteError,
+    ForgeWorkdirInvalidError,
     ImporterNotFoundError,
     ImportSourceInvalidError,
     InvalidProjectError,
     OpInvariantError,
     OpRejectedError,
     OpTargetNotFoundError,
+    OpUnsupportedForgeError,
     OsrWebCheckoutInvalidError,
     OsrWebNotConfiguredError,
     ProjectExistsError,
+    ProjectNotForgeError,
     ProjectNotFoundError,
     ProjectPathNotFoundError,
-    ProjectTypeUnsupportedError,
     PublishBlockedError,
     PublishDestinationExistsError,
     RedoStackEmptyError,
@@ -65,9 +71,10 @@ from osreditor.errors import (
     UndoStackEmptyError,
 )
 from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
-from osreditor.ops import Diagnostics, OpBatch, OpBatchResult
+from osreditor.ops import Diagnostics, ForgeState, OpBatch, OpBatchResult
 from osreditor.projects import create_native_project, open_project, utc_now_iso
 from osreditor.publish import PublishMode, PublishResult, check_osr_web_checkout, publish_adventure
+from osreditor.sidecar import EditorSidecar
 from osreditor.store import LocalProjectStore, atomic_write_bytes
 
 __all__ = [
@@ -286,6 +293,9 @@ class ProjectState(BaseModel):
     """One open project's full state: the document, revision, and diagnostics.
 
     The full document rides on open/get only; batches answer with deltas.
+    `forge` carries the review state for forge-backed projects (`None` for
+    native); `sidecar` is always answered — an in-memory empty sidecar for a
+    project with none on disk.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -299,6 +309,8 @@ class ProjectState(BaseModel):
     dropped_fields: tuple[str, ...]
     can_undo: bool
     can_redo: bool
+    forge: ForgeState | None = None
+    sidecar: EditorSidecar = EditorSidecar()
 
 
 def _error_response(
@@ -340,6 +352,8 @@ def _project_state(project: OpenProject) -> ProjectState:
             dropped_fields=project.dropped_fields,
             can_undo=bool(project.undo_stack),
             can_redo=bool(project.redo_stack),
+            forge=forge_state_model(project),
+            sidecar=project.sidecar,
         )
 
 
@@ -734,6 +748,11 @@ def _details_op_invariant(error: Exception) -> dict[str, object] | None:
     return {"offenders": error.offenders}
 
 
+def _details_op_unsupported_forge(error: Exception) -> dict[str, object] | None:
+    assert isinstance(error, OpUnsupportedForgeError)
+    return {"op": error.op, "address": error.address}
+
+
 _MAX_REPORTED_LOCATIONS = 10
 
 
@@ -761,13 +780,35 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
     ),
     ProjectPathNotFoundError: (404, "project_path_not_found", None, _details_none),
     InvalidProjectError: (422, "not_a_project", None, _details_none),
-    ProjectTypeUnsupportedError: (
+    ProjectExistsError: (409, "project_dir_not_empty", "Choose a new or empty directory.", _details_none),
+    ForgeWorkdirInvalidError: (
         422,
-        "project_type_unsupported",
-        "Forge-backed review arrives in a later release.",
+        "forge_workdir_invalid",
+        "A forge workdir is a directory whose run.json parses as forge's RunMeta with intact stage caches; "
+        "repair it with osr-forge, then reopen.",
         _details_none,
     ),
-    ProjectExistsError: (409, "project_dir_not_empty", "Choose a new or empty directory.", _details_none),
+    ForgeWorkdirIncompleteError: (
+        422,
+        "forge_workdir_incomplete",
+        "Complete the conversion from the CLI (osrforge rerun <stage>), then reopen.",
+        _details_none,
+    ),
+    ForgeOverrideInvalidError: (
+        422,
+        "forge_override_invalid",
+        "The overrides file is the human-readable record; repair the named entry by hand, then retry.",
+        _details_none,
+    ),
+    ForgeRerunInvalidError: (422, "forge_rerun_invalid", None, _details_none),
+    OpUnsupportedForgeError: (
+        422,
+        "op_unsupported_forge",
+        "This edit has no override kind. Detach to a native project to make it, or cancel.",
+        _details_op_unsupported_forge,
+    ),
+    ForgePageNotFoundError: (404, "forge_page_not_found", None, _details_none),
+    ProjectNotForgeError: (422, "project_not_forge", None, _details_none),
     StaleRevisionError: (
         409,
         "stale_revision",

@@ -125,6 +125,27 @@ class ProjectStore(Protocol):
         """
         ...
 
+    def materialize(self, project_id: str) -> Path:
+        """Return a local directory holding the project's artifacts.
+
+        The workdir-materialization seam: file-based tools (osr-forge) read and
+        write the returned directory directly. A remote store syncs the
+        project's artifacts down to a local directory before returning and
+        re-ingests them after forge operations complete — the
+        archive-the-workdir pattern the spec names; the local store returns the
+        project directory itself, making materialization the identity and
+        every forge write a live project write. No code outside the forge
+        bridge may call this — the store seam stays the only artifact path for
+        everything else.
+
+        Args:
+            project_id: The project to materialize.
+
+        Returns:
+            The local directory to run file-based tools against.
+        """
+        ...
+
 
 class LocalProjectStore:
     """The shipped store: a project is a directory on the local filesystem.
@@ -219,6 +240,20 @@ class LocalProjectStore:
             return path.read_bytes()
         except (FileNotFoundError, IsADirectoryError) as error:
             raise ArtifactNotFoundError(f"project {project_id!r} has no artifact {name!r}") from error
+
+    def materialize(self, project_id: str) -> Path:
+        """Return the project directory itself — local materialization is the identity.
+
+        Args:
+            project_id: The absolute project directory path.
+
+        Returns:
+            The project directory.
+        """
+        root = Path(project_id)
+        if not root.is_absolute():
+            raise ValueError(f"project id must be an absolute directory path, got {project_id!r}")
+        return root
 
     def write_artifact(self, project_id: str, name: str, data: bytes) -> None:
         """Write one artifact's bytes atomically.

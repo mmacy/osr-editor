@@ -9,19 +9,25 @@ their members under [`OsrEditorError`][osreditor.errors.OsrEditorError].
 __all__ = [
     "ArtifactNotFoundError",
     "DocumentPayloadInvalidError",
+    "ForgeOverrideInvalidError",
+    "ForgePageNotFoundError",
+    "ForgeRerunInvalidError",
+    "ForgeWorkdirIncompleteError",
+    "ForgeWorkdirInvalidError",
     "ImportSourceInvalidError",
     "ImporterNotFoundError",
     "InvalidProjectError",
     "OpInvariantError",
     "OpRejectedError",
     "OpTargetNotFoundError",
+    "OpUnsupportedForgeError",
     "OsrEditorError",
     "OsrWebCheckoutInvalidError",
     "OsrWebNotConfiguredError",
     "ProjectExistsError",
+    "ProjectNotForgeError",
     "ProjectNotFoundError",
     "ProjectPathNotFoundError",
-    "ProjectTypeUnsupportedError",
     "PublishBlockedError",
     "PublishDestinationExistsError",
     "RedoStackEmptyError",
@@ -50,8 +56,64 @@ class InvalidProjectError(OsrEditorError):
     """The directory exists but matches neither project shape."""
 
 
-class ProjectTypeUnsupportedError(OsrEditorError):
-    """The directory is a recognized project shape this release cannot open (a forge workdir)."""
+class ForgeWorkdirInvalidError(OsrEditorError):
+    """The workdir cannot open: `run.json` fails to parse, or assembly finds a missing or stale stage cache."""
+
+
+class ForgeWorkdirIncompleteError(OsrEditorError):
+    """The workdir's monsters stage is not `completed`, so it cannot assemble.
+
+    The message names the pending or failed stage; the remedy is the CLI's
+    `osrforge rerun <stage>` until phase 6 makes resume graphical.
+    """
+
+
+class ForgeOverrideInvalidError(OsrEditorError):
+    """The `overrides.yaml` cannot load or an entry cannot take effect.
+
+    Carries forge's own message verbatim — forge writes entry-naming,
+    remedy-bearing messages by design and the editor never paraphrases them.
+    """
+
+
+class ForgeRerunInvalidError(OsrEditorError):
+    """Forge's `rerun` rejected the request; the message (forge's own) carries the remedy."""
+
+
+class OpUnsupportedForgeError(OsrEditorError):
+    """An op in the batch has no override translation in forge-backed mode.
+
+    The whole batch rejects before any translation side effect; the remedy is
+    the detach offer, rendered in place by the frontend's blocked-op dialog.
+
+    Attributes:
+        op: The blocked op's discriminator code.
+        address: The op's target in the diagnostics address grammar.
+    """
+
+    def __init__(self, message: str, *, op: str, address: str) -> None:
+        """Build the error.
+
+        Args:
+            message: What has no translation.
+            op: The blocked op's discriminator code.
+            address: The op's target in the diagnostics address grammar.
+        """
+        super().__init__(message)
+        self.op = op
+        self.address = address
+
+
+class ForgePageNotFoundError(OsrEditorError):
+    """A requested workdir page render or level preview does not exist.
+
+    Normal for a licensed subset or lean workdir — the pane renders the
+    absence, never an error toast.
+    """
+
+
+class ProjectNotForgeError(OsrEditorError):
+    """A forge route was called on a project that is not forge-backed."""
 
 
 class ProjectExistsError(OsrEditorError):
