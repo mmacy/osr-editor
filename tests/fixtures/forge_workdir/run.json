@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "osrforge_version": "0.1.0",
+  "source_sha256": "6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d",
+  "source_bytes": 2048,
+  "page_count": 2,
+  "settings": {
+    "render_dpi": 150,
+    "max_pages": 200,
+    "max_source_bytes": 104857600,
+    "blank_page_renders": [],
+    "content_batch_pages": 8,
+    "survey_max_pages": 50,
+    "monster_fuzzy_threshold": 0.85,
+    "monster_llm_top_k": 8,
+    "custom_monsters": "emit",
+    "unresolved_fallback": "best-effort"
+  },
+  "provider": "FixtureProvider",
+  "model_id": "fixture-model-1",
+  "stages": {
+    "preprocess": {
+      "status": "completed",
+      "error": null,
+      "started_at": "2026-07-19T12:00:00Z",
+      "finished_at": "2026-07-19T12:01:00Z",
+      "usage": null
+    },
+    "survey": {
+      "status": "completed",
+      "error": null,
+      "started_at": "2026-07-19T12:02:00Z",
+      "finished_at": "2026-07-19T12:03:00Z",
+      "usage": {
+        "input_tokens": 1200,
+        "output_tokens": 300
+      }
+    },
+    "content": {
+      "status": "completed",
+      "error": null,
+      "started_at": "2026-07-19T12:04:00Z",
+      "finished_at": "2026-07-19T12:05:00Z",
+      "usage": {
+        "input_tokens": 5400,
+        "output_tokens": 900
+      }
+    },
+    "monsters": {
+      "status": "completed",
+      "error": null,
+      "started_at": "2026-07-19T12:06:00Z",
+      "finished_at": "2026-07-19T12:07:00Z",
+      "usage": {
+        "input_tokens": 800,
+        "output_tokens": 120
+      }
+    },
+    "geometry": {
+      "status": "pending",
+      "error": null,
+      "started_at": null,
+      "finished_at": null,
+      "usage": null
+    },
+    "assemble": {
+      "status": "pending",
+      "error": null,
+      "started_at": null,
+      "finished_at": null,
+      "usage": null
+    }
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "title": "The Millstone Warrens",
+  "description": "A derelict watermill hides a smugglers' warren beneath its grinding floor.",
+  "hooks": [
+    "The miller's ghost is said to walk the sluice gate at dusk."
+  ],
+  "town": {
+    "name": "Bran's Ford",
+    "description": "A ford-side hamlet of eel-catchers and carters.",
+    "services": [
+      "The Wheelhouse inn",
+      "Ferro's smithy"
+    ]
+  },
+  "dungeons": [
+    {
+      "id": "millstone-warrens",
+      "name": "The Millstone Warrens",
+      "levels": [
+        {
+          "number": 1,
+          "map_pages": [
+            1
+          ],
+          "areas": [
+            {
+              "key": "1",
+              "name": "Grinding Hall",
+              "source_label": null,
+              "kind": "room",
+              "source_pages": [
+                1
+              ]
+            },
+            {
+              "key": "2",
+              "name": "Flour Cellar",
+              "source_label": null,
+              "kind": "room",
+              "source_pages": [
+                1
+              ]
+            },
+            {
+              "key": "3",
+              "name": "Sluice Gate",
+              "source_label": null,
+              "kind": "room",
+              "source_pages": [
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "number": 2,
+          "map_pages": [
+            2
+          ],
+          "areas": [
+            {
+              "key": "1",
+              "name": "Undermill Pool",
+              "source_label": null,
+              "kind": "cave",
+              "source_pages": [
+                2
+              ]
+            },
+            {
+              "key": "2",
+              "name": "Rat King's Court",
+              "source_label": null,
+              "kind": "cave",
+              "source_pages": [
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "monster_names": [
+    "Goblin",
+    "Mill Wisp",
+    "Rat King"
+  ]
+}

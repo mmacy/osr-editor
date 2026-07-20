@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "resolutions": {
+    "goblin": {
+      "template_id": "goblin",
+      "method": "exact"
+    },
+    "mill wisp": {
+      "template_id": null,
+      "method": "unresolved"
+    },
+    "rat king": {
+      "template_id": null,
+      "method": "unresolved"
+    }
+  }
+}
