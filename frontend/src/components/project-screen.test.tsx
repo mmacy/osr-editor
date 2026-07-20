@@ -49,6 +49,7 @@ test('a diagnostics finding navigates by its address', () => {
           },
         ],
         lint: [],
+        forge: [],
       },
     }),
   )
@@ -73,6 +74,7 @@ test('an unnavigable address renders as plain text', () => {
           },
         ],
         lint: [],
+        forge: [],
       },
     }),
   )

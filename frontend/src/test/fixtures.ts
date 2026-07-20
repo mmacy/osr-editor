@@ -45,10 +45,24 @@ export function makeProjectState(overrides: Partial<ProjectState> = {}): Project
     type: 'native',
     document: makeDocument(),
     revision: 'r1',
-    diagnostics: { validation: [], lint: [] },
+    diagnostics: { validation: [], lint: [], forge: [] },
     dropped_fields: [],
     can_undo: false,
     can_redo: false,
+    forge: null,
+    sidecar: {
+      schema_version: 1,
+      provenance: null,
+      view_state: {
+        active_dungeon_id: null,
+        active_level_number: null,
+        zoom_pan: {},
+        review_selection: null,
+      },
+      notes: {},
+      review: [],
+      auto_reasons: [],
+    },
     ...overrides,
   }
 }
