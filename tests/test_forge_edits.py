@@ -122,7 +122,12 @@ def test_set_reason_marks_the_entry_human_composed(
     post_edits(
         client,
         forge_project,
-        {"edit": "set_reason", "kind": "monsters", "key": "rat king", "reason": "The rat king is a giant rat per p. 2."},
+        {
+            "edit": "set_reason",
+            "kind": "monsters",
+            "key": "rat king",
+            "reason": "The rat king is a giant rat per p. 2.",
+        },
         revision=result["revision"],
     )
     entry = yaml.safe_load((forge_workdir / "overrides.yaml").read_text())["monsters"]["rat king"]
@@ -281,7 +286,11 @@ def test_detach_writes_provenance_carries_notes_and_leaves_review_marks(
         json={
             "patches": [
                 {"action": "set_note", "address": "dungeon:millstone-warrens/level:1/area:2", "text": "Check p. 1"},
-                {"action": "dismiss_flag", "address": "millstone-warrens/1/1", "flag": "connection_ambiguous:no target stated"},
+                {
+                    "action": "dismiss_flag",
+                    "address": "millstone-warrens/1/1",
+                    "flag": "connection_ambiguous:no target stated",
+                },
             ]
         },
     )

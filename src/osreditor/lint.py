@@ -1,14 +1,16 @@
 """The tier-3 structural lint: forge's five graph checks mirrored exactly, plus `area_overlap`.
 
 The five shared checks mirror `osrforge.check`'s static tier — semantics,
-messages verbatim, severities from forge's producer-pinned table
-(`osrforge/check.py:62-70`) — which is what makes the spec's "forge's finding
-vocabulary where the checks coincide" true rather than aspirational. The
-mirrored semantics are pinned by fixture tests in this repo; the
-cross-implementation test that runs forge's `check()` beside
-[`lint_adventure`][osreditor.lint.lint_adventure] on shared fixtures arrives
-with phase 5, when `osr-forge` joins the dependencies. Until then the citations
-below are the contract.
+messages verbatim, severities from forge's producer-pinned table — which is
+what makes the spec's "forge's finding vocabulary where the checks coincide"
+true rather than aspirational. The contract is the running comparison: the
+cross-implementation parity suite (`tests/test_lint_parity.py`) runs forge's
+own `check()` beside [`lint_adventure`][osreditor.lint.lint_adventure] on the
+shared fixtures and their doctored variants, asserting ids, severities,
+messages, and order exactly, and locations under a refinement relation — the
+editor's `orphan_cell` and `transition_unpaired` addresses navigate to the
+exact cell where forge's location grammar stops at the level. The citations
+below remain as orientation, no longer the contract.
 
 Reachability is a BFS over one of two graph flavors — *inclusive* (open edges
 plus doors in any state, secret included) and *non-secret* (secret doors become

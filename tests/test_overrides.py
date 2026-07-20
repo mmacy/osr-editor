@@ -193,8 +193,21 @@ def test_remove_survey_area_translates_to_remove_true(forge_workdir: Path) -> No
         project,
         batch(
             project,
-            {"op": "set_area_field", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "1", "field": "name", "value": "Renamed"},
-            {"op": "set_area_cells", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "1", "cells": [[0, 0], [1, 0]]},
+            {
+                "op": "set_area_field",
+                "dungeon_id": DUNGEON,
+                "level_number": 1,
+                "area_id": "1",
+                "field": "name",
+                "value": "Renamed",
+            },
+            {
+                "op": "set_area_cells",
+                "dungeon_id": DUNGEON,
+                "level_number": 1,
+                "area_id": "1",
+                "cells": [[0, 0], [1, 0]],
+            },
         ),
     )
     apply_and_check_roundtrip(
@@ -472,7 +485,12 @@ def test_forge_mode_rejects_a_slash_in_a_new_area_id(forge_workdir: Path) -> Non
 # --- the blocked-op matrix ----------------------------------------------------
 
 BLOCKED_OPS = [
-    {"op": "set_wandering", "dungeon_id": DUNGEON, "level_number": 1, "wandering": {"chance_in_six": 1, "interval_turns": 2}},
+    {
+        "op": "set_wandering",
+        "dungeon_id": DUNGEON,
+        "level_number": 1,
+        "wandering": {"chance_in_six": 1, "interval_turns": 2},
+    },
     {"op": "set_dungeon_field", "dungeon_id": DUNGEON, "field": "name", "value": "Renamed"},
     {"op": "rename_dungeon", "old_id": DUNGEON, "new_id": "new-warrens"},
     {"op": "add_dungeon", "dungeon_id": "annex", "width": 5, "height": 5},
@@ -482,7 +500,13 @@ BLOCKED_OPS = [
     {"op": "renumber_level", "dungeon_id": DUNGEON, "old_number": 2, "new_number": 3},
     {"op": "resize_level", "dungeon_id": DUNGEON, "level_number": 1, "width": 40, "height": 40},
     {"op": "set_area_field", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "2", "field": "id", "value": "2a"},
-    {"op": "add_feature", "dungeon_id": DUNGEON, "level_number": 1, "area_id": None, "feature": {"id": "lvl", "kind": "custom"}},
+    {
+        "op": "add_feature",
+        "dungeon_id": DUNGEON,
+        "level_number": 1,
+        "area_id": None,
+        "feature": {"id": "lvl", "kind": "custom"},
+    },
 ]
 
 
@@ -502,7 +526,14 @@ def test_a_blocked_op_rejects_the_whole_batch_before_any_side_effect(forge_workd
             project,
             batch(
                 project,
-                {"op": "set_area_field", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "2", "field": "name", "value": "X"},
+                {
+                    "op": "set_area_field",
+                    "dungeon_id": DUNGEON,
+                    "level_number": 1,
+                    "area_id": "2",
+                    "field": "name",
+                    "value": "X",
+                },
                 {"op": "resize_level", "dungeon_id": DUNGEON, "level_number": 1, "width": 40, "height": 40},
             ),
         )
@@ -517,11 +548,31 @@ def test_successive_edits_merge_into_one_entry_and_redraft_the_reason(forge_work
     service, project = open_forge(forge_workdir)
     service.apply_batch(
         project,
-        batch(project, {"op": "set_area_field", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "2", "field": "name", "value": "The Flour Cellar"}),
+        batch(
+            project,
+            {
+                "op": "set_area_field",
+                "dungeon_id": DUNGEON,
+                "level_number": 1,
+                "area_id": "2",
+                "field": "name",
+                "value": "The Flour Cellar",
+            },
+        ),
     )
     service.apply_batch(
         project,
-        batch(project, {"op": "set_area_field", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "2", "field": "description", "value": "Corrected."}),
+        batch(
+            project,
+            {
+                "op": "set_area_field",
+                "dungeon_id": DUNGEON,
+                "level_number": 1,
+                "area_id": "2",
+                "field": "description",
+                "value": "Corrected.",
+            },
+        ),
     )
     data = overrides_data(forge_workdir)
     assert list(data["areas"]) == [f"{DUNGEON}/1/2"]
@@ -536,7 +587,17 @@ def test_a_human_composed_reason_survives_later_merges(forge_workdir: Path) -> N
     service, project = open_forge(forge_workdir)
     service.apply_batch(
         project,
-        batch(project, {"op": "set_area_field", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "2", "field": "name", "value": "The Flour Cellar"}),
+        batch(
+            project,
+            {
+                "op": "set_area_field",
+                "dungeon_id": DUNGEON,
+                "level_number": 1,
+                "area_id": "2",
+                "field": "name",
+                "value": "The Flour Cellar",
+            },
+        ),
     )
     # Simulate a human composing the reason: the ledger drops the key (item 4's
     # set_reason route owns this in production).
@@ -544,7 +605,17 @@ def test_a_human_composed_reason_survives_later_merges(forge_workdir: Path) -> N
     project.sidecar = project.sidecar.model_copy(update={"auto_reasons": ledger})
     service.apply_batch(
         project,
-        batch(project, {"op": "set_area_field", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "2", "field": "description", "value": "Corrected."}),
+        batch(
+            project,
+            {
+                "op": "set_area_field",
+                "dungeon_id": DUNGEON,
+                "level_number": 1,
+                "area_id": "2",
+                "field": "description",
+                "value": "Corrected.",
+            },
+        ),
     )
     entry = overrides_data(forge_workdir)["areas"][f"{DUNGEON}/1/2"]
     assert entry["reason"] == "area 2 name corrected against p. 1"
@@ -582,7 +653,14 @@ def test_serialization_is_deterministic_and_forge_loadable(forge_workdir: Path) 
         project,
         batch(
             project,
-            {"op": "set_area_field", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "2", "field": "description", "value": "Corrected."},
+            {
+                "op": "set_area_field",
+                "dungeon_id": DUNGEON,
+                "level_number": 1,
+                "area_id": "2",
+                "field": "description",
+                "value": "Corrected.",
+            },
             {"op": "set_adventure_field", "field": "name", "value": "Renamed"},
         ),
     )
@@ -602,7 +680,14 @@ def test_kinds_serialize_in_overrides_field_order(forge_workdir: Path) -> None:
             project,
             {"op": "set_adventure_field", "field": "name", "value": "Renamed"},
             {"op": "set_town_field", "field": "name", "value": "Bran's Crossing"},
-            {"op": "set_area_field", "dungeon_id": DUNGEON, "level_number": 1, "area_id": "2", "field": "name", "value": "Cellar"},
+            {
+                "op": "set_area_field",
+                "dungeon_id": DUNGEON,
+                "level_number": 1,
+                "area_id": "2",
+                "field": "name",
+                "value": "Cellar",
+            },
             {"op": "set_entrance", "dungeon_id": DUNGEON, "level_number": 1, "entrance": [1, 1]},
         ),
     )
