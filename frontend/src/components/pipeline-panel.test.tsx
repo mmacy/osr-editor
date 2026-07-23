@@ -25,11 +25,7 @@ describe('parseKnobEntry', () => {
 
 describe('PipelinePanel', () => {
   test('renders per-stage status, usage, and provider identity from run.json', () => {
-    render(
-      <PipelinePanel
-        project={makeProjectState({ type: 'forge', forge: makeForgeState() })}
-      />,
-    )
+    render(<PipelinePanel project={makeProjectState({ type: 'forge', forge: makeForgeState() })} />)
     expect(screen.getByText('survey')).toBeInTheDocument()
     expect(screen.getByText('1,200 in / 300 out')).toBeInTheDocument()
     expect(screen.getByText('FixtureProvider')).toBeInTheDocument()

@@ -95,9 +95,7 @@ export function makeForgeReport(overrides: Partial<ExtractionReport> = {}): Extr
     monsters: {
       resolved: 2,
       unresolved: ['rat king'],
-      custom: [
-        { id: 'mill_wisp', name: 'mill wisp', source_pages: [2], derived: ['xp', 'saves'] },
-      ],
+      custom: [{ id: 'mill_wisp', name: 'mill wisp', source_pages: [2], derived: ['xp', 'saves'] }],
     },
     usage: { input_tokens: 7400, output_tokens: 1320 },
     flags: ['low_confidence:module title unstated'],
@@ -130,7 +128,13 @@ export function makeForgeState(overrides: Partial<ForgeState> = {}): ForgeState 
       provider: 'FixtureProvider',
       model_id: 'fixture-model-1',
       stages: {
-        preprocess: { status: 'completed', error: null, started_at: null, finished_at: null, usage: null },
+        preprocess: {
+          status: 'completed',
+          error: null,
+          started_at: null,
+          finished_at: null,
+          usage: null,
+        },
         survey: {
           status: 'completed',
           error: null,
@@ -138,10 +142,34 @@ export function makeForgeState(overrides: Partial<ForgeState> = {}): ForgeState 
           finished_at: '2026-07-19T12:03:00Z',
           usage: { input_tokens: 1200, output_tokens: 300 },
         },
-        content: { status: 'completed', error: null, started_at: null, finished_at: null, usage: null },
-        monsters: { status: 'completed', error: null, started_at: null, finished_at: null, usage: null },
-        geometry: { status: 'completed', error: null, started_at: null, finished_at: null, usage: null },
-        assemble: { status: 'completed', error: null, started_at: null, finished_at: null, usage: null },
+        content: {
+          status: 'completed',
+          error: null,
+          started_at: null,
+          finished_at: null,
+          usage: null,
+        },
+        monsters: {
+          status: 'completed',
+          error: null,
+          started_at: null,
+          finished_at: null,
+          usage: null,
+        },
+        geometry: {
+          status: 'completed',
+          error: null,
+          started_at: null,
+          finished_at: null,
+          usage: null,
+        },
+        assemble: {
+          status: 'completed',
+          error: null,
+          started_at: null,
+          finished_at: null,
+          usage: null,
+        },
       },
     },
     overrides: {
