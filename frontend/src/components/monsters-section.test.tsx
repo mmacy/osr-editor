@@ -254,6 +254,35 @@ test('forge flow-entry actions open the blocked-op dialog client-side, never pos
   expect(screen.getByTestId('monster-detail-bespoke-1')).toBeInTheDocument()
 })
 
+test('a forge detail-field commit renders its 422 through the blocked-op dialog, never inline', async () => {
+  // The id field is the one surface with an inline claim — the claim
+  // discipline is op_invariant only, so op_unsupported_forge must fall
+  // through to the store's handler and land as the detach offer.
+  postOps.mockRejectedValueOnce(
+    new ApiRequestError(422, {
+      code: 'op_unsupported_forge',
+      message: BUNDLED_TEMPLATE_BLOCKED_MESSAGE,
+      remedy: 'This edit has no override kind. Detach to a native project to make it, or cancel.',
+      details: { op: 'set_monster_template', address: 'monster:bespoke-1' },
+    }),
+  )
+  const template = seedMonsterTemplate('bespoke-1', 'Bespoke horror')
+  const project = projectWithMonsters([template], { type: 'forge', forge: makeForgeState() })
+  renderSection(project)
+  const id = screen.getByLabelText('Id')
+  fireEvent.change(id, { target: { value: 'renamed' } })
+  fireEvent.blur(id)
+  await waitFor(() =>
+    expect(projectStore.getState().blockedOp).toEqual({
+      op: 'set_monster_template',
+      address: 'monster:bespoke-1',
+      message: BUNDLED_TEMPLATE_BLOCKED_MESSAGE,
+    }),
+  )
+  // Never claimed inline — the detach offer is not swallowed.
+  expect(screen.queryByText(BUNDLED_TEMPLATE_BLOCKED_MESSAGE)).not.toBeInTheDocument()
+})
+
 test('a create intent from the picker shortcut opens the create dialog', () => {
   renderSection(projectWithMonsters([]), { create: true })
   expect(screen.getByRole('button', { name: 'Create' })).toBeInTheDocument()

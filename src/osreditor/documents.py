@@ -993,12 +993,13 @@ def _resolve_monster_template(adventure: Adventure, template_id: str) -> int:
     raise OpTargetNotFoundError(f"the document bundles no monster template {template_id!r}")
 
 
-def _require_monster_id_free(adventure: Adventure, template_id: str, exclude_index: int | None = None) -> None:
+def _require_monster_id_free(adventure: Adventure, template_id: str) -> None:
     """Reject an empty or colliding bundled-template id — the `AddMonsterTemplate` id rules.
 
-    The invariant is "no op ever *introduces* a collision", so it runs only on
-    new or changed ids; `exclude_index` excludes the replacement target so a
-    rename never collides with the template it replaces.
+    The invariant is "no op ever *introduces* a collision", so callers run it
+    on new or changed ids only. A rename can never collide with the template
+    it replaces: the target still carries the old id when the check runs, and
+    the rename branch runs only when the new id differs from it.
     """
     if not template_id:
         raise OpInvariantError("monster template id must be non-empty")
@@ -1007,9 +1008,8 @@ def _require_monster_id_free(adventure: Adventure, template_id: str, exclude_ind
             f"monster template id {template_id!r} collides with the shipped catalog — "
             "the shipped entry would shadow the bundled one"
         )
-    for index, template in enumerate(adventure.monsters):
-        if index != exclude_index and template.id == template_id:
-            raise OpInvariantError(f"the document already bundles a monster template {template_id!r}")
+    if any(template.id == template_id for template in adventure.monsters):
+        raise OpInvariantError(f"the document already bundles a monster template {template_id!r}")
 
 
 def _apply_add_monster_template(adventure: Adventure, op: AddMonsterTemplate) -> tuple[Adventure, str]:
@@ -1023,7 +1023,7 @@ def _apply_set_monster_template(adventure: Adventure, op: SetMonsterTemplate) ->
         # A rename, under AddMonsterTemplate's id rules; an unchanged id —
         # colliding or not — carries through, so a foreign document's
         # colliding template stays editable and its finding stays navigable.
-        _require_monster_id_free(adventure, op.template.id, exclude_index=index)
+        _require_monster_id_free(adventure, op.template.id)
     monsters = (*adventure.monsters[:index], op.template, *adventure.monsters[index + 1 :])
     adventure = adventure.model_copy(update={"monsters": monsters})
     if op.template.id == op.template_id:

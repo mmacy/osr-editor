@@ -124,6 +124,10 @@ class TranslationResult:
     serialized: bytes
 
 
+# The frontend mirrors two of these strings verbatim for client-side
+# flow-entry routing (monster-builders.ts BUNDLED_TEMPLATE_BLOCKED_MESSAGE;
+# import-dialog.tsx's new-level radio) — a rewording here should carry over so
+# the dialog copy matches what a posted batch would answer.
 _BUNDLED_TEMPLATE_BLOCKED = (
     "bundled monster templates have no override kind — assembly derives them from the monsters stage"
 )

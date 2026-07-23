@@ -874,13 +874,14 @@ function HitDiceEditor({ template, update }: { template: MonsterTemplate; update
   )
   const fixedHp = useCommittedField(
     dice.fixed_hp == null ? '' : String(dice.fixed_hp),
+    (draft) => patchDice({ fixed_hp: draft === '' ? null : Number(draft) }),
     (draft) => {
       // Clearing fixed hp under count 0 would leave nothing to roll — the
-      // form refuses the shape rather than surface a rejection.
-      if (draft === '' && dice.count === 0) return
-      patchDice({ fixed_hp: draft === '' ? null : Number(draft) })
+      // normalizer refuses the shape (the draft reverts) rather than
+      // surface a rejection.
+      if (draft.trim() === '' && dice.count === 0) return null
+      return optionalInteger(1)(draft)
     },
-    optionalInteger(1),
   )
   return (
     <div className="flex flex-col gap-1.5">
@@ -931,10 +932,12 @@ function LabeledColumn({ label, children }: { label: string; children: React.Rea
 }
 
 function RoutinesEditor({ template, update }: { template: MonsterTemplate; update: Update }) {
-  const patchAttack = (
+  // Attack edits — the effects tuple included — compute from the committed
+  // attack inside the queue, never from the render-time prop.
+  const updateAttack = (
     routineIndex: number,
     attackIndex: number,
-    attackPatch: Partial<MonsterAttack>,
+    build: (committed: MonsterAttack) => Partial<MonsterAttack>,
   ) =>
     update((committed) => {
       const routine = committed.attacks[routineIndex]
@@ -943,7 +946,7 @@ function RoutinesEditor({ template, update }: { template: MonsterTemplate; updat
         at === routineIndex
           ? {
               attacks: existing.attacks.map((attack, index) =>
-                index === attackIndex ? { ...attack, ...attackPatch } : attack,
+                index === attackIndex ? { ...attack, ...build(attack) } : attack,
               ),
             }
           : existing,
@@ -973,7 +976,7 @@ function RoutinesEditor({ template, update }: { template: MonsterTemplate; updat
             <AttackRow
               key={attackIndex}
               attack={attack}
-              onPatch={(attackPatch) => patchAttack(routineIndex, attackIndex, attackPatch)}
+              onUpdate={(build) => updateAttack(routineIndex, attackIndex, build)}
               onRemove={
                 routine.attacks.length > 1
                   ? () =>
@@ -1036,32 +1039,35 @@ function RoutinesEditor({ template, update }: { template: MonsterTemplate; updat
 
 function AttackRow({
   attack,
-  onPatch,
+  onUpdate,
   onRemove,
 }: {
   attack: MonsterAttack
-  onPatch: (patch: Partial<MonsterAttack>) => void
+  onUpdate: (build: (committed: MonsterAttack) => Partial<MonsterAttack>) => void
   onRemove?: () => void
 }) {
+  // Scalar patches are state-independent; the effects tuple derives from the
+  // committed attack inside the queue (the ListEditor updater contract).
+  const patch = (value: Partial<MonsterAttack>) => onUpdate(() => value)
   const count = useCommittedField(
     String(attack.count),
-    (draft) => onPatch({ count: Number(draft) }),
+    (draft) => patch({ count: Number(draft) }),
     integerInRange(1),
   )
-  const name = useCommittedField(attack.name, (value) => onPatch({ name: value }), nonEmpty)
+  const name = useCommittedField(attack.name, (value) => patch({ name: value }), nonEmpty)
   const damage = useCommittedField(
     attack.damage ?? '',
-    (draft) => onPatch({ damage: draft === '' ? null : draft }),
+    (draft) => patch({ damage: draft === '' ? null : draft }),
     optionalDice,
   )
   const fixedDamage = useCommittedField(
     attack.fixed_damage == null ? '' : String(attack.fixed_damage),
-    (draft) => onPatch({ fixed_damage: draft === '' ? null : Number(draft) }),
+    (draft) => patch({ fixed_damage: draft === '' ? null : Number(draft) }),
     optionalInteger(0),
   )
   const byWeaponModifier = useCommittedField(
     String(attack.by_weapon_modifier),
-    (draft) => onPatch({ by_weapon_modifier: Number(draft) }),
+    (draft) => patch({ by_weapon_modifier: Number(draft) }),
     anyInteger,
   )
   return (
@@ -1099,7 +1105,7 @@ function AttackRow({
           <input
             type="checkbox"
             checked={attack.by_weapon}
-            onChange={(event) => onPatch({ by_weapon: event.target.checked })}
+            onChange={(event) => patch({ by_weapon: event.target.checked })}
           />
           or by weapon
         </label>
@@ -1117,7 +1123,9 @@ function AttackRow({
         label="Effects"
         items={attack.effects}
         placeholder="poison, energy_drain…"
-        onCommit={(mutate) => onPatch({ effects: mutate([...attack.effects]) })}
+        onCommit={(mutate) =>
+          onUpdate((committed) => ({ effects: mutate([...committed.effects]) }))
+        }
       />
     </div>
   )
@@ -1615,12 +1623,18 @@ function TreasureSection({ template, update }: { template: MonsterTemplate; upda
 }
 
 function AbilitiesSection({ template, update }: { template: MonsterTemplate; update: Update }) {
-  const patchAbility = (index: number, abilityPatch: Partial<MonsterAbility>) =>
+  // Ability edits — the params map included — compute from the committed
+  // ability inside the queue, never from the render-time prop.
+  const updateAbility = (
+    index: number,
+    build: (committed: MonsterAbility) => Partial<MonsterAbility>,
+  ) =>
     update((committed) => {
-      if (index >= committed.abilities.length) return null
+      const ability = committed.abilities[index]
+      if (!ability) return null
       return {
         abilities: committed.abilities.map((existing, at) =>
-          at === index ? { ...existing, ...abilityPatch } : existing,
+          at === index ? { ...existing, ...build(existing) } : existing,
         ),
       }
     })
@@ -1631,7 +1645,7 @@ function AbilitiesSection({ template, update }: { template: MonsterTemplate; upd
         <AbilityEditor
           key={index}
           ability={ability}
-          onPatch={(abilityPatch) => patchAbility(index, abilityPatch)}
+          onUpdate={(build) => updateAbility(index, build)}
           onRemove={() =>
             update((committed) => ({
               abilities: committed.abilities.filter((_, at) => at !== index),
@@ -1660,23 +1674,26 @@ function AbilitiesSection({ template, update }: { template: MonsterTemplate; upd
 
 function AbilityEditor({
   ability,
-  onPatch,
+  onUpdate,
   onRemove,
 }: {
   ability: MonsterAbility
-  onPatch: (patch: Partial<MonsterAbility>) => void
+  onUpdate: (build: (committed: MonsterAbility) => Partial<MonsterAbility>) => void
   onRemove: () => void
 }) {
-  const tag = useCommittedField(ability.tag, (value) => onPatch({ tag: value }), nonEmpty)
-  const name = useCommittedField(ability.name, (value) => onPatch({ name: value }), nonEmpty)
-  const prose = useCommittedField(ability.prose, (value) => onPatch({ prose: value }))
+  // Scalar patches are state-independent; the params map derives from the
+  // committed ability inside the queue.
+  const patch = (value: Partial<MonsterAbility>) => onUpdate(() => value)
+  const tag = useCommittedField(ability.tag, (value) => patch({ tag: value }), nonEmpty)
+  const name = useCommittedField(ability.name, (value) => patch({ name: value }), nonEmpty)
+  const prose = useCommittedField(ability.prose, (value) => patch({ prose: value }))
   const [paramKey, setParamKey] = useState('')
   const [paramValue, setParamValue] = useState('')
   const addParam = () => {
     const key = paramKey.trim()
     const parsed = parseAbilityParam(paramValue)
     if (key === '' || parsed === null) return
-    onPatch({ params: { ...ability.params, [key]: parsed } })
+    onUpdate((committed) => ({ params: { ...committed.params, [key]: parsed } }))
     setParamKey('')
     setParamValue('')
   }
@@ -1693,7 +1710,7 @@ function AbilityEditor({
           <input
             type="checkbox"
             checked={ability.manual}
-            onChange={(event) => onPatch({ manual: event.target.checked })}
+            onChange={(event) => patch({ manual: event.target.checked })}
           />
           manual (the kernel doesn't execute it)
         </label>
@@ -1722,17 +1739,21 @@ function AbilityEditor({
             <ParamValueField
               paramKey={key}
               value={value}
-              onCommit={(next) => onPatch({ params: { ...ability.params, [key]: next } })}
+              onCommit={(next) =>
+                onUpdate((committed) => ({ params: { ...committed.params, [key]: next } }))
+              }
             />
             <Button
               variant="ghost"
               size="icon-sm"
               aria-label={`Remove param ${key}`}
-              onClick={() => {
-                const params = { ...ability.params }
-                delete params[key]
-                onPatch({ params })
-              }}
+              onClick={() =>
+                onUpdate((committed) => {
+                  const params = { ...committed.params }
+                  delete params[key]
+                  return { params }
+                })
+              }
             >
               <XIcon />
             </Button>

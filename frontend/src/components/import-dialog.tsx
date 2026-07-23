@@ -288,6 +288,8 @@ function ImportDialogBody({
                       projectStore.getState().setBlockedOp({
                         op: 'add_level',
                         address: `dungeon:${encodeURIComponent(targetDungeon)}`,
+                        // Mirrors the server's _BLOCKED_MESSAGES entry for
+                        // add_level — op_unsupported_forge stays the authority.
                         message: 'level structure has no override kind',
                       })
                       return
