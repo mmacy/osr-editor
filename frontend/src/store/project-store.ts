@@ -96,6 +96,9 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
           // The forge state refreshes on every forge commit, undo, and redo;
           // a native result carries null and leaves the field null.
           forge: result.forge ?? project.forge,
+          // The sidecar rides every result: a forge commit moves the
+          // auto_reasons ledger, a native re-keying commit cascades the notes.
+          sidecar: result.sidecar ?? project.sidecar,
         },
       })
     }

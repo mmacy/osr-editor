@@ -2429,6 +2429,7 @@ export interface components {
             /** Can Redo */
             can_redo: boolean;
             forge?: components["schemas"]["ForgeState"] | null;
+            sidecar?: components["schemas"]["EditorSidecar"] | null;
         };
         /**
          * OpenProjectRequest

@@ -840,6 +840,7 @@ class DocumentService:
             can_undo=bool(project.undo_stack),
             can_redo=bool(project.redo_stack),
             forge=forge_state_model(project),
+            sidecar=project.sidecar,
         )
 
 
