@@ -11,7 +11,22 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 
 import { api, ApiRequestError, type ApiClient } from '@/lib/api'
 import { applyDelta } from '@/lib/apply-delta'
-import type { Adventure, AnyEditOp, OpBatchResult, ProjectState } from '@/types'
+import type {
+  Adventure,
+  AnyEditOp,
+  AnyOverrideEdit,
+  AnySidecarPatch,
+  OpBatchResult,
+  ProjectState,
+} from '@/types'
+
+// A blocked forge-mode gesture, rendered in place by the blocked-op dialog:
+// the gesture named, the one-line why, and the detach-or-cancel choice.
+export interface BlockedOp {
+  op: string
+  address: string
+  message: string
+}
 
 // Ops whose payload depends on the document (a whole hooks tuple, a spread
 // wandering spec) must be BUILT at dequeue time against the document the
@@ -37,15 +52,23 @@ export interface ProjectStoreState {
   // the backend's config is the durable copy; this is only the echo of the
   // last path this session typed or used.
   lastCheckoutPath: string | null
+  // The blocked forge-mode gesture awaiting the detach-or-cancel choice.
+  blockedOp: BlockedOp | null
   setProject: (state: ProjectState) => void
   clear: () => void
   acknowledgeFidelity: () => void
   setLastExportPath: (path: string) => void
   setLastCheckoutPath: (path: string) => void
+  clearBlockedOp: () => void
   commit: (ops: OpsInput, options?: CommitOptions) => Promise<boolean>
   undo: () => Promise<void>
   redo: () => Promise<void>
   refresh: () => Promise<void>
+  commitForgeEdits: (edits: AnyOverrideEdit[]) => Promise<boolean>
+  runForgeCheck: () => Promise<void>
+  runForgeRerun: (settings: Record<string, unknown>) => Promise<boolean>
+  detach: (path: string) => Promise<ProjectState | null>
+  patchSidecar: (patches: AnySidecarPatch[]) => Promise<void>
 }
 
 export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreState> {
@@ -70,6 +93,9 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
           diagnostics: result.diagnostics,
           can_undo: result.can_undo,
           can_redo: result.can_redo,
+          // The forge state refreshes on every forge commit, undo, and redo;
+          // a native result carries null and leaves the field null.
+          forge: result.forge ?? project.forge,
         },
       })
     }
@@ -99,6 +125,19 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
         void refresh()
         return
       }
+      if (error.detail.code === 'op_unsupported_forge') {
+        // The spec's rule: the edit blocks in place with the detach offer —
+        // a dialog, never a toast.
+        const details = (error.detail.details ?? {}) as { op?: string; address?: string }
+        set({
+          blockedOp: {
+            op: details.op ?? 'unknown',
+            address: details.address ?? '',
+            message: error.detail.message,
+          },
+        })
+        return
+      }
       toast.error(error.detail.message, {
         description: error.detail.remedy ?? undefined,
       })
@@ -110,12 +149,14 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       gone: false,
       lastExportPath: null,
       lastCheckoutPath: null,
+      blockedOp: null,
 
       setProject: (state) => set({ project: state, fidelityAcknowledged: false, gone: false }),
       clear: () => set({ project: null, fidelityAcknowledged: false, gone: false }),
       acknowledgeFidelity: () => set({ fidelityAcknowledged: true }),
       setLastExportPath: (path) => set({ lastExportPath: path }),
       setLastCheckoutPath: (path) => set({ lastCheckoutPath: path }),
+      clearBlockedOp: () => set({ blockedOp: null }),
 
       commit: (ops, options) =>
         enqueue(async () => {
@@ -156,6 +197,72 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
         }),
 
       refresh,
+
+      commitForgeEdits: (edits) =>
+        enqueue(async () => {
+          const { project } = get()
+          if (!project || edits.length === 0) return false
+          try {
+            applyResult(await client.postForgeOverrides(project.id, project.revision, edits))
+            return true
+          } catch (error) {
+            handleError(error)
+            return false
+          }
+        }),
+
+      runForgeCheck: () =>
+        enqueue(async () => {
+          const { project } = get()
+          if (!project) return
+          try {
+            applyResult(await client.postForgeCheck(project.id))
+          } catch (error) {
+            handleError(error)
+          }
+        }),
+
+      runForgeRerun: (settings) =>
+        enqueue(async () => {
+          const { project } = get()
+          if (!project) return false
+          try {
+            applyResult(await client.postForgeRerun(project.id, settings))
+            return true
+          } catch (error) {
+            handleError(error)
+            return false
+          }
+        }),
+
+      detach: (path) =>
+        enqueue(async () => {
+          const { project } = get()
+          if (!project) return null
+          try {
+            const detached = await client.postForgeDetach(project.id, path)
+            set({ project: detached, fidelityAcknowledged: false, gone: false, blockedOp: null })
+            return detached
+          } catch (error) {
+            handleError(error)
+            return null
+          }
+        }),
+
+      patchSidecar: (patches) =>
+        enqueue(async () => {
+          const { project } = get()
+          if (!project || patches.length === 0) return
+          try {
+            const sidecar = await client.postSidecar(project.id, patches)
+            const current = get().project
+            if (current && current.id === project.id) {
+              set({ project: { ...current, sidecar } })
+            }
+          } catch (error) {
+            handleError(error)
+          }
+        }),
     }
   })
 }

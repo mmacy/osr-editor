@@ -5,6 +5,7 @@
 // effects.
 import { useState } from 'react'
 
+import { AuthorNotesCard } from '@/components/author-notes-card'
 import { LevelFeaturesSection } from '@/components/level-features'
 import { MiniLevelPicker } from '@/components/mini-level-picker'
 import { Button } from '@/components/ui/button'
@@ -20,7 +21,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
-import { navTargetFor, type NavTarget } from '@/lib/address'
+import { levelAddress, navTargetFor, type NavTarget } from '@/lib/address'
 import { transitionOps } from '@/map/gestures'
 import { projectStore } from '@/store/project-store'
 import type {
@@ -595,6 +596,7 @@ export function LevelPropertiesDialog({
             dungeonId={dungeonId}
             levelNumber={levelNumber}
           />
+          <AuthorNotesCard address={levelAddress(dungeonId, levelNumber)} />
           <div>
             <Button
               variant="destructive"

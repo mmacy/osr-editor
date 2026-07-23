@@ -160,3 +160,32 @@ test('replace mode against a vanished level returns no ops', () => {
     }),
   ).toEqual([])
 })
+
+test('the forge variant emits no ResizeLevel — dimensions are derived state', () => {
+  const ops = importOps(importedLevel(), makeDocument(), {
+    dungeonId: 'dungeon-1',
+    levelNumber: 1,
+    mode: 'replace',
+    keepUnresolved: [],
+    forge: true,
+  })
+  expect(ops.some((op) => op.op === 'resize_level')).toBe(false)
+  // Everything else rides the existing mapping: the clearing sequence, the
+  // creates, the entrance.
+  expect(ops.map((op) => op.op)).toEqual([
+    'set_entrance',
+    'set_edges',
+    'create_area',
+    'set_entrance',
+  ])
+})
+
+test('the native replace still resizes', () => {
+  const ops = importOps(importedLevel(), makeDocument(), {
+    dungeonId: 'dungeon-1',
+    levelNumber: 1,
+    mode: 'replace',
+    keepUnresolved: [],
+  })
+  expect(ops.some((op) => op.op === 'resize_level')).toBe(true)
+})

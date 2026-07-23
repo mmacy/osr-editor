@@ -18,8 +18,10 @@ import {
 } from 'lucide-react'
 
 import type { CardIntent } from '@/components/area-content-cards'
+import { ForgePreviewDialog } from '@/components/forge-preview-dialog'
 import { ImportDialog } from '@/components/import-dialog'
 import { MapCanvas } from '@/components/map-canvas'
+import { SourcePagesPane } from '@/components/source-pages-pane'
 import {
   AddDungeonDialog,
   AddLevelDialog,
@@ -65,7 +67,7 @@ import {
   type StockingMenuEntry,
 } from '@/map/stocking'
 import { cellSizePx, fitView, resetView, zoomAt, type ViewTransform } from '@/map/view'
-import { projectStore } from '@/store/project-store'
+import { projectStore, useProjectStore } from '@/store/project-store'
 import type { Adventure, Diagnostics, LevelSpec, Position } from '@/types'
 
 const TOOLS: Array<{ tool: Tool; label: string; shortcut: string; icon: React.ReactNode }> = [
@@ -145,10 +147,15 @@ export function MapEditor({
     | 'resize'
     | 'properties'
     | 'import'
+    | 'forge-preview'
     | null
   >(null)
   const prefersDark = usePrefersDark()
   const theme = prefersDark ? DARK_THEME : LIGHT_THEME
+  // The forge review chrome: the preview dialog and the source-pages pane
+  // exist only for forge-backed projects.
+  const forgeProject = useProjectStore((state) => state.project?.forge ?? null)
+  const forgeProjectId = useProjectStore((state) => state.project?.id ?? null)
   // The hover line's monster names resolve through the effective catalog.
   const shippedMonsters = useCatalog(loadMonsterCatalog)
   const pickerMonsters = useMemo(
@@ -643,6 +650,14 @@ export function MapEditor({
           </TooltipTrigger>
           <TooltipContent>Dim stocked areas (F)</TooltipContent>
         </Tooltip>
+        {forgeProject && (
+          <>
+            <Separator orientation="vertical" className="mx-1 h-5" />
+            <Button variant="ghost" size="sm" onClick={() => setDialog('forge-preview')}>
+              Forge preview
+            </Button>
+          </>
+        )}
         <span className="ml-auto font-mono text-xs text-muted-foreground" data-testid="hover-ref">
           {hoverLine}
         </span>
@@ -724,6 +739,16 @@ export function MapEditor({
             onCardIntentConsumed={() => setCardIntent(null)}
           />
         </aside>
+        {forgeProject && forgeProjectId && selection?.kind === 'area' && (
+          <SourcePagesPane
+            projectId={forgeProjectId}
+            pages={
+              forgeProject.report.areas.find(
+                (record) => record.id === `${dungeonId}/${levelNumber}/${selection.areaId}`,
+              )?.source_pages ?? []
+            }
+          />
+        )}
       </div>
 
       <AddDungeonDialog
@@ -776,7 +801,17 @@ export function MapEditor({
         document={document}
         dungeonId={dungeonId}
         onNavigate={onNavigate}
+        forge={forgeProject !== null}
       />
+      {forgeProjectId && (
+        <ForgePreviewDialog
+          open={dialog === 'forge-preview'}
+          onOpenChange={(open) => setDialog(open ? 'forge-preview' : null)}
+          projectId={forgeProjectId}
+          dungeonId={dungeonId}
+          levelNumber={levelNumber}
+        />
+      )}
       {transitionCell && (
         <TransitionDialog
           open

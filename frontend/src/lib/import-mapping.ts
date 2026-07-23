@@ -11,6 +11,13 @@ export interface ImportChoices {
   // Indices into the imported level's transitions to keep even though their
   // targets do not resolve; everything unresolved and unlisted here drops.
   keepUnresolved: readonly number[]
+  // Forge-backed mode: replace-only (a new level has no override kind — the
+  // dialog never offers the mode), and no ResizeLevel — dimensions are the
+  // derived bounding box forge recomputes, so a forge level never shrinks
+  // below the synthesized extent (the documented dimension residue). The
+  // sealing of every stale synthesized opening falls out of the translator's
+  // edge diffing; the batch otherwise rides the existing mapping.
+  forge?: boolean
 }
 
 // A transition target resolves when the destination document will contain the
@@ -113,13 +120,15 @@ export function importOps(
         edges: deletions,
       })
     }
-    ops.push({
-      op: 'resize_level',
-      dungeon_id: dungeonId,
-      level_number: levelNumber,
-      width: imported.width,
-      height: imported.height,
-    })
+    if (!choices.forge) {
+      ops.push({
+        op: 'resize_level',
+        dungeon_id: dungeonId,
+        level_number: levelNumber,
+        width: imported.width,
+        height: imported.height,
+      })
+    }
   }
   if (Object.keys(imported.edges).length > 0) {
     ops.push({

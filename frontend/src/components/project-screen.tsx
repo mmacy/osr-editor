@@ -3,12 +3,18 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { HomeIcon, Redo2Icon, Undo2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { BlockedOpDialog } from '@/components/blocked-op-dialog'
+import { CorrectionsPanel } from '@/components/corrections-panel'
 import { DiagnosticsPanel } from '@/components/diagnostics-panel'
 import { ExportDialog } from '@/components/export-dialog'
 import { FidelityDialog } from '@/components/fidelity-dialog'
+import { MonsterResolutionPanel } from '@/components/monster-resolution-panel'
+import { PipelinePanel } from '@/components/pipeline-panel'
 import { PublishDialog } from '@/components/publish-dialog'
+import { ReviewQueue } from '@/components/review-queue'
 import { AdventureForm, TownForm } from '@/components/forms'
 import { MapEditor } from '@/components/map-editor'
+import { buildReviewRows, undismissedFlagCount } from '@/lib/review'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
@@ -137,6 +143,35 @@ export function ProjectScreen() {
         <aside className="w-56 shrink-0 border-r bg-card">
           <ScrollArea className="h-full">
             <nav aria-label="Sections" className="flex flex-col gap-0.5 p-2">
+              {project.forge && (
+                <>
+                  <SectionButton
+                    label={`Review${(() => {
+                      const count = undismissedFlagCount(
+                        buildReviewRows(project.forge.report, project.sidecar),
+                      )
+                      return count > 0 ? ` (${count})` : ''
+                    })()}`}
+                    active={section.kind === 'review'}
+                    onClick={() => setSection({ kind: 'review' })}
+                  />
+                  <SectionButton
+                    label="Corrections"
+                    active={section.kind === 'corrections'}
+                    onClick={() => setSection({ kind: 'corrections' })}
+                  />
+                  <SectionButton
+                    label="Pipeline"
+                    active={section.kind === 'pipeline'}
+                    onClick={() => setSection({ kind: 'pipeline' })}
+                  />
+                  <SectionButton
+                    label="Monsters"
+                    active={section.kind === 'monsters'}
+                    onClick={() => setSection({ kind: 'monsters' })}
+                  />
+                </>
+              )}
               <SectionButton
                 label="Adventure"
                 active={section.kind === 'adventure'}
@@ -187,6 +222,12 @@ export function ProjectScreen() {
         >
           {section.kind === 'adventure' && <AdventureForm document={project.document} />}
           {section.kind === 'town' && <TownForm document={project.document} />}
+          {section.kind === 'review' && <ReviewQueue project={project} onNavigate={navigateTo} />}
+          {section.kind === 'corrections' && (
+            <CorrectionsPanel project={project} onNavigate={navigateTo} />
+          )}
+          {section.kind === 'pipeline' && <PipelinePanel project={project} />}
+          {section.kind === 'monsters' && <MonsterResolutionPanel project={project} />}
           {section.kind === 'level' && (
             <MapEditor
               document={project.document}
@@ -208,6 +249,7 @@ export function ProjectScreen() {
         onRemoveEntry={removeEntry}
       />
       <FidelityDialog />
+      <BlockedOpDialog />
     </div>
   )
 }

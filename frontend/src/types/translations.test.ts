@@ -203,9 +203,9 @@ test('the override-edit and sidecar unions discriminate', () => {
   expectTypeOf<Extract<AnyOverrideEdit, { edit: 'set_monster_remap' }>>().toHaveProperty(
     'template_id',
   )
-  expectTypeOf<Extract<AnyOverrideEdit, { edit: 'set_template_patch' }>['patch']>().toEqualTypeOf<
-    StatBlockPatch
-  >()
+  expectTypeOf<
+    Extract<AnyOverrideEdit, { edit: 'set_template_patch' }>['patch']
+  >().toEqualTypeOf<StatBlockPatch>()
 
   expectTypeOf<AnySidecarPatch['action']>().toEqualTypeOf<
     'set_view_state' | 'set_note' | 'remove_note' | 'dismiss_flag' | 'undismiss_flag'

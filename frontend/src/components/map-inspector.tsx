@@ -6,11 +6,13 @@
 import { useEffect, useRef } from 'react'
 
 import { AreaContentCards, type CardIntent } from '@/components/area-content-cards'
+import { AuthorNotesCard } from '@/components/author-notes-card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
+import { areaAddress } from '@/lib/address'
 import type { MapSelection } from '@/map/render'
 import { isAreaStocked } from '@/map/stocking'
 import { projectStore } from '@/store/project-store'
@@ -180,6 +182,7 @@ function AreaInspector({
       <p className="text-xs text-muted-foreground">
         <span className="font-mono">{area.cells.length}</span> cell(s)
       </p>
+      <AuthorNotesCard address={areaAddress(dungeonId, levelNumber, area.id)} />
       <AreaContentCards
         document={document}
         area={area}

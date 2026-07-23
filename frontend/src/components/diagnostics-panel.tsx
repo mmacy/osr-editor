@@ -24,7 +24,7 @@ export function DiagnosticsPanel({
   onRemoveEntry?: (finding: Finding) => void
 }) {
   const [open, setOpen] = useState(true)
-  const findings = [...diagnostics.validation, ...diagnostics.lint]
+  const findings = [...diagnostics.validation, ...diagnostics.lint, ...(diagnostics.forge ?? [])]
   return (
     <section aria-label="Diagnostics" className="border-t bg-card">
       <Button

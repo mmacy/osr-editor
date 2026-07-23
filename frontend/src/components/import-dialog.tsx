@@ -37,6 +37,10 @@ interface ImportDialogProps {
   document: Adventure
   dungeonId: string
   onNavigate: (target: NavTarget) => void
+  // Forge-backed mode: replace-an-existing-level only (a new level has no
+  // override kind — the mode is absent, not disabled), and the batch emits no
+  // ResizeLevel (dimensions are derived).
+  forge?: boolean
 }
 
 export function ImportDialog(props: ImportDialogProps) {
@@ -52,7 +56,13 @@ function nextFreeLevelNumber(document: Adventure, dungeonId: string): string {
   return dungeon ? String(Math.max(...dungeon.levels.map((level) => level.number)) + 1) : '1'
 }
 
-function ImportDialogBody({ onOpenChange, document, dungeonId, onNavigate }: ImportDialogProps) {
+function ImportDialogBody({
+  onOpenChange,
+  document,
+  dungeonId,
+  onNavigate,
+  forge = false,
+}: ImportDialogProps) {
   const [importers, setImporters] = useState<ImporterInfo[]>([])
   const [path, setPath] = useState('')
   const [matches, setMatches] = useState<string[] | null>(null)
@@ -60,7 +70,7 @@ function ImportDialogBody({ onOpenChange, document, dungeonId, onNavigate }: Imp
   const [geometry, setGeometry] = useState<ImportedGeometry | null>(null)
   const [sourceIndex, setSourceIndex] = useState(0)
   const [targetDungeon, setTargetDungeon] = useState(dungeonId)
-  const [mode, setMode] = useState<'new' | 'replace'>('new')
+  const [mode, setMode] = useState<'new' | 'replace'>(forge ? 'replace' : 'new')
   const [newNumber, setNewNumber] = useState(() => nextFreeLevelNumber(document, dungeonId))
   const [replaceNumber, setReplaceNumber] = useState<number | null>(
     () =>
@@ -150,6 +160,7 @@ function ImportDialogBody({ onOpenChange, document, dungeonId, onNavigate }: Imp
           levelNumber: destinationNumber,
           mode,
           keepUnresolved,
+          forge,
         }),
       )
       .then((committed) => {
@@ -262,24 +273,26 @@ function ImportDialogBody({ onOpenChange, document, dungeonId, onNavigate }: Imp
               </select>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="import-mode"
-                  checked={mode === 'new'}
-                  onChange={() => setMode('new')}
-                />
-                Add as a new level, number
-                <Input
-                  aria-label="New level number"
-                  className="h-7 w-20 font-mono"
-                  type="number"
-                  min={1}
-                  value={newNumber}
-                  onChange={(event) => setNewNumber(event.target.value)}
-                  disabled={mode !== 'new'}
-                />
-              </label>
+              {!forge && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="import-mode"
+                    checked={mode === 'new'}
+                    onChange={() => setMode('new')}
+                  />
+                  Add as a new level, number
+                  <Input
+                    aria-label="New level number"
+                    className="h-7 w-20 font-mono"
+                    type="number"
+                    min={1}
+                    value={newNumber}
+                    onChange={(event) => setNewNumber(event.target.value)}
+                    disabled={mode !== 'new'}
+                  />
+                </label>
+              )}
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="radio"
@@ -304,6 +317,13 @@ function ImportDialogBody({ onOpenChange, document, dungeonId, onNavigate }: Imp
                     ))}
                 </select>
               </label>
+              {forge && (
+                <p className="text-xs text-muted-foreground">
+                  The replacement lands as geometry: overrides — the reproducible loop keeps
+                  running. Level dimensions are derived, so the grid never shrinks below the
+                  synthesized floor plan&apos;s extent.
+                </p>
+              )}
             </div>
             {source && unresolved.length > 0 && (
               <div className="flex flex-col gap-1" aria-label="Unresolved transitions">
