@@ -8,20 +8,27 @@ too and the routes serve whole lists; the frontend filters client-side.
 
 The *effective* monster catalog (shipped plus the open document's bundled
 templates) is a client-side merge — the document is already in hand there, so no
-per-project catalog route exists. Encounter tables ride verbatim: the six
-compiled dungeon tables seed the wandering-table editor, and
-[`EncounterTable`][osrlib.core.tables.EncounterTable] already crosses the wire
-inside `WanderingSpec`. The NPC generation tables stay server-side, no consumer.
+per-project catalog route exists. The one full-template route is
+[`catalog_monster`][osreditor.catalogs.catalog_monster], phase 4's clone source:
+the summaries deliberately omit the stat block, and clone-and-modify needs a
+shipped monster's whole `MonsterTemplate` (bundled templates need no route — the
+document is in hand client-side, the same reasoning as the merge). Encounter
+tables ride verbatim: the six compiled dungeon tables seed the wandering-table
+editor, and [`EncounterTable`][osrlib.core.tables.EncounterTable] already
+crosses the wire inside `WanderingSpec`. The NPC generation tables stay
+server-side, no consumer.
 """
 
 from functools import cache
 
 from osrlib.core.alignment import Alignment
-from osrlib.core.monsters import MonsterHitDice
+from osrlib.core.monsters import MonsterHitDice, MonsterTemplate
 from osrlib.core.tables import EncounterTable
 from osrlib.core.treasure import TreasureSection
 from osrlib.data import load_encounter_tables, load_equipment, load_monsters, load_treasure_tables
 from pydantic import BaseModel, ConfigDict
+
+from osreditor.errors import CatalogMonsterNotFoundError
 
 __all__ = [
     "CatalogItem",
@@ -31,6 +38,7 @@ __all__ = [
     "EquipmentCatalogResponse",
     "MonsterCatalogResponse",
     "TreasureTypeCatalogResponse",
+    "catalog_monster",
     "encounter_table_catalog",
     "equipment_catalog",
     "monster_catalog",
@@ -135,6 +143,29 @@ def monster_catalog() -> MonsterCatalogResponse:
             for template in load_monsters().monsters
         )
     )
+
+
+def catalog_monster(monster_id: str) -> MonsterTemplate:
+    """Answer one shipped monster's full stat block — the clone source.
+
+    Serves from `load_monsters()` itself (osrlib's cached loader); the list
+    route's summary cache holds picker fields and cannot answer a full stat
+    block. The response model is osrlib's own `MonsterTemplate` riding the
+    OpenAPI surface — already generated, never mirrored.
+
+    Args:
+        monster_id: A shipped monster id.
+
+    Returns:
+        The full template, verbatim.
+
+    Raises:
+        CatalogMonsterNotFoundError: If no shipped monster has that id.
+    """
+    try:
+        return load_monsters().get(monster_id)
+    except ValueError as error:
+        raise CatalogMonsterNotFoundError(f"the shipped catalog has no monster {monster_id!r}") from error
 
 
 @cache

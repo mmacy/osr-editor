@@ -526,6 +526,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/catalogs/monsters/{monster_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Catalog Monster
+         * @description Report one shipped monster's full stat block — the clone-and-modify source.
+         *
+         *     Args:
+         *         monster_id: The shipped monster id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The full template, verbatim from the shipped data.
+         */
+        get: operations["get_catalog_monster_api_catalogs_monsters__monster_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/catalogs/equipment": {
         parameters: {
             query?: never;
@@ -800,6 +827,29 @@ export interface components {
             width: number;
             /** Height */
             height: number;
+        };
+        /**
+         * AddMonsterTemplate
+         * @description Add a bundled monster template, appended to `Adventure.monsters` in authored order.
+         *
+         *     Adventure-scoped, the `SetAdventureField` neighborhood — `Adventure.monsters`
+         *     is top-level, so there is no targeting base. The template's internal validity
+         *     (the AC/auto-hit coupling, dice grammars, the number-appearing XORs, every
+         *     scalar bound) is the model's own, enforced at request parse. Invariants at
+         *     apply: the id non-empty and free — an id colliding with the shipped catalog
+         *     or another bundled template is rejected as `op_invariant`, because osrlib's
+         *     first-occurrence-wins union would silently shadow the new template and a
+         *     collision is never intentional. The op never *introduces* a collision; a
+         *     foreign document already carrying one stays editable (see
+         *     [`SetMonsterTemplate`][osreditor.ops.SetMonsterTemplate]'s carry-through).
+         */
+        AddMonsterTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "add_monster_template";
+            template: components["schemas"]["MonsterTemplate"];
         };
         /**
          * AddTransition
@@ -2402,7 +2452,7 @@ export interface components {
             /** Revision */
             revision: string;
             /** Ops */
-            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["SetEncounter"] | components["schemas"]["SetTrap"] | components["schemas"]["SetTreasure"] | components["schemas"]["AddFeature"] | components["schemas"]["SetFeature"] | components["schemas"]["RemoveFeature"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
+            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["AddMonsterTemplate"] | components["schemas"]["SetMonsterTemplate"] | components["schemas"]["RemoveMonsterTemplate"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["SetEncounter"] | components["schemas"]["SetTrap"] | components["schemas"]["SetTreasure"] | components["schemas"]["AddFeature"] | components["schemas"]["SetFeature"] | components["schemas"]["RemoveFeature"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
         };
         /**
          * OpBatchResult
@@ -2697,6 +2747,24 @@ export interface components {
             edit: "remove_monster_remap";
             /** Name */
             name: string;
+        };
+        /**
+         * RemoveMonsterTemplate
+         * @description Remove one bundled template; first-match among foreign duplicate ids.
+         *
+         *     Removal admits dangling references: encounters and wandering rows naming
+         *     the removed id become `encounter_unknown_monster`/`wandering_unknown_monster`
+         *     diagnostics — legal while editing, the tier rule. The UI confirms first when
+         *     references exist.
+         */
+        RemoveMonsterTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "remove_monster_template";
+            /** Template Id */
+            template_id: string;
         };
         /**
          * RemoveNote
@@ -3145,6 +3213,34 @@ export interface components {
             template_id: string;
             /** Reason */
             reason?: string | null;
+        };
+        /**
+         * SetMonsterTemplate
+         * @description Replace one bundled template whole; a differing `template.id` is a rename.
+         *
+         *     Whole-value replacement at the stat-block card's commit grain — the
+         *     `SetEncounter`/`SetFeature` reasoning, an order of magnitude over: a
+         *     field-grained op over `MonsterTemplate`'s 25 fields would need a value union
+         *     undiscriminable on the wire. A rename falls under
+         *     [`AddMonsterTemplate`][osreditor.ops.AddMonsterTemplate]'s id rejections and
+         *     cascades: every `KeyedMonster.template_id` and wandering-row monster id
+         *     naming the old id is rewritten in the same commit (the `RenameDungeon`
+         *     precedent — template ids are referenced in-document), with the honest
+         *     whole-document delta. The collision invariant guards **new or changed ids
+         *     only**: a foreign template's unchanged colliding id passes through
+         *     untouched, so its other fields stay editable and the finding stays a
+         *     navigable diagnostic. Among foreign duplicate bundled ids, the first match
+         *     in authored order is the target — the `SetFeature` posture.
+         */
+        SetMonsterTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_monster_template";
+            /** Template Id */
+            template_id: string;
+            template: components["schemas"]["MonsterTemplate"];
         };
         /**
          * SetNote
@@ -4429,6 +4525,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonsterCatalogResponse"];
+                };
+            };
+        };
+    };
+    get_catalog_monster_api_catalogs_monsters__monster_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                monster_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonsterTemplate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

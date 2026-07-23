@@ -15,6 +15,24 @@ from osreditor.store import LocalProjectStore
 
 DUNGEON = "millstone-warrens"
 
+BESPOKE_TEMPLATE = {
+    "id": "bespoke-1",
+    "name": "Bespoke horror",
+    "page": "",
+    "ac": 9,
+    "ac_ascending": 10,
+    "hit_dice": {"count": 1, "die": 8},
+    "attacks": [{"attacks": [{"name": "weapon", "by_weapon": True}]}],
+    "thac0": 19,
+    "attack_bonus": 0,
+    "movement": [{"rate_feet": 120, "encounter_rate_feet": 40}],
+    "saves": {"values": {"death": 12, "wands": 13, "paralysis": 14, "breath": 15, "spells": 16}, "save_as": "1"},
+    "morale": 7,
+    "alignment": {"options": ["neutral"]},
+    "xp": 10,
+    "number_appearing": {"dungeon": {"dice": "1d6"}, "lair": {"dice": "1d6"}},
+}
+
 
 def open_forge(workdir: Path) -> tuple[DocumentService, OpenProject]:
     service = DocumentService(LocalProjectStore())
@@ -507,6 +525,9 @@ BLOCKED_OPS = [
         "area_id": None,
         "feature": {"id": "lvl", "kind": "custom"},
     },
+    {"op": "add_monster_template", "template": BESPOKE_TEMPLATE},
+    {"op": "set_monster_template", "template_id": "bespoke-1", "template": BESPOKE_TEMPLATE},
+    {"op": "remove_monster_template", "template_id": "bespoke-1"},
 ]
 
 
@@ -517,6 +538,19 @@ def test_blocked_ops_reject_with_the_detach_offer(forge_workdir: Path, blocked: 
         service.apply_batch(project, batch(project, blocked))
     assert excinfo.value.op == blocked["op"]
     assert excinfo.value.address
+
+
+def test_blocked_monster_template_ops_answer_the_monster_address(forge_workdir: Path) -> None:
+    service, project = open_forge(forge_workdir)
+    for op_data in (
+        {"op": "add_monster_template", "template": BESPOKE_TEMPLATE},
+        {"op": "set_monster_template", "template_id": "bespoke-1", "template": BESPOKE_TEMPLATE},
+        {"op": "remove_monster_template", "template_id": "bespoke-1"},
+    ):
+        with pytest.raises(OpUnsupportedForgeError) as excinfo:
+            service.apply_batch(project, batch(project, op_data))
+        assert excinfo.value.address == "monster:bespoke-1"
+        assert "assembly derives them from the monsters stage" in str(excinfo.value)
 
 
 def test_a_blocked_op_rejects_the_whole_batch_before_any_side_effect(forge_workdir: Path) -> None:

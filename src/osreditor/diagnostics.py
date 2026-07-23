@@ -27,8 +27,9 @@ The address grammar, pinned by this first producer: `/`-joined `kind:value`
 segments, values percent-encoded (RFC 3986) so arbitrary osrlib ids can never
 make the grammar ambiguous — the builders live in
 [`osreditor.addresses`][osreditor.addresses]. Segments: `town`, `monsters`,
-`dungeon:<id>`, `dungeon:<id>/level:<n>`, `dungeon:<id>/level:<n>/area:<id>`,
-plus the `cell:` and `edge:` geometry segments phase 2 added.
+`monster:<id>` (phase 4's finer bundled-template scope), `dungeon:<id>`,
+`dungeon:<id>/level:<n>`, `dungeon:<id>/level:<n>/area:<id>`, plus the `cell:`
+and `edge:` geometry segments phase 2 added.
 
 Every validation finding carries `severity="error"` — `validate_adventure`
 output gates publish, which is what error means here.
@@ -42,7 +43,7 @@ from osrlib.crawl.dungeon import LevelSpec
 from osrlib.data import load_equipment, load_monsters
 from osrlib.errors import ContentValidationError
 
-from osreditor.addresses import area_address, dungeon_address, level_address
+from osreditor.addresses import area_address, dungeon_address, level_address, monster_address
 from osreditor.lint import lint_adventure
 from osreditor.ops import Diagnostics, Finding
 
@@ -158,6 +159,26 @@ _BUNDLED_RE = re.compile(r"^bundled monster id .+ collides with the catalog$")
 _TRAVEL_RE = re.compile(r"^town travel names unknown dungeon .+$")
 
 
+def _classify_bundled_collision(line: str, adventure: Adventure) -> Finding:
+    """Address a collision line to `monster:<id>` — enumeration-confirmed, degrading to the coarse scope.
+
+    The id is confirmed the same way as every owner-scoped shape: each bundled
+    template's id is rendered exactly as osrlib reprs it and matched against
+    the whole line. Duplicate bundled ids render identical lines, so hits
+    dedupe by id; a line no distinct id renders (the phase 1 parser's honesty
+    guard) degrades to the bare `monsters` scope — always true, never a lie.
+    """
+    hits = {
+        template.id
+        for template in adventure.monsters
+        if line == f"bundled monster id {template.id!r} collides with the catalog"
+    }
+    address = monster_address(next(iter(hits))) if len(hits) == 1 else "monsters"
+    return Finding(
+        source="validation", code="bundled_monster_collision", severity="error", message=line, address=address
+    )
+
+
 def _classify(line: str, adventure: Adventure) -> Finding:
     # Owner-confirmed shapes first: a hostile id embedding a static shape's
     # text inside an owner prefix classifies by its true, document-confirmed
@@ -169,9 +190,7 @@ def _classify(line: str, adventure: Adventure) -> Finding:
     if finding is not None:
         return finding
     if _BUNDLED_RE.match(line):
-        return Finding(
-            source="validation", code="bundled_monster_collision", severity="error", message=line, address="monsters"
-        )
+        return _classify_bundled_collision(line, adventure)
     if _TRAVEL_RE.match(line):
         return Finding(
             source="validation", code="travel_unknown_dungeon", severity="error", message=line, address="town"

@@ -1,6 +1,7 @@
 """The envelope models and the phase 1 op vocabulary: round-trips, pairing validators, frozen-ness."""
 
 import pytest
+from osrlib.core.monsters import MonsterTemplate
 from osrlib.crawl.dungeon import (
     AreaTreasureSpec,
     FeatureSpec,
@@ -14,19 +15,42 @@ from pydantic import BaseModel, ValidationError
 
 from osreditor.ops import (
     AddFeature,
+    AddMonsterTemplate,
     Diagnostics,
     Finding,
     OpBatch,
     OpBatchResult,
     RemoveFeature,
+    RemoveMonsterTemplate,
     SetAdventureField,
     SetEncounter,
     SetFeature,
+    SetMonsterTemplate,
     SetTownField,
     SetTrap,
     SetTreasure,
     SetWandering,
     SubtreeChange,
+)
+
+TEMPLATE = MonsterTemplate.model_validate(
+    {
+        "id": "bespoke-1",
+        "name": "Bespoke horror",
+        "page": "",
+        "ac": 9,
+        "ac_ascending": 10,
+        "hit_dice": {"count": 1, "die": 8},
+        "attacks": [{"attacks": [{"name": "weapon", "by_weapon": True}]}],
+        "thac0": 19,
+        "attack_bonus": 0,
+        "movement": [{"rate_feet": 120, "encounter_rate_feet": 40}],
+        "saves": {"values": {"death": 12, "wands": 13, "paralysis": 14, "breath": 15, "spells": 16}, "save_as": "1"},
+        "morale": 7,
+        "alignment": {"options": ["neutral"]},
+        "xp": 10,
+        "number_appearing": {"dungeon": {"dice": "1d6"}, "lair": {"dice": "1d6"}},
+    }
 )
 
 FINDING = Finding(
@@ -85,6 +109,9 @@ RESULT = OpBatchResult(
             feature=FeatureSpec(id="feature-1", kind="treasure_cache", cell=None),
         ),
         RemoveFeature(dungeon_id="mill-caves", level_number=1, area_id="1", feature_id="feature-1"),
+        AddMonsterTemplate(template=TEMPLATE),
+        SetMonsterTemplate(template_id="bespoke-1", template=TEMPLATE),
+        RemoveMonsterTemplate(template_id="bespoke-1"),
         OpBatch(revision="rev-1", ops=(SetAdventureField(field="description", value="…"),)),
         FINDING,
         Finding(source="lint", code="orphan_cell", severity="warning", message="cell (2, 1) is in no area"),
@@ -125,6 +152,13 @@ def test_op_batch_discriminates_on_op() -> None:
                     "feature": {"id": "feature-1", "kind": "custom"},
                 },
                 {"op": "remove_feature", "dungeon_id": "d", "level_number": 1, "area_id": "1", "feature_id": "f"},
+                {"op": "add_monster_template", "template": TEMPLATE.model_dump(mode="json")},
+                {
+                    "op": "set_monster_template",
+                    "template_id": "bespoke-1",
+                    "template": TEMPLATE.model_dump(mode="json"),
+                },
+                {"op": "remove_monster_template", "template_id": "bespoke-1"},
             ],
         }
     )
@@ -138,6 +172,9 @@ def test_op_batch_discriminates_on_op() -> None:
         AddFeature,
         SetFeature,
         RemoveFeature,
+        AddMonsterTemplate,
+        SetMonsterTemplate,
+        RemoveMonsterTemplate,
     ]
 
 
@@ -173,6 +210,27 @@ def test_the_content_models_validate_at_request_parse() -> None:
                 "level_number": 1,
                 "area_id": "1",
                 "trap": {"kind": "room", "trigger": "enter", "effect": {"condition_duration_amount": 3}},
+            }
+        )
+    # MonsterTemplate's own validators fire the same way: the AC pair couples
+    # to the auto-hit flag, dice grammars parse, XORs hold — all before any op
+    # logic runs.
+    with pytest.raises(ValidationError, match="requires attack rolls but has no armour class"):
+        AddMonsterTemplate.model_validate(
+            {"template": {**TEMPLATE.model_dump(mode="json"), "ac": None, "ac_ascending": None}}
+        )
+    with pytest.raises(ValidationError, match="needs no hit roll and must not carry an armour class"):
+        AddMonsterTemplate.model_validate(
+            {"template": {**TEMPLATE.model_dump(mode="json"), "attack_roll_required": False}}
+        )
+    with pytest.raises(ValidationError, match="exactly one of dice or fixed"):
+        SetMonsterTemplate.model_validate(
+            {
+                "template_id": "bespoke-1",
+                "template": {
+                    **TEMPLATE.model_dump(mode="json"),
+                    "number_appearing": {"dungeon": {"dice": "1d6", "fixed": 3}, "lair": {"dice": "1d6"}},
+                },
             }
         )
 
@@ -242,6 +300,9 @@ def test_finding_rejects_unknown_severity() -> None:
     "model",
     [
         SetAdventureField(field="name", value="X"),
+        AddMonsterTemplate(template=TEMPLATE),
+        SetMonsterTemplate(template_id="bespoke-1", template=TEMPLATE),
+        RemoveMonsterTemplate(template_id="bespoke-1"),
         OpBatch(revision="rev-1", ops=(SetAdventureField(field="name", value="X"),)),
         FINDING,
         DIAGNOSTICS,

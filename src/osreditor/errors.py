@@ -8,6 +8,7 @@ their members under [`OsrEditorError`][osreditor.errors.OsrEditorError].
 
 __all__ = [
     "ArtifactNotFoundError",
+    "CatalogMonsterNotFoundError",
     "DocumentPayloadInvalidError",
     "ForgeOverrideInvalidError",
     "ForgePageNotFoundError",
@@ -42,6 +43,10 @@ class OsrEditorError(Exception):
 
 class ArtifactNotFoundError(OsrEditorError):
     """A project artifact requested from a store does not exist."""
+
+
+class CatalogMonsterNotFoundError(OsrEditorError):
+    """No shipped monster has the requested id — the catalog detail route's miss."""
 
 
 class ProjectNotFoundError(OsrEditorError):

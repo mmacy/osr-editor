@@ -38,12 +38,13 @@ from osrlib.crawl.dungeon import Edge, EdgeKind, LevelSpec, Position
 from pydantic import BaseModel, ConfigDict, StringConstraints
 from pydantic import Field as PydanticField
 
-from osreditor.addresses import area_address, dungeon_address, level_address
+from osreditor.addresses import area_address, dungeon_address, level_address, monster_address
 from osreditor.errors import OpTargetNotFoundError, OpUnsupportedForgeError
 from osreditor.ops import (
     AddDungeon,
     AddFeature,
     AddLevel,
+    AddMonsterTemplate,
     AddTransition,
     AnyEditOp,
     CreateArea,
@@ -51,6 +52,7 @@ from osreditor.ops import (
     RemoveDungeon,
     RemoveFeature,
     RemoveLevel,
+    RemoveMonsterTemplate,
     RemoveTransition,
     RenameDungeon,
     RenumberLevel,
@@ -63,6 +65,7 @@ from osreditor.ops import (
     SetEncounter,
     SetEntrance,
     SetFeature,
+    SetMonsterTemplate,
     SetTownField,
     SetTrap,
     SetTreasure,
@@ -121,6 +124,10 @@ class TranslationResult:
     serialized: bytes
 
 
+_BUNDLED_TEMPLATE_BLOCKED = (
+    "bundled monster templates have no override kind — assembly derives them from the monsters stage"
+)
+
 _BLOCKED_MESSAGES: dict[type, str] = {
     SetWandering: "wandering-monster parameters have no override kind",
     SetDungeonField: "dungeon fields have no override kind",
@@ -131,11 +138,18 @@ _BLOCKED_MESSAGES: dict[type, str] = {
     RemoveLevel: "level structure has no override kind",
     RenumberLevel: "level numbers have no override kind — override addressing is by number",
     ResizeLevel: "level dimensions are derived state — the bounding box forge recomputes",
+    AddMonsterTemplate: _BUNDLED_TEMPLATE_BLOCKED,
+    SetMonsterTemplate: _BUNDLED_TEMPLATE_BLOCKED,
+    RemoveMonsterTemplate: _BUNDLED_TEMPLATE_BLOCKED,
 }
 
 
 def _blocked_address(op: AnyEditOp) -> str:
     """The blocked op's target in the diagnostics address grammar."""
+    if isinstance(op, AddMonsterTemplate):
+        return monster_address(op.template.id)
+    if isinstance(op, SetMonsterTemplate | RemoveMonsterTemplate):
+        return monster_address(op.template_id)
     if isinstance(op, SetDungeonField | RemoveDungeon):
         return dungeon_address(op.dungeon_id)
     if isinstance(op, AddDungeon):

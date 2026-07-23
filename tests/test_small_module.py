@@ -7,12 +7,15 @@ hand-authorable content — keyed encounters exercising dice and fixed counts, a
 pinned alignment, aware and a stance; an area treasure by letters and another
 unguarded; a pit trap; a trapped treasure cache; a construction trick and a
 level-scope custom feature; a secret door on the only route to the treasure
-room; an inline wandering table on level 2; town, hooks, and services filled.
-Validation-clean, and lint-clean except the one finding it is built to carry:
-the secret-only treasure room *is* the `secret_only_access` trigger — the
-spec's own publish rule ("secret-only access is sometimes the point") needs a
-module that exercises it, so the publish suite proves a warning-bearing module
-publishes. All content is original — no retail module material.
+room; an inline wandering table on level 2; a bundled bespoke monster template
+keyed in a level 2 encounter (phase 4's growth, so the round-trip, golden, and
+publish suites cover `Adventure.monsters` permanently); town, hooks, and
+services filled. Validation-clean, and lint-clean except the one finding it is
+built to carry: the secret-only treasure room *is* the `secret_only_access`
+trigger — the spec's own publish rule ("secret-only access is sometimes the
+point") needs a module that exercises it, so the publish suite proves a
+warning-bearing module publishes. All content is original — no retail module
+material.
 """
 
 import json
@@ -21,8 +24,21 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from osrlib.core.alignment import Alignment
+from osrlib.core.classes import SavingThrows
 from osrlib.core.combat import SaveCategory
 from osrlib.core.items import Coins
+from osrlib.core.monsters import (
+    AlignmentSpec,
+    AttackRoutine,
+    MonsterAbility,
+    MonsterAttack,
+    MonsterHitDice,
+    MonsterSaves,
+    MonsterTemplate,
+    MovementMode,
+    NumberAppearing,
+    NumberAppearingValue,
+)
 from osrlib.core.spells import SaveSpec
 from osrlib.core.tables import ReactionResult
 from osrlib.crawl.adventure import Adventure, TownSpec, validate_adventure
@@ -221,6 +237,7 @@ def _level_two() -> LevelSpec:
         name="The spring cave",
         description="The millstream rises here, black and cold; the current tugs at torchlight.",
         cells=((1, 1),),
+        encounter=KeyedEncounter(monsters=(KeyedMonster(template_id="drowned-miller", count_fixed=1),)),
     )
     return LevelSpec(
         number=2,
@@ -245,6 +262,52 @@ def _level_two() -> LevelSpec:
     )
 
 
+def _drowned_miller() -> MonsterTemplate:
+    """The bundled bespoke template: the miller himself, keyed in the spring cave.
+
+    Editor-authored conventions apply — `page=""` (the unpaged marker) and
+    `overrides_applied=()` (SRD-compiler provenance, meaningless here). Printed
+    values follow the 3 HD rows: THAC0 17 [+2], the 1-3 save band, 50 XP
+    (35 base + 15 for the asterisk).
+    """
+    return MonsterTemplate(
+        id="drowned-miller",
+        name="The drowned miller",
+        page="",
+        intro=(
+            "He went into the millrace owing everyone and surfaced owing nothing. What walks "
+            "the spring cave still counts on its fingers."
+        ),
+        ac=7,
+        ac_ascending=12,
+        hit_dice=MonsterHitDice(count=3, die=8, asterisks=1),
+        attacks=(AttackRoutine(attacks=(MonsterAttack(name="sodden grasp", damage="1d6"),)),),
+        thac0=17,
+        attack_bonus=2,
+        movement=(
+            MovementMode(rate_feet=60, encounter_rate_feet=20),
+            MovementMode(rate_feet=120, encounter_rate_feet=40, descriptor="swimming"),
+        ),
+        saves=MonsterSaves(values=SavingThrows(death=12, wands=13, paralysis=14, breath=15, spells=16), save_as="3"),
+        morale=12,
+        alignment=AlignmentSpec(options=(Alignment.CHAOTIC,)),
+        xp=50,
+        number_appearing=NumberAppearing(dungeon=NumberAppearingValue(fixed=1), lair=NumberAppearingValue(fixed=1)),
+        abilities=(
+            MonsterAbility(
+                tag="millrace_chill",
+                name="Chill of the millrace",
+                prose=(
+                    "A character grappled by the miller and dragged under the spring must save "
+                    "versus paralysis or lose their next round to the cold."
+                ),
+                manual=True,
+            ),
+        ),
+        categories=("undead",),
+    )
+
+
 def build_small_module() -> Adventure:
     """Build the small complete module — the source of truth for the committed fixture."""
     return Adventure(
@@ -263,6 +326,7 @@ def build_small_module() -> Adventure:
             travel_turns={"mill-caves": 2},
         ),
         dungeons=(DungeonSpec(id="mill-caves", name="The mill caves", levels=(_level_one(), _level_two())),),
+        monsters=(_drowned_miller(),),
     )
 
 

@@ -213,6 +213,41 @@ def test_note_content_never_rides_the_document_stack(tmp_path: Path) -> None:
     assert project.sidecar.notes == {"dungeon:dungeon-1/level:1": "Edited after the renumber."}
 
 
+def test_monster_template_rename_cascades_the_template_note(tmp_path: Path) -> None:
+    template = {
+        "id": "bespoke-1",
+        "name": "Bespoke horror",
+        "page": "",
+        "ac": 9,
+        "ac_ascending": 10,
+        "hit_dice": {"count": 1, "die": 8},
+        "attacks": [{"attacks": [{"name": "weapon", "by_weapon": True}]}],
+        "thac0": 19,
+        "attack_bonus": 0,
+        "movement": [{"rate_feet": 120, "encounter_rate_feet": 40}],
+        "saves": {"values": {"death": 12, "wands": 13, "paralysis": 14, "breath": 15, "spells": 16}, "save_as": "1"},
+        "morale": 7,
+        "alignment": {"options": ["neutral"]},
+        "xp": 10,
+        "number_appearing": {"dungeon": {"dice": "1d6"}, "lair": {"dice": "1d6"}},
+    }
+    service, project = open_native(tmp_path)
+    service.apply_batch(project, batch(project, {"op": "add_monster_template", "template": template}))
+    set_note(service, project, "monster:bespoke-1", "Ours.")
+    service.apply_batch(
+        project,
+        batch(
+            project,
+            {"op": "set_monster_template", "template_id": "bespoke-1", "template": {**template, "id": "renamed"}},
+        ),
+    )
+    assert project.sidecar.notes == {"monster:renamed": "Ours."}
+    service.undo(project)
+    assert project.sidecar.notes == {"monster:bespoke-1": "Ours."}
+    service.redo(project)
+    assert project.sidecar.notes == {"monster:renamed": "Ours."}
+
+
 def test_area_rekey_cascades_the_area_note(tmp_path: Path) -> None:
     service, project = open_native(tmp_path)
     service.apply_batch(
