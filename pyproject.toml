@@ -30,7 +30,9 @@ classifiers = [
 ]
 dependencies = [
     "osrlib>=1.2,<2",
+    "osr-forge>=0.1,<0.2",
     "pydantic>=2",
+    "pyyaml>=6",
     "fastapi>=0.139",
     "uvicorn>=0.51",
     "platformdirs>=4",
@@ -57,7 +59,15 @@ dev = [
     "ruff>=0.11",
     "pyright>=1.1",
     "httpx2>=2.7.0",
+    "types-pyyaml>=6",
 ]
+
+# osr-forge has no PyPI release yet; until it does, the lock resolves it from
+# the public repo at a pinned commit — the closest available posture to
+# "published builds pin PyPI ranges". A sibling checkout stays a local-dev
+# override (`uv pip install -e ../osr-forge`), never a manifest entry.
+[tool.uv.sources]
+osr-forge = { git = "https://github.com/mmacy/osr-forge" }
 
 [build-system]
 requires = ["uv_build>=0.8.22,<0.9.0"]

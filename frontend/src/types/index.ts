@@ -84,8 +84,41 @@ export type TreasureTypeCatalogResponse = components['schemas']['TreasureTypeCat
 export type ValuableSpec = components['schemas']['ValuableSpec']
 export type WanderingSpec = components['schemas']['WanderingSpec']
 
+// Phase 5: the forge review surface — forge's own contracts riding the
+// generated types, never hand-mirrored.
+export type ForgeState = components['schemas']['ForgeState']
+export type ExtractionReport = components['schemas']['ExtractionReport']
+export type AreaReport = components['schemas']['AreaReport']
+export type MonsterSummary = components['schemas']['MonsterSummary']
+export type CustomMonsterRecord = components['schemas']['CustomMonsterRecord']
+export type LintFinding = components['schemas']['LintFinding']
+export type RunMeta = components['schemas']['RunMeta']
+export type StageStatus = components['schemas']['StageStatus']
+export type ConversionSettings = components['schemas']['ConversionSettings']
+export type Overrides = components['schemas']['Overrides']
+export type AreaOverride = components['schemas']['AreaOverride']
+export type GeometryOverride = components['schemas']['GeometryOverride']
+export type MonsterOverride = components['schemas']['MonsterOverride']
+export type StatBlockOverride = components['schemas']['StatBlockOverride']
+export type TownOverride = components['schemas']['TownOverride']
+export type ModuleOverride = components['schemas']['ModuleOverride']
+export type StatBlockPatch = components['schemas']['StatBlockPatch']
+export type EditorSidecar = components['schemas']['EditorSidecar']
+export type SidecarProvenance = components['schemas']['SidecarProvenance']
+export type ViewState = components['schemas']['ViewState']
+export type ReviewMark = components['schemas']['ReviewMark']
+export type ZoomPan = components['schemas']['ZoomPan']
+export type ForgeOverridesRequest = components['schemas']['ForgeOverridesRequest']
+export type SidecarPatchRequest = components['schemas']['SidecarPatchRequest']
+
 // The discriminated op union, as OpBatch actually carries it.
 export type AnyEditOp = OpBatch['ops'][number]
+
+// The override-level edit union, as the forge overrides route carries it.
+export type AnyOverrideEdit = ForgeOverridesRequest['edits'][number]
+
+// The sidecar patch union, as the sidecar route carries it.
+export type AnySidecarPatch = SidecarPatchRequest['patches'][number]
 
 // The encounter-table entry union, as a row actually carries it.
 export type EncounterEntry = EncounterTableRow['entry']

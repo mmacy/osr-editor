@@ -36,6 +36,7 @@ output gates publish, which is what error means here.
 
 import re
 
+from osrforge.contracts.report import LintFinding
 from osrlib.crawl.adventure import Adventure, validate_adventure
 from osrlib.crawl.dungeon import LevelSpec
 from osrlib.data import load_equipment, load_monsters
@@ -47,6 +48,7 @@ from osreditor.ops import Diagnostics, Finding
 
 __all__ = [
     "compute_diagnostics",
+    "forge_findings",
     "parse_validation_error",
 ]
 
@@ -195,6 +197,52 @@ def parse_validation_error(message: str, adventure: Adventure) -> tuple[Finding,
     if lines and lines[0].strip() == _HEADER:
         lines = lines[1:]
     return tuple(_classify(line, adventure) for line in lines if line)
+
+
+def _forge_location_address(location: str) -> str | None:
+    """Map a forge `LintFinding.location` onto the editor's address grammar.
+
+    Forge's location grammar has three forms — `dungeon/level/area`,
+    `dungeon/level`, and a bare dungeon id (the delve findings) — mapped onto
+    the editor's percent-encoded segments so click-to-navigate works
+    unchanged. A shape outside the grammar answers `None` (an unnavigable
+    finding, never a guessed address); forge's own contracts make that
+    unreachable for reports forge wrote.
+    """
+    parts = location.split("/")
+    if len(parts) == 3 and parts[1].isdigit():
+        return area_address(parts[0], int(parts[1]), parts[2])
+    if len(parts) == 2 and parts[1].isdigit():
+        return level_address(parts[0], int(parts[1]))
+    if len(parts) == 1 and parts[0]:
+        return dungeon_address(parts[0])
+    return None
+
+
+def forge_findings(findings: tuple[LintFinding, ...]) -> tuple[Finding, ...]:
+    """Map the report's check findings into the diagnostics envelope's locked shape.
+
+    Severity and message ride verbatim — forge's producer-pinned severity
+    table is the authority; the editor mirrors forge's static checks in its
+    own lint but the delve findings (`delve_blocked`, `delve_incomplete`)
+    arrive only through this tier.
+
+    Args:
+        findings: `report.json`'s `findings`, as forge merged them.
+
+    Returns:
+        One `source="forge"` finding per input, in forge's order.
+    """
+    return tuple(
+        Finding(
+            source="forge",
+            code=finding.id.value,
+            severity=finding.severity,
+            message=finding.message,
+            address=_forge_location_address(finding.location),
+        )
+        for finding in findings
+    )
 
 
 def compute_diagnostics(adventure: Adventure) -> Diagnostics:

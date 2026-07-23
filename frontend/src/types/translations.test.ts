@@ -15,19 +15,33 @@ import type {
   AddTransition,
   Alignment,
   AnyEditOp,
+  AnyOverrideEdit,
+  AnySidecarPatch,
+  AreaReport,
   AreaTreasureSpec,
   CatalogMonster,
   Condition,
+  CustomMonsterRecord,
+  Diagnostics,
   Edge,
+  EditorSidecar,
   EncounterEntry,
+  ExtractionReport,
   FeatureSpec,
+  Finding,
+  ForgeState,
   ImportedArea,
   ImportedGeometry,
   ImportedLevel,
   KeyedEncounter,
   LevelSpec,
+  LintFinding,
+  MonsterSummary,
+  OpBatchResult,
+  ProjectState,
   PublishResult,
   ReactionResult,
+  ReviewMark,
   SaveCategory,
   SetEdges,
   SetEncounter,
@@ -35,6 +49,8 @@ import type {
   SetTrap,
   SetTreasure,
   SetWandering,
+  StatBlockOverride,
+  StatBlockPatch,
   SubtreeChange,
   TimeUnit,
   TransitionSpec,
@@ -152,6 +168,51 @@ test('the enum option lists stay exhaustive', () => {
   expectTypeOf<
     Exclude<FeatureSpec['kind'], (typeof FEATURE_KINDS)[number]>
   >().toEqualTypeOf<never>()
+})
+
+test('the forge state translations hold', () => {
+  // ProjectState grows the additive forge and sidecar fields.
+  expectTypeOf<ProjectState['forge']>().toEqualTypeOf<ForgeState | null | undefined>()
+  expectTypeOf<ProjectState['sidecar']>().toEqualTypeOf<EditorSidecar>()
+  expectTypeOf<OpBatchResult['forge']>().toEqualTypeOf<ForgeState | null | undefined>()
+
+  // The diagnostics envelope's reserved forge tier arrived.
+  expectTypeOf<Diagnostics['forge']>().toEqualTypeOf<Finding[]>()
+  expectTypeOf<Finding['source']>().toEqualTypeOf<'validation' | 'lint' | 'forge'>()
+
+  // Forge's own contracts ride the surface: the report's shapes.
+  expectTypeOf<ForgeState['report']>().toEqualTypeOf<ExtractionReport>()
+  expectTypeOf<AreaReport['flags']>().toEqualTypeOf<string[]>()
+  expectTypeOf<MonsterSummary['custom']>().toEqualTypeOf<CustomMonsterRecord[]>()
+  expectTypeOf<LintFinding['severity']>().toEqualTypeOf<'error' | 'warning'>()
+
+  // The printed-notation form's payload: attacks is a nullable string array.
+  expectTypeOf<StatBlockOverride['attacks']>().toEqualTypeOf<string[] | null | undefined>()
+  expectTypeOf<StatBlockPatch['attacks']>().toEqualTypeOf<string[] | null | undefined>()
+})
+
+test('the override-edit and sidecar unions discriminate', () => {
+  expectTypeOf<AnyOverrideEdit['edit']>().toEqualTypeOf<
+    | 'set_monster_remap'
+    | 'remove_monster_remap'
+    | 'set_template_patch'
+    | 'remove_template_patch'
+    | 'set_reason'
+    | 'remove_entry'
+  >()
+  expectTypeOf<Extract<AnyOverrideEdit, { edit: 'set_monster_remap' }>>().toHaveProperty(
+    'template_id',
+  )
+  expectTypeOf<
+    Extract<AnyOverrideEdit, { edit: 'set_template_patch' }>['patch']
+  >().toEqualTypeOf<StatBlockPatch>()
+
+  expectTypeOf<AnySidecarPatch['action']>().toEqualTypeOf<
+    'set_view_state' | 'set_note' | 'remove_note' | 'dismiss_flag' | 'undismiss_flag'
+  >()
+  expectTypeOf<Extract<AnySidecarPatch, { action: 'dismiss_flag' }>>().toHaveProperty('flag')
+  expectTypeOf<EditorSidecar['review']>().toEqualTypeOf<ReviewMark[]>()
+  expectTypeOf<EditorSidecar['notes']>().toEqualTypeOf<Record<string, string>>()
 })
 
 test('the importer payload translations hold', () => {

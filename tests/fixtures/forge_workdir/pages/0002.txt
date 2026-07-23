@@ -1,0 +1,19 @@
+THE MILLSTONE WARRENS - page 2
+
+3. SLUICE GATE. Green water sluices through a rusted
+grate below the walkway. 120 gp in a tarred satchel
+hang beneath it. Stairs descend to the undermill.
+
+LEVEL 2
+
+1. UNDERMILL POOL. A cold pool fills half the cavern;
+two pale lights bob over the water.
+
+MILL WISP. AC 7 [12], HD 2*, hp 9, MV fly 120' (40'),
+ATT 1 chill touch (1d4 + special), THAC0 17, ML 10,
+AL Chaotic, NA 1d4 (1d6). Harmed only by silver or
+magical weapons.
+
+2. RAT KING'S COURT. Bones and grain husks carpet a
+throne of broken millstones. The rat king holds court
+here, wearing a silver crown worth 400 gp.

@@ -36,9 +36,13 @@ import re
 import secrets
 import threading
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
+from osrforge.contracts.overrides import Overrides
+from osrforge.contracts.report import ExtractionReport
+from osrforge.contracts.run import RunMeta
 from osrlib.crawl.adventure import Adventure
 from osrlib.crawl.dungeon import (
     AreaSpec,
@@ -52,8 +56,8 @@ from osrlib.crawl.dungeon import (
 from osrlib.versioning import check_document, stamp_document
 from pydantic import ValidationError
 
-from osreditor.addresses import area_address, cell_address
-from osreditor.diagnostics import compute_diagnostics
+from osreditor.addresses import area_address, cell_address, dungeon_address, level_address
+from osreditor.diagnostics import compute_diagnostics, forge_findings
 from osreditor.errors import (
     OpInvariantError,
     OpRejectedError,
@@ -63,6 +67,7 @@ from osreditor.errors import (
     StaleRevisionError,
     UndoStackEmptyError,
 )
+from osreditor.forge import assemble_workdir, check_workdir, read_overrides_value, read_run_meta, rerun_assemble
 from osreditor.ops import (
     AddDungeon,
     AddFeature,
@@ -71,6 +76,7 @@ from osreditor.ops import (
     AnyEditOp,
     CreateArea,
     Diagnostics,
+    ForgeState,
     OpBatch,
     OpBatchResult,
     RemoveArea,
@@ -95,11 +101,17 @@ from osreditor.ops import (
     SetWandering,
     SubtreeChange,
 )
+from osreditor.overrides import ForgeTranslationState, TranslationResult, ensure_forge_supported, translate_batch
+from osreditor.sidecar import SIDECAR_ARTIFACT, AnySidecarPatch, EditorSidecar, apply_sidecar_patches
 from osreditor.store import ProjectStore
 
 __all__ = [
     "ADVENTURE_ARTIFACT",
+    "OVERRIDES_ARTIFACT",
     "DocumentService",
+    "ForgeProjectState",
+    "HistoryEntry",
+    "LoadedProject",
     "OpenProject",
     "ProjectType",
     "canonical_edge_cells",
@@ -111,6 +123,7 @@ __all__ = [
 ]
 
 ADVENTURE_ARTIFACT = "adventure.json"
+OVERRIDES_ARTIFACT = "overrides.yaml"
 MAX_UNDO_DEPTH = 100
 
 ProjectType = Literal["native", "forge"]
@@ -246,6 +259,54 @@ def dropped_pointers(source: object, reserialized: object, prefix: str = "") -> 
     return tuple(dropped)
 
 
+@dataclass
+class ForgeProjectState:
+    """A forge-backed project's working state beside the document.
+
+    Mutable like [`OpenProject`][osreditor.documents.OpenProject] — guarded by
+    the same per-project lock. `overrides_bytes` is the raw `overrides.yaml`
+    as on disk (`b""` when absent), the currency of the forge undo stack's
+    snapshots; `checked` flips false on every assembly (re-assembly wipes
+    check findings by forge's design) and true after the check route.
+    """
+
+    workdir: Path
+    run: RunMeta
+    report: ExtractionReport
+    overrides: Overrides
+    overrides_bytes: bytes
+    checked: bool = False
+
+
+@dataclass(frozen=True)
+class LoadedProject:
+    """What a project loader answers: everything `get_or_open` needs to admit a project."""
+
+    adventure: Adventure
+    project_type: ProjectType
+    dropped_fields: tuple[str, ...]
+    sidecar: EditorSidecar
+    forge: ForgeProjectState | None
+
+
+@dataclass(frozen=True)
+class HistoryEntry:
+    """One undo-stack step.
+
+    Native entries carry the prior document plus the note key-remaps the
+    commit's re-keying ops performed (undo replays them inversely, redo
+    forward, on the live notes map — note *content* never rides the stack).
+    Forge entries carry the snapshot pair instead: the `overrides.yaml` bytes
+    and the `auto_reasons` tuple together — the document is derived state, and
+    `auto_reasons` is derived state of the same commit, so one is never
+    restored without the other.
+    """
+
+    document: Adventure | None = None
+    note_remap: tuple[tuple[str, str], ...] = ()
+    forge_snapshot: tuple[bytes, tuple[str, ...]] | None = None
+
+
 class OpenProject:
     """One open project: the document, its revision stream, and its history.
 
@@ -262,6 +323,8 @@ class OpenProject:
         adventure: Adventure,
         dropped_fields: tuple[str, ...],
         diagnostics: Diagnostics,
+        sidecar: EditorSidecar,
+        forge: ForgeProjectState | None = None,
     ) -> None:
         """Bundle a just-loaded project's working state.
 
@@ -269,9 +332,11 @@ class OpenProject:
             project_id: The server-minted opaque id.
             path: The resolved project directory path.
             project_type: The detected project shape.
-            adventure: The loaded document.
+            adventure: The loaded (native) or assembled (forge) document.
             dropped_fields: The open-time fidelity diff's pointers.
             diagnostics: The diagnostics computed at open.
+            sidecar: The editor sidecar, loaded or empty.
+            forge: The forge working state; `None` for native projects.
         """
         self.id = project_id
         self.path = path
@@ -279,9 +344,11 @@ class OpenProject:
         self.adventure = adventure
         self.dropped_fields = dropped_fields
         self.diagnostics = diagnostics
+        self.sidecar = sidecar
+        self.forge = forge
         self.revision_number = 1
-        self.undo_stack: list[Adventure] = []
-        self.redo_stack: list[Adventure] = []
+        self.undo_stack: list[HistoryEntry] = []
+        self.redo_stack: list[HistoryEntry] = []
         self.lock = threading.Lock()
 
     @property
@@ -328,9 +395,7 @@ class DocumentService:
             raise ProjectNotFoundError(f"no open project with id {project_id!r}")
         return project
 
-    def get_or_open(
-        self, path: Path, loader: Callable[[], tuple[Adventure, ProjectType, tuple[str, ...]]]
-    ) -> OpenProject:
+    def get_or_open(self, path: Path, loader: Callable[[], LoadedProject]) -> OpenProject:
         """Return the already-open project for a resolved path, or admit a new one.
 
         The whole open — `loader` included — runs under the registry lock:
@@ -340,9 +405,7 @@ class DocumentService:
 
         Args:
             path: The resolved project directory path (the registry index).
-            loader: Classifies and loads the document; called only on a miss.
-                Returns the adventure, the project type, and the fidelity diff's
-                dropped-field pointers.
+            loader: Classifies and loads the project; called only on a miss.
 
         Returns:
             The open project.
@@ -351,21 +414,47 @@ class DocumentService:
             existing = self._by_path.get(str(path))
             if existing is not None:
                 return existing
-            adventure, project_type, dropped = loader()
+            loaded = loader()
+            diagnostics = compute_diagnostics(loaded.adventure)
+            if loaded.forge is not None:
+                diagnostics = diagnostics.model_copy(update={"forge": forge_findings(loaded.forge.report.findings)})
             project = OpenProject(
                 project_id=secrets.token_hex(8),
                 path=path,
-                project_type=project_type,
-                adventure=adventure,
-                dropped_fields=dropped,
-                diagnostics=compute_diagnostics(adventure),
+                project_type=loaded.project_type,
+                adventure=loaded.adventure,
+                dropped_fields=loaded.dropped_fields,
+                diagnostics=diagnostics,
+                sidecar=loaded.sidecar,
+                forge=loaded.forge,
             )
             self._by_id[project.id] = project
             self._by_path[str(path)] = project
             return project
 
+    def close(self, project: OpenProject) -> None:
+        """Drop a project from the open registry (the detach crossing).
+
+        The next open of the same path admits a fresh project with a fresh id;
+        any tab still holding the old id 404s and returns home — the same
+        contract a server restart already imposes.
+
+        Args:
+            project: The project to drop.
+        """
+        with self._registry_lock:
+            self._by_id.pop(project.id, None)
+            self._by_path.pop(str(project.path), None)
+
     def apply_batch(self, project: OpenProject, batch: OpBatch) -> OpBatchResult:
         """Apply one batch atomically: all ops or none, one undo step, one revision.
+
+        Native projects commit the op-applied document directly. Forge-backed
+        projects run the same ops against the in-memory document first — the
+        same invariants and rejections hold in both modes, with the pinned
+        growth-rule substitution — then translate the batch to the next
+        `overrides.yaml` value and run the forge commit protocol; the document
+        the project adopts is the *assembled* result, never the candidate.
 
         Args:
             project: The open project.
@@ -381,12 +470,18 @@ class DocumentService:
             OpInvariantError: If an op violates an editor-enforced semantic
                 invariant (a duplicate id, a non-canonical edge key, an
                 out-of-bounds cell, a stranding resize — see the op docstrings).
+            OpUnsupportedForgeError: If the project is forge-backed and an op
+                has no override translation — the whole batch rejects before
+                any translation side effect, with the detach offer as remedy.
             OpRejectedError: If the batch would produce an invalid model — the
                 round-trip re-validation is the single enforcement point, because
                 `model_copy(update=...)` bypasses every validator in pydantic v2.
                 It also backstops every invariant the ops enforce ahead of it: a
                 bug in an op-level check surfaces as `op_rejected`, never a
                 committed invalid document.
+            ForgeOverrideInvalidError: If forge rejects the translated
+                overrides at assembly — the snapshot is restored and the
+                workdir is unchanged (forge fails before any artifact write).
         """
         with project.lock:
             if batch.revision != project.revision:
@@ -395,11 +490,15 @@ class DocumentService:
                     f"but the current revision is {project.revision}",
                     current_revision=project.revision,
                 )
+            if project.forge is not None:
+                return self._apply_forge_batch(project, batch)
             candidate = project.adventure
             touched: list[str] = []
+            remap_rules: list[tuple[str, str]] = []
             for op in batch.ops:
                 candidate, pointer = _apply_op(candidate, op)
                 touched.append(pointer)
+                remap_rules.extend(_note_remap_rules(op))
             try:
                 validated = Adventure.model_validate(candidate.model_dump())
             except ValidationError as error:
@@ -411,13 +510,119 @@ class DocumentService:
                 ) from error
             previous = project.adventure
             self._commit(project, validated)
-            project.undo_stack.append(previous)
+            applied_remap = self._remap_notes(project, remap_rules)
+            project.undo_stack.append(HistoryEntry(document=previous, note_remap=applied_remap))
             if len(project.undo_stack) > MAX_UNDO_DEPTH:
                 project.undo_stack.pop(0)
             project.redo_stack.clear()
             payload = validated.model_dump(mode="json")
             delta = _coalesce_delta(payload, touched)
             return self._result(project, delta)
+
+    def _apply_forge_batch(self, project: OpenProject, batch: OpBatch) -> OpBatchResult:
+        """The forge half of `apply_batch`: apply, validate, translate, commit. Caller holds the lock."""
+        forge = project.forge
+        assert forge is not None
+        ensure_forge_supported(batch.ops)
+        candidate = project.adventure
+        for op in batch.ops:
+            candidate, _ = _apply_op(candidate, op, forge_mode=True)
+        try:
+            Adventure.model_validate(candidate.model_dump())
+        except ValidationError as error:
+            raise OpRejectedError(
+                "the batch would produce an invalid document and was rejected whole",
+                errors=[{"path": json_pointer(detail["loc"]), "message": detail["msg"]} for detail in error.errors()],
+            ) from error
+        translation = translate_batch(
+            batch.ops,
+            ForgeTranslationState(
+                document=project.adventure,
+                applied=candidate,
+                overrides=forge.overrides,
+                report=forge.report,
+                auto_reasons=frozenset(project.sidecar.auto_reasons),
+            ),
+        )
+        return self._commit_forge(project, translation)
+
+    def commit_forge_translation(
+        self, project: OpenProject, revision: str, translation: TranslationResult
+    ) -> OpBatchResult:
+        """Commit an already-built overrides value at a named revision — the override-level edits' entry.
+
+        Args:
+            project: The open project (must be forge-backed).
+            revision: The revision the edits were computed against.
+            translation: The next overrides value with its `auto_reasons`.
+
+        Returns:
+            The result, carrying the whole-document delta and refreshed forge
+            state.
+
+        Raises:
+            StaleRevisionError: If `revision` is not current.
+            ForgeOverrideInvalidError: If forge rejects the overrides at
+                assembly — the snapshot is restored.
+        """
+        with project.lock:
+            if revision != project.revision:
+                raise StaleRevisionError(
+                    f"edits were computed against revision {revision}, but the current revision is {project.revision}",
+                    current_revision=project.revision,
+                )
+            return self._commit_forge(project, translation)
+
+    def _commit_forge(self, project: OpenProject, translation: TranslationResult) -> OpBatchResult:
+        """The forge commit protocol: snapshot → write → assemble → adopt, or restore.
+
+        Caller holds the lock. On any assembly failure the snapshotted
+        `overrides.yaml` bytes and `auto_reasons` are restored and the error
+        re-raised — forge's fail-before-write guarantee means the workdir
+        artifacts never saw the bad file, so restoring the input restores the
+        whole state.
+        """
+        forge = project.forge
+        assert forge is not None
+        snapshot = HistoryEntry(forge_snapshot=(forge.overrides_bytes, project.sidecar.auto_reasons))
+        new_bytes = translation.serialized
+        new_auto = tuple(sorted(translation.auto_reasons))
+        self._write_forge_state(project, new_bytes, new_auto)
+        try:
+            result = assemble_workdir(forge.workdir)
+        except Exception:
+            self._write_forge_state(project, *_snapshot_pair(snapshot))
+            raise
+        self._adopt_assembly(project, result.adventure, result.report)
+        forge.overrides = translation.overrides
+        project.undo_stack.append(snapshot)
+        if len(project.undo_stack) > MAX_UNDO_DEPTH:
+            project.undo_stack.pop(0)
+        project.redo_stack.clear()
+        return self._result(project, _whole_document_delta(project.adventure))
+
+    def _write_forge_state(self, project: OpenProject, overrides_bytes: bytes, auto_reasons: tuple[str, ...]) -> None:
+        """Write the overrides file and, when it changed, the sidecar's `auto_reasons`."""
+        forge = project.forge
+        assert forge is not None
+        self.store.write_artifact(str(project.path), OVERRIDES_ARTIFACT, overrides_bytes)
+        forge.overrides_bytes = overrides_bytes
+        if auto_reasons != project.sidecar.auto_reasons:
+            project.sidecar = project.sidecar.model_copy(update={"auto_reasons": auto_reasons})
+            self.persist_sidecar(project)
+
+    def _adopt_assembly(self, project: OpenProject, adventure: Adventure, report: ExtractionReport) -> None:
+        """Install a fresh assembly: document, report, run, revision, diagnostics — the forge tier honestly emptied."""
+        forge = project.forge
+        assert forge is not None
+        project.adventure = adventure
+        forge.report = report
+        forge.run = read_run_meta(forge.workdir)
+        forge.checked = False
+        project.revision_number += 1
+        project.diagnostics = compute_diagnostics(adventure).model_copy(
+            update={"forge": forge_findings(report.findings)}
+        )
 
     def undo(self, project: OpenProject) -> OpBatchResult:
         """Revert the latest commit.
@@ -427,6 +632,10 @@ class DocumentService:
         one document, one history, like two windows onto one desktop app. The
         result still bumps the revision, so the other tab's next batch is a 409
         and it resyncs.
+
+        Forge-backed undo restores the snapshot pair — the `overrides.yaml`
+        bytes and `auto_reasons` together — and re-assembles; assembly is pure
+        and deterministic, so the restored document is exact.
 
         Args:
             project: The open project.
@@ -440,10 +649,19 @@ class DocumentService:
         with project.lock:
             if not project.undo_stack:
                 raise UndoStackEmptyError("there is nothing to undo")
+            entry = project.undo_stack[-1]
+            if entry.forge_snapshot is not None:
+                current = HistoryEntry(forge_snapshot=(_forge_bytes(project), project.sidecar.auto_reasons))
+                self._restore_forge_snapshot(project, entry)
+                project.undo_stack.pop()
+                project.redo_stack.append(current)
+                return self._result(project, _whole_document_delta(project.adventure))
+            assert entry.document is not None
             previous = project.adventure
-            self._commit(project, project.undo_stack[-1])
+            self._commit(project, entry.document)
+            self._remap_notes(project, [(new, old) for old, new in reversed(entry.note_remap)])
             project.undo_stack.pop()
-            project.redo_stack.append(previous)
+            project.redo_stack.append(HistoryEntry(document=previous, note_remap=entry.note_remap))
             return self._result(project, _whole_document_delta(project.adventure))
 
     def redo(self, project: OpenProject) -> OpBatchResult:
@@ -461,11 +679,142 @@ class DocumentService:
         with project.lock:
             if not project.redo_stack:
                 raise RedoStackEmptyError("there is nothing to redo")
+            entry = project.redo_stack[-1]
+            if entry.forge_snapshot is not None:
+                current = HistoryEntry(forge_snapshot=(_forge_bytes(project), project.sidecar.auto_reasons))
+                self._restore_forge_snapshot(project, entry)
+                project.redo_stack.pop()
+                project.undo_stack.append(current)
+                return self._result(project, _whole_document_delta(project.adventure))
+            assert entry.document is not None
             previous = project.adventure
-            self._commit(project, project.redo_stack[-1])
+            self._commit(project, entry.document)
+            self._remap_notes(project, list(entry.note_remap))
             project.redo_stack.pop()
-            project.undo_stack.append(previous)
+            project.undo_stack.append(HistoryEntry(document=previous, note_remap=entry.note_remap))
             return self._result(project, _whole_document_delta(project.adventure))
+
+    def apply_check(self, project: OpenProject) -> OpBatchResult:
+        """Run forge's on-demand `check()` and refresh the forge tier.
+
+        Not part of the per-commit loop: re-assembly wipes findings by forge's
+        explicit design, the editor's own live lint already mirrors the five
+        static checks per commit, and the delve is a deliberate, whole-dungeon
+        act. The revision does not bump — the document is unchanged.
+
+        Args:
+            project: The open project (must be forge-backed; callers guard).
+
+        Returns:
+            The envelope with the refreshed forge tier and `checked` state.
+        """
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            findings = check_workdir(forge.workdir)
+            # check() rewrote report.json with exactly this merge — mirror it
+            # in memory rather than re-reading forge's own write.
+            forge.report = forge.report.model_copy(update={"findings": findings})
+            forge.checked = True
+            project.diagnostics = project.diagnostics.model_copy(update={"forge": forge_findings(findings)})
+            return self._result(project, ())
+
+    def apply_rerun(self, project: OpenProject, settings_updates: Mapping[str, object] | None) -> OpBatchResult:
+        """Re-run the assemble stage, optionally updating assembly-owned knobs.
+
+        Not an undo step: the snapshot stack captures `overrides.yaml` and the
+        reason ledger, and a knob change lives in `run.json`'s settings echo —
+        pipeline state, not correction history. The revision bumps because the
+        document may change.
+
+        Args:
+            project: The open project (must be forge-backed; callers guard).
+            settings_updates: Knob updates, or `None`/empty for a plain
+                re-assembly.
+
+        Returns:
+            The envelope with the whole-document delta and refreshed forge
+            state.
+        """
+        with project.lock:
+            forge = project.forge
+            assert forge is not None
+            result = rerun_assemble(forge.workdir, settings_updates if settings_updates else None)
+            self._adopt_assembly(project, result.adventure, result.report)
+            return self._result(project, _whole_document_delta(project.adventure))
+
+    def _restore_forge_snapshot(self, project: OpenProject, entry: HistoryEntry) -> None:
+        """Write a snapshot pair back and re-assemble; restore the current pair on failure."""
+        forge = project.forge
+        assert forge is not None
+        current_bytes, current_auto = _forge_bytes(project), project.sidecar.auto_reasons
+        overrides_bytes, auto_reasons = _snapshot_pair(entry)
+        self._write_forge_state(project, overrides_bytes, auto_reasons)
+        try:
+            result = assemble_workdir(forge.workdir)
+        except Exception:
+            self._write_forge_state(project, current_bytes, current_auto)
+            raise
+        self._adopt_assembly(project, result.adventure, result.report)
+        forge.overrides = read_overrides_value(forge.workdir)
+
+    def _remap_notes(self, project: OpenProject, rules: Sequence[tuple[str, str]]) -> tuple[tuple[str, str], ...]:
+        """Apply note key-remap rules to the live notes map, persisting when anything moved.
+
+        Each rule is an address-prefix pair; a note key matches when it equals
+        the old prefix or continues it with a `/` segment. Returns the actual
+        `(old key, new key)` pairs applied — the entry undo replays. A rule
+        landing on a key where a dormant note sits overwrites it: the live
+        entity's note wins, pinned as acceptable.
+        """
+        if not rules or not project.sidecar.notes:
+            return ()
+        notes = dict(project.sidecar.notes)
+        applied: list[tuple[str, str]] = []
+        for old_prefix, new_prefix in rules:
+            moved: dict[str, str] = {}
+            for key in list(notes):
+                if key == old_prefix or key.startswith(f"{old_prefix}/"):
+                    moved[key] = f"{new_prefix}{key[len(old_prefix) :]}"
+            for old_key, new_key in moved.items():
+                notes[new_key] = notes.pop(old_key)
+                applied.append((old_key, new_key))
+        if not applied:
+            return ()
+        project.sidecar = project.sidecar.model_copy(update={"notes": notes})
+        self.persist_sidecar(project)
+        return tuple(applied)
+
+    def apply_sidecar_patch(self, project: OpenProject, patches: tuple[AnySidecarPatch, ...]) -> EditorSidecar:
+        """Apply typed sidecar patches and save atomically, answering the new state.
+
+        Deliberately not revision-guarded: annotation state, single-user,
+        last-write-wins — the document's 409 discipline exists to prevent
+        silent *content* destruction, which annotations are not.
+
+        Args:
+            project: The open project.
+            patches: The patches, in order.
+
+        Returns:
+            The new sidecar.
+        """
+        with project.lock:
+            project.sidecar = apply_sidecar_patches(project.sidecar, patches)
+            self.persist_sidecar(project)
+            return project.sidecar
+
+    def persist_sidecar(self, project: OpenProject) -> None:
+        """Write the project's sidecar — the first sidecar-bearing write creates the file.
+
+        Args:
+            project: The open project whose sidecar changed.
+        """
+        self.store.write_artifact(
+            str(project.path),
+            SIDECAR_ARTIFACT,
+            canonical_json_bytes(project.sidecar.model_dump(mode="json")),
+        )
 
     def _commit(self, project: OpenProject, document: Adventure) -> None:
         """Persist a document, then install it: revision bump, diagnostics refresh.
@@ -474,7 +823,9 @@ class DocumentService:
         through the store atomically. The write comes first, so a failed write
         (disk full) raises with the in-memory document, revision, and — because
         callers mutate them only after this returns — the history stacks all
-        exactly as they were.
+        exactly as they were. Native only: a forge project's persistence path
+        is the commit protocol, and the editor never writes a workdir's
+        `adventure.json`.
         """
         self.store.write_artifact(str(project.path), ADVENTURE_ARTIFACT, dump_adventure(document))
         project.adventure = document
@@ -488,15 +839,79 @@ class DocumentService:
             delta=delta,
             can_undo=bool(project.undo_stack),
             can_redo=bool(project.redo_stack),
+            forge=forge_state_model(project),
+            sidecar=project.sidecar,
         )
 
 
-def _apply_op(adventure: Adventure, op: AnyEditOp) -> tuple[Adventure, str]:
+def forge_state_model(project: OpenProject) -> ForgeState | None:
+    """Build the API-surface forge state from a project's working state.
+
+    Args:
+        project: The open project.
+
+    Returns:
+        The forge state, or `None` for native projects.
+    """
+    if project.forge is None:
+        return None
+    return ForgeState(
+        report=project.forge.report,
+        run=project.forge.run,
+        overrides=project.forge.overrides,
+        checked=project.forge.checked,
+    )
+
+
+def _forge_bytes(project: OpenProject) -> bytes:
+    forge = project.forge
+    assert forge is not None
+    return forge.overrides_bytes
+
+
+def _snapshot_pair(entry: HistoryEntry) -> tuple[bytes, tuple[str, ...]]:
+    assert entry.forge_snapshot is not None
+    return entry.forge_snapshot
+
+
+def _note_remap_rules(op: AnyEditOp) -> list[tuple[str, str]]:
+    """The address-prefix remaps a re-keying op implies for the notes map.
+
+    The three re-keying ops are all native-mode ops (forge blocks every one),
+    so the cascade never coincides with a forge commit.
+    """
+    if isinstance(op, RenameDungeon):
+        return [(dungeon_address(op.old_id), dungeon_address(op.new_id))]
+    if isinstance(op, RenumberLevel):
+        return [
+            (level_address(op.dungeon_id, op.old_number), level_address(op.dungeon_id, op.new_number)),
+        ]
+    if isinstance(op, SetAreaField) and op.field == "id":
+        return [
+            (
+                area_address(op.dungeon_id, op.level_number, op.area_id),
+                area_address(op.dungeon_id, op.level_number, op.value),
+            )
+        ]
+    return []
+
+
+def _apply_op(adventure: Adventure, op: AnyEditOp, forge_mode: bool = False) -> tuple[Adventure, str]:
     """Apply one op to a candidate document, returning it and the touched subtree root.
 
     The rebuild is bottom-up nested `model_copy(update=...)` — the idiom
     osrlib's own tests use pervasively. It bypasses validators, which is why
     the batch round-trip re-validation in `apply_batch` is mandatory.
+
+    `forge_mode` is the pinned growth-rule substitution: a forge level's
+    dimensions are the derived bounding box forge recomputes and `ResizeLevel`
+    is blocked, so the geometry ops' in-bounds invariants become *nonnegative*
+    invariants — forge's own guard, and the only one it has. The candidate
+    legally carries cells beyond its stale `width`/`height` for the instant
+    before the assembled document's recomputed bounding box is adopted
+    (out-of-bounds cells are validation findings, not model errors). Forge
+    mode also tolerates an edge delete naming no entry — an absent entry is
+    already the wall the gesture wants — where native mode rejects it.
     """
     if isinstance(op, SetAdventureField):
         return adventure.model_copy(update={op.field: op.value}), json_pointer([op.field])
@@ -506,13 +921,13 @@ def _apply_op(adventure: Adventure, op: AnyEditOp) -> tuple[Adventure, str]:
     if isinstance(op, SetWandering):
         return _apply_level_field(adventure, op, "wandering", op.wandering)
     if isinstance(op, SetEdges):
-        return _apply_set_edges(adventure, op)
+        return _apply_set_edges(adventure, op, forge_mode)
     if isinstance(op, SetEntrance):
-        return _apply_set_entrance(adventure, op)
+        return _apply_set_entrance(adventure, op, forge_mode)
     if isinstance(op, CreateArea):
-        return _apply_create_area(adventure, op)
+        return _apply_create_area(adventure, op, forge_mode)
     if isinstance(op, SetAreaCells):
-        return _apply_set_area_cells(adventure, op)
+        return _apply_set_area_cells(adventure, op, forge_mode)
     if isinstance(op, SetAreaField):
         return _apply_set_area_field(adventure, op)
     if isinstance(op, RemoveArea):
@@ -530,7 +945,7 @@ def _apply_op(adventure: Adventure, op: AnyEditOp) -> tuple[Adventure, str]:
     if isinstance(op, RemoveFeature):
         return _apply_remove_feature(adventure, op)
     if isinstance(op, AddTransition):
-        return _apply_add_transition(adventure, op)
+        return _apply_add_transition(adventure, op, forge_mode)
     if isinstance(op, RemoveTransition):
         return _apply_remove_transition(adventure, op)
     if isinstance(op, AddDungeon):
@@ -622,13 +1037,24 @@ def canonical_edge_cells(key: str) -> tuple[Position, Position] | None:
     return (x, y), neighbour
 
 
-def _require_cells_in_bounds(level: LevelSpec, cells: Sequence[Position]) -> None:
+def _require_cells_in_bounds(level: LevelSpec, cells: Sequence[Position], forge_mode: bool = False) -> None:
+    """The bounds invariant, or under the growth rule its forge-mode substitution.
+
+    Forge-mode geometry admits growth beyond the current extent: dimensions
+    are the bounding box forge recomputes over area and corridor cells, so the
+    only invariant left is forge's own — nonnegative coordinates.
+    """
+    if forge_mode:
+        for x, y in cells:
+            if x < 0 or y < 0:
+                raise OpInvariantError(f"cell ({x}, {y}) has a negative coordinate — osrlib grids start at (0, 0)")
+        return
     for cell in cells:
         if not level.in_bounds(cell):
             raise OpInvariantError(f"cell {cell} is out of bounds for the {level.width}x{level.height} grid")
 
 
-def _apply_set_edges(adventure: Adventure, op: SetEdges) -> tuple[Adventure, str]:
+def _apply_set_edges(adventure: Adventure, op: SetEdges, forge_mode: bool = False) -> tuple[Adventure, str]:
     dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
     level = adventure.dungeons[dungeon_index].levels[level_index]
     edges = dict(level.edges)
@@ -636,8 +1062,13 @@ def _apply_set_edges(adventure: Adventure, op: SetEdges) -> tuple[Adventure, str
         if value is None:
             # Deletion authors no key, so any existing entry — the malformed
             # and non-canonical keys a foreign document legally carries
-            # included — stays deletable without weakening the write rule.
+            # included — stays deletable without weakening the write rule. In
+            # forge mode a delete naming no entry is a no-op instead: an
+            # absent entry is already the wall the gesture wants, and the
+            # translator's semantic diff emits nothing for it.
             if key not in edges:
+                if forge_mode:
+                    continue
                 raise OpInvariantError(f"edge delete names no existing entry {key!r}")
             del edges[key]
             continue
@@ -646,9 +1077,12 @@ def _apply_set_edges(adventure: Adventure, op: SetEdges) -> tuple[Adventure, str
             raise OpInvariantError(
                 f"edge key {key!r} is not canonical — the editor authors only 'x,y:north' and 'x,y:west' keys"
             )
-        for cell in cells:
-            if not level.in_bounds(cell):
-                raise OpInvariantError(f"edge key {key!r} references the out-of-bounds cell {cell}")
+        if forge_mode:
+            _require_cells_in_bounds(level, cells, forge_mode=True)
+        else:
+            for cell in cells:
+                if not level.in_bounds(cell):
+                    raise OpInvariantError(f"edge key {key!r} references the out-of-bounds cell {cell}")
         if value.kind is EdgeKind.WALL:
             raise OpInvariantError(
                 f"edge key {key!r} assigns an explicit wall — delete the entry instead; an absent edge is a wall"
@@ -659,22 +1093,26 @@ def _apply_set_edges(adventure: Adventure, op: SetEdges) -> tuple[Adventure, str
     return _replace_level(adventure, dungeon_index, level_index, new_level), pointer
 
 
-def _apply_set_entrance(adventure: Adventure, op: SetEntrance) -> tuple[Adventure, str]:
+def _apply_set_entrance(adventure: Adventure, op: SetEntrance, forge_mode: bool = False) -> tuple[Adventure, str]:
     dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
     level = adventure.dungeons[dungeon_index].levels[level_index]
     if op.entrance is not None:
-        _require_cells_in_bounds(level, (op.entrance,))
+        _require_cells_in_bounds(level, (op.entrance,), forge_mode)
     return _apply_level_field(adventure, op, "entrance", op.entrance)
 
 
-def _apply_create_area(adventure: Adventure, op: CreateArea) -> tuple[Adventure, str]:
+def _apply_create_area(adventure: Adventure, op: CreateArea, forge_mode: bool = False) -> tuple[Adventure, str]:
     dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
     level = adventure.dungeons[dungeon_index].levels[level_index]
     if not op.area_id:
         raise OpInvariantError("area id must be non-empty")
+    if forge_mode and "/" in op.area_id:
+        # The address grammar's one reserved character: forge keys area
+        # entries by <dungeon>/<level>/<key>, so a slash would break the key.
+        raise OpInvariantError(f"area id {op.area_id!r} contains '/' — not addressable in a forge-backed project")
     if any(area.id == op.area_id for area in level.areas):
         raise OpInvariantError(f"dungeon {op.dungeon_id!r} level {op.level_number} already has an area {op.area_id!r}")
-    _require_cells_in_bounds(level, op.cells)
+    _require_cells_in_bounds(level, op.cells, forge_mode)
     area = AreaSpec(id=op.area_id, name=op.name, description=op.description, cells=op.cells)
     new_level = level.model_copy(update={"areas": (*level.areas, area)})
     pointer = f"/dungeons/{dungeon_index}/levels/{level_index}/areas"
@@ -693,11 +1131,11 @@ def _replace_area(
     return _replace_level(adventure, dungeon_index, level_index, new_level), pointer
 
 
-def _apply_set_area_cells(adventure: Adventure, op: SetAreaCells) -> tuple[Adventure, str]:
+def _apply_set_area_cells(adventure: Adventure, op: SetAreaCells, forge_mode: bool = False) -> tuple[Adventure, str]:
     dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
     level = adventure.dungeons[dungeon_index].levels[level_index]
     area_index = _resolve_area(level, op.dungeon_id, op.area_id)
-    _require_cells_in_bounds(level, op.cells)
+    _require_cells_in_bounds(level, op.cells, forge_mode)
     area = level.areas[area_index].model_copy(update={"cells": op.cells})
     return _replace_area(adventure, dungeon_index, level_index, area_index, area)
 
@@ -843,11 +1281,13 @@ def _apply_remove_feature(adventure: Adventure, op: RemoveFeature) -> tuple[Adve
     return _replace_container_features(adventure, dungeon_index, level_index, area_index, features)
 
 
-def _apply_add_transition(adventure: Adventure, op: AddTransition) -> tuple[Adventure, str]:
+def _apply_add_transition(adventure: Adventure, op: AddTransition, forge_mode: bool = False) -> tuple[Adventure, str]:
     dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)
     level = adventure.dungeons[dungeon_index].levels[level_index]
     transition = op.transition
-    if not level.in_bounds(transition.position):
+    if forge_mode:
+        _require_cells_in_bounds(level, (transition.position,), forge_mode=True)
+    elif not level.in_bounds(transition.position):
         raise OpInvariantError(
             f"transition source {transition.position} is out of bounds for the {level.width}x{level.height} grid"
         )

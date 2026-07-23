@@ -3,8 +3,11 @@
 // every caller can toast the message and remedy generically.
 import type {
   AnyEditOp,
+  AnyOverrideEdit,
+  AnySidecarPatch,
   ApiError,
   ApiErrorDetail,
+  EditorSidecar,
   EncounterTableCatalogResponse,
   EquipmentCatalogResponse,
   ExportResult,
@@ -96,6 +99,26 @@ export const api = {
       `/api/importers/${encodeURIComponent(formatId)}/load`,
       jsonPost({ path }),
     ),
+  postForgeOverrides: (id: string, revision: string, edits: AnyOverrideEdit[]) =>
+    request<OpBatchResult>(`/api/projects/${id}/forge/overrides`, jsonPost({ revision, edits })),
+  postForgeCheck: (id: string) =>
+    request<OpBatchResult>(`/api/projects/${id}/forge/check`, jsonPost()),
+  postForgeRerun: (id: string, settings: Record<string, unknown>) =>
+    request<OpBatchResult>(`/api/projects/${id}/forge/rerun`, jsonPost({ settings })),
+  postForgeDetach: (id: string, path: string) =>
+    request<ProjectState>(`/api/projects/${id}/forge/detach`, jsonPost({ path })),
+  postSidecar: (id: string, patches: AnySidecarPatch[]) =>
+    request<EditorSidecar>(`/api/projects/${id}/sidecar`, jsonPost({ patches })),
+}
+
+// Image sources for the review surfaces — plain URLs, not fetches: the browser
+// streams them straight into <img>.
+export function forgePageUrl(projectId: string, pageNumber: number): string {
+  return `/api/projects/${projectId}/forge/pages/${pageNumber}`
+}
+
+export function forgePreviewUrl(projectId: string, dungeonId: string, levelNumber: number): string {
+  return `/api/projects/${projectId}/forge/previews/${encodeURIComponent(dungeonId)}/${levelNumber}`
 }
 
 export type ApiClient = typeof api

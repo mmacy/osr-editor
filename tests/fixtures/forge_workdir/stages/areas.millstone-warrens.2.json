@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "dungeon_id": "millstone-warrens",
+  "level_number": 2,
+  "areas": [
+    {
+      "key": "1",
+      "description": "A cold pool fills half the cavern; two pale lights bob over the water.",
+      "encounters": [
+        {
+          "monster": "Mill Wisp",
+          "count_fixed": 2,
+          "count_dice": null,
+          "count_note": null
+        }
+      ],
+      "trap": null,
+      "treasure": [],
+      "features": [],
+      "connections": [
+        {
+          "to_key": "2",
+          "direction": "east",
+          "via": "passage",
+          "door_stuck": false,
+          "door_locked": false,
+          "to_level": null
+        },
+        {
+          "to_key": null,
+          "direction": "up",
+          "via": "stairs",
+          "door_stuck": false,
+          "door_locked": false,
+          "to_level": 1
+        }
+      ],
+      "source_pages": [
+        2
+      ],
+      "confidence": 0.8
+    },
+    {
+      "key": "2",
+      "description": "Bones and grain husks carpet a throne of broken millstones.",
+      "encounters": [
+        {
+          "monster": "Rat King",
+          "count_fixed": null,
+          "count_dice": null,
+          "count_note": null
+        }
+      ],
+      "trap": null,
+      "treasure": [
+        "a silver crown worth 400 gp"
+      ],
+      "features": [],
+      "connections": [
+        {
+          "to_key": "1",
+          "direction": "west",
+          "via": "passage",
+          "door_stuck": false,
+          "door_locked": false,
+          "to_level": null
+        }
+      ],
+      "source_pages": [
+        2
+      ],
+      "confidence": 0.75
+    }
+  ]
+}

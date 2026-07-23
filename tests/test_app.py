@@ -64,9 +64,11 @@ def test_create_returns_full_project_state(client: TestClient, tmp_path: Path) -
     assert state["type"] == "native"
     assert state["path"] == str(tmp_path / "demo.osr")
     assert state["document"]["name"] == "The mill"
-    assert state["diagnostics"] == {"validation": [], "lint": []}
+    assert state["diagnostics"] == {"validation": [], "lint": [], "forge": []}
     assert state["dropped_fields"] == []
     assert state["can_undo"] is False and state["can_redo"] is False
+    assert state["forge"] is None
+    assert state["sidecar"]["provenance"]["created_by"].startswith("osr-editor ")
 
 
 def test_create_in_a_non_empty_directory_answers_409(client: TestClient, tmp_path: Path) -> None:
@@ -99,15 +101,16 @@ def test_open_non_project_answers_422(client: TestClient, tmp_path: Path) -> Non
     assert response.json()["error"]["code"] == "not_a_project"
 
 
-def test_open_forge_workdir_answers_project_type_unsupported(client: TestClient, tmp_path: Path) -> None:
+def test_open_forge_shaped_directory_with_bad_run_json_answers_workdir_invalid(
+    client: TestClient, tmp_path: Path
+) -> None:
     workdir = tmp_path / "demo.forge"
     make_forge_workdir(workdir)
     response = client.post("/api/projects/open", json={"path": str(workdir)})
     assert response.status_code == 422
     body = response.json()["error"]
-    assert body["code"] == "project_type_unsupported"
-    assert "workdir" in body["message"]
-    assert "later release" in body["remedy"]
+    assert body["code"] == "forge_workdir_invalid"
+    assert "run.json" in body["message"]
 
 
 def _write_document(path: Path, **envelope_changes: object) -> None:

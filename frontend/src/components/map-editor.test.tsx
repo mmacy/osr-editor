@@ -6,7 +6,7 @@ import { MapEditor } from '@/components/map-editor'
 import { makeDocument } from '@/test/fixtures'
 import type { Diagnostics } from '@/types'
 
-const CLEAN: Diagnostics = { validation: [], lint: [] }
+const CLEAN: Diagnostics = { validation: [], lint: [], forge: [] }
 
 function renderEditor(overrides: Partial<Parameters<typeof MapEditor>[0]> = {}) {
   return render(

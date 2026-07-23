@@ -54,7 +54,9 @@ export function PublishDialog({ onNavigate }: { onNavigate: (target: NavTarget) 
   const [publishing, setPublishing] = useState(false)
 
   if (!project) return null
-  const lintFindings = project.diagnostics.lint
+  // Forge findings join lint in the confirm — "secret-only access is
+  // sometimes the point" extends naturally to a delve_incomplete warning.
+  const lintFindings = [...project.diagnostics.lint, ...(project.diagnostics.forge ?? [])]
 
   const openDialog = (next: boolean) => {
     if (next) {

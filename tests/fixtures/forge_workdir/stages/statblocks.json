@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "custom_monsters": "emit",
+  "blocks": {
+    "mill wisp": {
+      "ac": "7 [12]",
+      "ac_notation": "dual",
+      "thac0": "17",
+      "hit_dice": "2*",
+      "class_level": null,
+      "hp": 9,
+      "attacks": [
+        "1 chill touch (1d4 + special)"
+      ],
+      "movement": "fly 120' (40')",
+      "saves": "D12 W13 P14 B15 S16",
+      "morale": 10,
+      "alignment": "Chaotic",
+      "xp": null,
+      "number_appearing": "1d4 (1d6)",
+      "special": [
+        "Harmed only by silver or magical weapons."
+      ],
+      "confidence": 0.8,
+      "source_pages": [
+        2
+      ]
+    },
+    "rat king": null
+  }
+}

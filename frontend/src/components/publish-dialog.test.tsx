@@ -41,7 +41,9 @@ beforeEach(() => {
   projectStore.getState().clear()
 })
 
-function openDialog(diagnostics = { validation: [] as Finding[], lint: [] as Finding[] }) {
+function openDialog(
+  diagnostics = { validation: [] as Finding[], lint: [] as Finding[], forge: [] as Finding[] },
+) {
   const onNavigate = vi.fn()
   projectStore.getState().setProject(makeProjectState({ diagnostics }))
   render(<PublishDialog onNavigate={onNavigate} />)
@@ -79,7 +81,7 @@ describe('the publish dialog flow', () => {
 
   test('the lint confirm interposes, listing the warnings, and publishes on confirm', async () => {
     publishProject.mockResolvedValueOnce({ path: '/osr-web/adventures/demo', mode: 'symlink' })
-    openDialog({ validation: [], lint: [LINT_FINDING] })
+    openDialog({ validation: [], lint: [LINT_FINDING], forge: [] })
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Publish' }))
     // No request yet — the confirm interposes with the warning listed.
     expect(publishProject).not.toHaveBeenCalled()

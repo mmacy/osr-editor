@@ -14,7 +14,7 @@ const RENAME: AnyEditOp = { op: 'set_adventure_field', field: 'name', value: 'Re
 function result(revision: string, overrides: Partial<OpBatchResult> = {}): OpBatchResult {
   return {
     revision,
-    diagnostics: { validation: [], lint: [] },
+    diagnostics: { validation: [], lint: [], forge: [] },
     delta: [{ path: '/name', value: `name at ${revision}` }],
     can_undo: true,
     can_redo: false,

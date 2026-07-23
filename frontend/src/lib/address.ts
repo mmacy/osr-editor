@@ -18,6 +18,12 @@ export type NavTarget =
   | { kind: 'adventure' }
   | { kind: 'town' }
   | { kind: 'level'; dungeonId: string; levelNumber: number; focus?: LevelFocus }
+  // The forge review surfaces — nav sections, never address-mapped (the
+  // grammar's producers stay validation, lint, and the forge tier).
+  | { kind: 'review' }
+  | { kind: 'corrections' }
+  | { kind: 'pipeline' }
+  | { kind: 'monsters' }
 
 function segmentValue(segment: string, expected: string): string | null {
   const prefix = `${expected}:`
@@ -55,6 +61,20 @@ function parseFocus(segment: string, level: LevelSpec): LevelFocus | null {
     return key in level.edges ? { type: 'edge', key } : null
   }
   return null
+}
+
+// The address builders, mirroring the backend's percent-encoding rule (RFC
+// 3986, everything reserved) — the notes map and view state key on these.
+export function dungeonAddress(dungeonId: string): string {
+  return `dungeon:${encodeURIComponent(dungeonId)}`
+}
+
+export function levelAddress(dungeonId: string, levelNumber: number): string {
+  return `${dungeonAddress(dungeonId)}/level:${levelNumber}`
+}
+
+export function areaAddress(dungeonId: string, levelNumber: number, areaId: string): string {
+  return `${levelAddress(dungeonId, levelNumber)}/area:${encodeURIComponent(areaId)}`
 }
 
 export function navTargetFor(

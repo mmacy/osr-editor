@@ -27,6 +27,9 @@ docstring for its pinned invariants.
 
 from typing import Annotated, Literal
 
+from osrforge.contracts.overrides import Overrides
+from osrforge.contracts.report import ExtractionReport
+from osrforge.contracts.run import RunMeta
 from osrlib.crawl.dungeon import (
     AreaTreasureSpec,
     Edge,
@@ -38,6 +41,8 @@ from osrlib.crawl.dungeon import (
     WanderingSpec,
 )
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from osreditor.sidecar import EditorSidecar
 
 __all__ = [
     "AddDungeon",
@@ -51,6 +56,7 @@ __all__ = [
     "EditOp",
     "FeatureContainerOp",
     "Finding",
+    "ForgeState",
     "LevelOp",
     "OpBatch",
     "OpBatchResult",
@@ -595,17 +601,41 @@ class Finding(BaseModel):
 class Diagnostics(BaseModel):
     """Live diagnostics, recomputed after every batch.
 
-    Two tiers here mirror the spec's diagnostics panel: `validation` is
-    `validate_adventure` output, `lint` the editor's structural lint. Tier 1,
-    model validity, is unrepresentable by construction — invalid batches are
-    rejected whole and never become state. Forge-check findings merge in
-    phase 5 via an additive `forge` field.
+    Three tiers mirror the spec's diagnostics panel: `validation` is
+    `validate_adventure` output, `lint` the editor's structural lint, and
+    `forge` — the additive field phase 0 reserved — maps `report.json`'s
+    check findings for forge-backed projects. Tier 1, model validity, is
+    unrepresentable by construction — invalid batches are rejected whole and
+    never become state. The forge tier honestly empties on every edit:
+    re-assembly wipes findings by forge's explicit design (stale lint about a
+    changed draft is worse than none), and the check control shows when no
+    check has run since the last change.
     """
 
     model_config = ConfigDict(frozen=True)
 
     validation: tuple[Finding, ...] = ()
     lint: tuple[Finding, ...] = ()
+    forge: tuple[Finding, ...] = ()
+
+
+class ForgeState(BaseModel):
+    """A forge-backed project's review state: forge's own models riding the API surface.
+
+    `report`, `run`, and `overrides` are forge's pydantic contracts embedded
+    directly — the same source-of-truth discipline as osrlib's models; no
+    hand-written mirror ever appears. `checked` is the pipeline panel's
+    ran/stale state: `False` after every assembly (open, commit, undo, redo —
+    re-assembly wipes check findings by forge's design), `True` after the
+    check route runs.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    report: ExtractionReport
+    run: RunMeta
+    overrides: Overrides
+    checked: bool
 
 
 class SubtreeChange(BaseModel):
@@ -630,7 +660,10 @@ class OpBatchResult(BaseModel):
     `delta` entries apply in order and are coalesced so no entry's path is a
     descendant of another's; undo and redo answer with the degenerate
     whole-document delta (`path=""`). `can_undo`/`can_redo` track the stacks so
-    the frontend's buttons never need a second request.
+    the frontend's buttons never need a second request. `forge` rides on every
+    forge commit, undo, and redo — an assembly can move anything, so the delta
+    is whole-document and the forge state refreshes with it; `None` for native
+    projects.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -640,3 +673,5 @@ class OpBatchResult(BaseModel):
     delta: tuple[SubtreeChange, ...]
     can_undo: bool
     can_redo: bool
+    forge: ForgeState | None = None
+    sidecar: EditorSidecar | None = None

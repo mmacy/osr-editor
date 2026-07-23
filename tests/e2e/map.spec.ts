@@ -201,3 +201,21 @@ test('import a fixture project level as a new level', async ({ page }) => {
   ).not.toBeVisible()
   await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
 })
+
+test('view state resumes a session where it left off', async ({ page }) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'osr-editor-e2e-'))
+  const projectDir = join(workspace, 'resume.osr')
+  await createProject(page, projectDir, 'Resume test')
+  await openMap(page)
+
+  // Zoom in — a user-set camera the flush persists on leaving the map.
+  await page.getByRole('button', { name: 'Zoom in' }).click()
+  await page.getByRole('button', { name: 'Home' }).click()
+  await expect(page.getByRole('button', { name: 'New adventure' })).toBeVisible()
+
+  // Reopening lands straight on the level the session left off in.
+  await page.getByRole('button', { name: 'Open project' }).click()
+  await page.getByLabel('Project directory').fill(projectDir)
+  await page.getByRole('dialog').getByRole('button', { name: 'Open' }).click()
+  await expect(page.getByTestId('map-canvas')).toBeVisible()
+})
