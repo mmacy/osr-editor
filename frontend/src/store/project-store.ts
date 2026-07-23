@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { useStore } from 'zustand'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 
+import type { NavTarget } from '@/lib/address'
 import { api, ApiRequestError, type ApiClient } from '@/lib/api'
 import { applyDelta } from '@/lib/apply-delta'
 import type {
@@ -54,12 +55,23 @@ export interface ProjectStoreState {
   lastCheckoutPath: string | null
   // The blocked forge-mode gesture awaiting the detach-or-cancel choice.
   blockedOp: BlockedOp | null
+  // A cross-surface navigation request (the monster picker's create shortcut
+  // lives layers below the section state); the project screen consumes it.
+  navigationIntent: NavTarget | null
   setProject: (state: ProjectState) => void
   clear: () => void
   acknowledgeFidelity: () => void
   setLastExportPath: (path: string) => void
   setLastCheckoutPath: (path: string) => void
+  // Client-side flow-entry blocking: a forge-mode gesture whose whole flow is
+  // blocked (create/clone/remove a bundled template, the picker's create
+  // shortcut, import's new-level mode) opens the dialog before any dialog is
+  // filled or batch posted — the server's op_unsupported_forge stays the
+  // authority for any batch that does arrive.
+  setBlockedOp: (blocked: BlockedOp) => void
   clearBlockedOp: () => void
+  requestNavigation: (target: NavTarget) => void
+  clearNavigationIntent: () => void
   commit: (ops: OpsInput, options?: CommitOptions) => Promise<boolean>
   undo: () => Promise<void>
   redo: () => Promise<void>
@@ -153,13 +165,17 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       lastExportPath: null,
       lastCheckoutPath: null,
       blockedOp: null,
+      navigationIntent: null,
 
       setProject: (state) => set({ project: state, fidelityAcknowledged: false, gone: false }),
       clear: () => set({ project: null, fidelityAcknowledged: false, gone: false }),
       acknowledgeFidelity: () => set({ fidelityAcknowledged: true }),
       setLastExportPath: (path) => set({ lastExportPath: path }),
       setLastCheckoutPath: (path) => set({ lastCheckoutPath: path }),
+      setBlockedOp: (blocked) => set({ blockedOp: blocked }),
       clearBlockedOp: () => set({ blockedOp: null }),
+      requestNavigation: (target) => set({ navigationIntent: target }),
+      clearNavigationIntent: () => set({ navigationIntent: null }),
 
       commit: (ops, options) =>
         enqueue(async () => {

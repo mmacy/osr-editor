@@ -96,7 +96,7 @@ test('the forge review loop: flags to corrected, resolved, checked, published', 
   )
 
   // Remap the unresolved rat king to a catalog monster.
-  await page.getByRole('button', { name: 'Monsters', exact: true }).click()
+  await page.getByRole('button', { name: 'Monster resolution' }).click()
   await expect(page.getByText('2 resolved · 1 unresolved')).toBeVisible()
   await page
     .getByTestId('monster-rat king')
@@ -115,6 +115,13 @@ test('the forge review loop: flags to corrected, resolved, checked, published', 
   await page.getByLabel('Morale').fill('9')
   await page.getByRole('button', { name: 'Commit correction' }).click()
   await expect(page.getByTestId('revision')).toHaveText('r6')
+
+  // The always-present Monsters section renders the derived bundle as a
+  // review view; authoring blocks in place with the detach offer.
+  await page.getByRole('button', { name: 'Monsters', exact: true }).click()
+  await page.getByRole('button', { name: 'New monster' }).click()
+  await expect(page.getByText('This edit needs a native project')).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click()
 
   // Run the playability check; the forge tier joins the diagnostics drawer.
   await page.getByRole('button', { name: 'Pipeline' }).click()

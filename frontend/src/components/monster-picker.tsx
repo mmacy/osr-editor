@@ -27,7 +27,9 @@ import {
   recordRecentMonster,
   useCatalog,
 } from '@/lib/catalogs'
+import { BUNDLED_TEMPLATE_BLOCKED_MESSAGE } from '@/lib/monster-builders'
 import { formatHitDice, parseDice } from '@/lib/notation'
+import { projectStore, useProjectStore } from '@/store/project-store'
 import type { KeyedMonster, MonsterTemplate } from '@/types'
 
 export function countToKeyedMonster(templateId: string, countText: string): KeyedMonster | null {
@@ -57,6 +59,7 @@ export function MonsterPicker({
   const [query, setQuery] = useState('')
   const [count, setCount] = useState('1')
   const shipped = useCatalog(loadMonsterCatalog)
+  const forge = useProjectStore((state) => state.project?.forge != null)
   const monsters = useMemo(
     () => (shipped ? effectiveMonsterCatalog(shipped, bundled) : []),
     [shipped, bundled],
@@ -71,6 +74,23 @@ export function MonsterPicker({
     onPick(line)
     setOpen(false)
     setQuery('')
+  }
+
+  // The create shortcut: "like an orc, but…" starts where stocking happens.
+  // In a forge project the capability stays discoverable and the shortcut
+  // routes to the blocked-op dialog, which names detach as what unlocks it.
+  const createMonster = () => {
+    setOpen(false)
+    setQuery('')
+    if (forge) {
+      projectStore.getState().setBlockedOp({
+        op: 'add_monster_template',
+        address: 'monsters',
+        message: BUNDLED_TEMPLATE_BLOCKED_MESSAGE,
+      })
+      return
+    }
+    projectStore.getState().requestNavigation({ kind: 'monsters', create: true })
   }
 
   return (
@@ -116,6 +136,16 @@ export function MonsterPicker({
             </CommandGroup>
           </CommandList>
         </Command>
+        <div className="border-t p-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+            onClick={createMonster}
+          >
+            <PlusIcon /> Create monster…
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   )

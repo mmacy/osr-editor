@@ -18,12 +18,16 @@ export type NavTarget =
   | { kind: 'adventure' }
   | { kind: 'town' }
   | { kind: 'level'; dungeonId: string; levelNumber: number; focus?: LevelFocus }
+  // The always-present Monsters section (both project types): the `monsters`
+  // scope's landing, a `monster:<id>` finding's landing with that template
+  // selected, and the picker's create shortcut with the create dialog open.
+  | { kind: 'monsters'; templateId?: string; create?: boolean }
   // The forge review surfaces — nav sections, never address-mapped (the
   // grammar's producers stay validation, lint, and the forge tier).
   | { kind: 'review' }
   | { kind: 'corrections' }
   | { kind: 'pipeline' }
-  | { kind: 'monsters' }
+  | { kind: 'monster-resolution' }
 
 function segmentValue(segment: string, expected: string): string | null {
   const prefix = `${expected}:`
@@ -77,16 +81,29 @@ export function areaAddress(dungeonId: string, levelNumber: number, areaId: stri
   return `${levelAddress(dungeonId, levelNumber)}/area:${encodeURIComponent(areaId)}`
 }
 
+export function monsterAddress(templateId: string): string {
+  return `monster:${encodeURIComponent(templateId)}`
+}
+
 export function navTargetFor(
   address: string | null | undefined,
   document: Adventure,
 ): NavTarget | null {
   if (!address) return null
   if (address === 'town') return { kind: 'town' }
-  // Bundled monsters are adventure scope; their own surface is phase 4's.
-  if (address === 'monsters') return { kind: 'adventure' }
+  if (address === 'monsters') return { kind: 'monsters' }
 
   const segments = address.split('/')
+  const templateId = segmentValue(segments[0], 'monster')
+  if (templateId !== null) {
+    // A `monster:<id>` finding lands on the Monsters section with that
+    // template selected; an id the document no longer bundles stays
+    // unnavigable — never a guessed coarser landing.
+    if (segments.length !== 1) return null
+    return document.monsters.some((template) => template.id === templateId)
+      ? { kind: 'monsters', templateId }
+      : null
+  }
   const dungeonId = segmentValue(segments[0], 'dungeon')
   if (dungeonId === null) return null
   const dungeon = document.dungeons.find((candidate) => candidate.id === dungeonId)

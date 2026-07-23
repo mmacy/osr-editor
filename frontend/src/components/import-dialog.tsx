@@ -273,26 +273,39 @@ function ImportDialogBody({
               </select>
             </div>
             <div className="flex flex-col gap-2">
-              {!forge && (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="import-mode"
-                    checked={mode === 'new'}
-                    onChange={() => setMode('new')}
-                  />
-                  Add as a new level, number
-                  <Input
-                    aria-label="New level number"
-                    className="h-7 w-20 font-mono"
-                    type="number"
-                    min={1}
-                    value={newNumber}
-                    onChange={(event) => setNewNumber(event.target.value)}
-                    disabled={mode !== 'new'}
-                  />
-                </label>
-              )}
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="import-mode"
+                  checked={mode === 'new'}
+                  onChange={() => {
+                    // The offer-in-place posture, backported from phase 4: in
+                    // a forge project the new-level mode stays a visible
+                    // choice, and choosing it opens the blocked-op dialog (a
+                    // new level has no override kind) with detach as the
+                    // unlock — the mode itself never engages.
+                    if (forge) {
+                      projectStore.getState().setBlockedOp({
+                        op: 'add_level',
+                        address: `dungeon:${encodeURIComponent(targetDungeon)}`,
+                        message: 'level structure has no override kind',
+                      })
+                      return
+                    }
+                    setMode('new')
+                  }}
+                />
+                Add as a new level, number
+                <Input
+                  aria-label="New level number"
+                  className="h-7 w-20 font-mono"
+                  type="number"
+                  min={1}
+                  value={newNumber}
+                  onChange={(event) => setNewNumber(event.target.value)}
+                  disabled={mode !== 'new'}
+                />
+              </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="radio"

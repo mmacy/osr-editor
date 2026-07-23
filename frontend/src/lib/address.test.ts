@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 
-import { navTargetFor } from '@/lib/address'
+import { monsterAddress, navTargetFor } from '@/lib/address'
+import { seedMonsterTemplate } from '@/lib/monster-builders'
 import { makeDocument } from '@/test/fixtures'
 import type { Adventure } from '@/types'
 
@@ -23,10 +24,33 @@ function documentWithGeometry(): Adventure {
   return document
 }
 
-test('town and monsters addresses resolve as before', () => {
+test('town resolves as before; the monsters scope lands on the Monsters section', () => {
   const document = documentWithGeometry()
   expect(navTargetFor('town', document)).toEqual({ kind: 'town' })
-  expect(navTargetFor('monsters', document)).toEqual({ kind: 'adventure' })
+  expect(navTargetFor('monsters', document)).toEqual({ kind: 'monsters' })
+})
+
+test('a monster address selects its bundled template', () => {
+  const document = documentWithGeometry()
+  document.monsters = [seedMonsterTemplate('bespoke-1', 'Bespoke horror')]
+  expect(navTargetFor('monster:bespoke-1', document)).toEqual({
+    kind: 'monsters',
+    templateId: 'bespoke-1',
+  })
+})
+
+test('a monster address the document no longer bundles stays unnavigable', () => {
+  expect(navTargetFor('monster:gone', documentWithGeometry())).toBeNull()
+})
+
+test('a percent-encoded monster id decodes before resolution', () => {
+  const document = documentWithGeometry()
+  document.monsters = [seedMonsterTemplate('the miller', 'The miller')]
+  expect(monsterAddress('the miller')).toBe('monster:the%20miller')
+  expect(navTargetFor('monster:the%20miller', document)).toEqual({
+    kind: 'monsters',
+    templateId: 'the miller',
+  })
 })
 
 test('a dungeon-scope address lands on the first level with properties open', () => {

@@ -14,6 +14,7 @@ import type {
   ImportedGeometry,
   ImporterListResponse,
   MonsterCatalogResponse,
+  MonsterTemplate,
   OpBatchResult,
   ProjectListResponse,
   ProjectState,
@@ -86,6 +87,8 @@ export const api = {
   publishProject: (id: string, body: PublishRequest) =>
     request<PublishResult>(`/api/projects/${id}/publish`, jsonPost(body)),
   getMonsterCatalog: () => request<MonsterCatalogResponse>('/api/catalogs/monsters'),
+  getCatalogMonster: (id: string) =>
+    request<MonsterTemplate>(`/api/catalogs/monsters/${encodeURIComponent(id)}`),
   getEquipmentCatalog: () => request<EquipmentCatalogResponse>('/api/catalogs/equipment'),
   getTreasureTypeCatalog: () =>
     request<TreasureTypeCatalogResponse>('/api/catalogs/treasure-types'),
