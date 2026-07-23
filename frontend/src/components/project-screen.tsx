@@ -36,6 +36,29 @@ export function ProjectScreen() {
   // re-applies its focus (re-select, re-scroll, re-open properties).
   const [focusToken, setFocusToken] = useState(0)
 
+  // Resume where the last session left off: once per opened project, the
+  // persisted view state's active level (when the document still has it)
+  // replaces the default adventure landing — the render-time adjustment
+  // pattern, not an effect.
+  const [resumedFor, setResumedFor] = useState<string | null>(null)
+  if (project && project.id === id && resumedFor !== project.id) {
+    setResumedFor(project.id)
+    const viewState = project.sidecar.view_state
+    const resumable =
+      viewState.active_dungeon_id != null &&
+      viewState.active_level_number != null &&
+      project.document.dungeons
+        .find((dungeon) => dungeon.id === viewState.active_dungeon_id)
+        ?.levels.some((level) => level.number === viewState.active_level_number)
+    if (resumable) {
+      setSection({
+        kind: 'level',
+        dungeonId: viewState.active_dungeon_id!,
+        levelNumber: viewState.active_level_number!,
+      })
+    }
+  }
+
   const navigateTo = (target: NavTarget) => {
     setSection(target)
     setFocusToken((token) => token + 1)

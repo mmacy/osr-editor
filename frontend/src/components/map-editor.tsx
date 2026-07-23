@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/context-menu'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { LevelFocus, NavTarget } from '@/lib/address'
+import { levelAddress, type LevelFocus, type NavTarget } from '@/lib/address'
 import { effectiveMonsterCatalog, loadMonsterCatalog, useCatalog } from '@/lib/catalogs'
 import { areaTrapOps, encounterOps, treasureOps } from '@/lib/content-builders'
 import { formatAreaContents } from '@/lib/notation'
@@ -69,6 +69,45 @@ import {
 import { cellSizePx, fitView, resetView, zoomAt, type ViewTransform } from '@/map/view'
 import { projectStore, useProjectStore } from '@/store/project-store'
 import type { Adventure, Diagnostics, LevelSpec, Position } from '@/types'
+
+// The persisted camera, restored: the sidecar's view state keyed by level
+// address, read once per level entry (not reactive — the map owns the live
+// camera from there).
+function restoredView(dungeonId: string, levelNumber: number): ViewTransform | null {
+  const saved =
+    projectStore.getState().project?.sidecar.view_state.zoom_pan[
+      levelAddress(dungeonId, levelNumber)
+    ]
+  return saved ? { scale: saved.zoom, offsetX: saved.pan_x, offsetY: saved.pan_y } : null
+}
+
+// Flush the camera and the active level on a navigation transition — the
+// resuming-correction-work-across-sessions write the phase 2 scope decision
+// deferred to the surface that finally earns it.
+function flushViewState(dungeonId: string, levelNumber: number, view: ViewTransform | null): void {
+  const project = projectStore.getState().project
+  if (!project) return
+  const current = project.sidecar.view_state
+  const zoomPan = { ...current.zoom_pan }
+  if (view) {
+    zoomPan[levelAddress(dungeonId, levelNumber)] = {
+      zoom: view.scale,
+      pan_x: view.offsetX,
+      pan_y: view.offsetY,
+    }
+  }
+  void projectStore.getState().patchSidecar([
+    {
+      action: 'set_view_state',
+      view_state: {
+        ...current,
+        active_dungeon_id: dungeonId,
+        active_level_number: levelNumber,
+        zoom_pan: zoomPan,
+      },
+    },
+  ])
+}
 
 const TOOLS: Array<{ tool: Tool; label: string; shortcut: string; icon: React.ReactNode }> = [
   { tool: 'select', label: 'Select tool', shortcut: 'V', icon: <MousePointer2Icon /> },
@@ -129,7 +168,7 @@ export function MapEditor({
   const level = dungeon?.levels.find((candidate) => candidate.number === levelNumber)
 
   const [tool, setTool] = useState<Tool>('select')
-  const [view, setView] = useState<ViewTransform | null>(null)
+  const [view, setView] = useState<ViewTransform | null>(() => restoredView(dungeonId, levelNumber))
   const [viewport, setViewport] = useState<{ width: number; height: number } | null>(null)
   const [selection, setSelection] = useState<MapSelection | null>(null)
   const [hover, setHover] = useState<HitTarget | null>(null)
@@ -172,12 +211,25 @@ export function MapEditor({
   const [seenLevel, setSeenLevel] = useState(levelIdentity)
   if (seenLevel !== levelIdentity) {
     setSeenLevel(levelIdentity)
-    setView(null)
+    setView(restoredView(dungeonId, levelNumber))
     setSelection(null)
     setGesture(null)
     setHover(null)
     setCardIntent(null)
   }
+
+  // The persisted camera: the latest user-set view per level rides a ref so
+  // the flush-on-leave effect can read the *outgoing* level's camera after
+  // the new level has already rendered. Writes coalesce on navigation
+  // transitions (level switch, unmount) — never per pointer frame.
+  const lastViewRef = useRef<Record<string, ViewTransform>>({})
+  useEffect(() => {
+    if (view) lastViewRef.current[levelAddress(dungeonId, levelNumber)] = view
+  }, [view, dungeonId, levelNumber])
+  useEffect(() => {
+    const address = levelAddress(dungeonId, levelNumber)
+    return () => flushViewState(dungeonId, levelNumber, lastViewRef.current[address] ?? null)
+  }, [dungeonId, levelNumber])
 
   // A one-shot intent lives only while its area stays selected: the selection
   // leaving the area drops it (render-time adjustment), and consumption nulls
