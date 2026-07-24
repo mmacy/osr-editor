@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from osrforge.contracts.run import TokenUsage
 from osrforge.providers.base import ModelRequest, ModelResponse
 from osrforge.providers.fixtures import RecordingProvider
+from osrlib.crawl.adventure import Adventure
 
 from osreditor.aids import (
     build_area_facts,
@@ -53,7 +54,7 @@ def record(app: FastAPI, fixtures_dir: Path, request: ModelRequest, data: object
     RecordingProvider(_StubProvider(data), fixtures_dir).generate(request)
 
 
-def project_with_room(client: TestClient, app: FastAPI, tmp_path: Path) -> tuple[str, object]:
+def project_with_room(client: TestClient, app: FastAPI, tmp_path: Path) -> tuple[str, Adventure]:
     state = client.post("/api/projects", json={"path": str(tmp_path / "p.osr"), "name": "Cellar"}).json()
     pid, revision = state["id"], state["revision"]
     revision = client.post(

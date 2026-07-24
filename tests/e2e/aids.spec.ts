@@ -11,13 +11,17 @@
 import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
 import { CELL_SIZE, RESET_MARGIN } from '../../frontend/src/map/view'
 
-const PROSE_DIR = fileURLToPath(new URL('../assets/prose', import.meta.url))
+// The committed prose fixtures, resolved through Playwright's own testDir so the
+// path holds however the suite is invoked (spec files load as CJS here, so
+// `import.meta` is unavailable — it breaks discovery for the whole suite).
+function proseDir(testInfo: TestInfo): string {
+  return join(testInfo.project.testDir, '..', 'assets', 'prose')
+}
 
 interface StampedDocument {
   kind: string
@@ -58,7 +62,7 @@ async function drawRoom(page: Page, a: [number, number], b: [number, number]) {
   await page.getByRole('button', { name: 'Select tool' }).click()
 }
 
-test('draft prose on a blank room, sweep the level, and publish', async ({ page }) => {
+test('draft prose on a blank room, sweep the level, and publish', async ({ page }, testInfo) => {
   const workspace = mkdtempSync(join(tmpdir(), 'osr-editor-e2e-aids-'))
   const projectDir = join(workspace, 'stocking-demo.osr')
   const checkout = join(workspace, 'osr-web')
@@ -79,7 +83,7 @@ test('draft prose on a blank room, sweep the level, and publish', async ({ page 
   // Configure the fixtures provider through the typed route — the prose assistant
   // renders only when a provider is configured.
   const provider = await page.request.post('/api/provider', {
-    data: { kind: 'fixtures', fixtures_dir: PROSE_DIR },
+    data: { kind: 'fixtures', fixtures_dir: proseDir(testInfo) },
   })
   expect(provider.ok()).toBeTruthy()
 
@@ -99,19 +103,29 @@ test('draft prose on a blank room, sweep the level, and publish', async ({ page 
   await suggestion.getByRole('button', { name: 'Accept' }).click()
   await expect(inspector.getByLabel('Description')).toHaveValue(/A low, close room/)
 
-  // Two more blank rooms, then seed the stocking RNG and sweep the level.
+  // Two more blank rooms, joined by corridors so every room is reachable and the
+  // level publishes lint-clean (the warning-confirm path is phase 3's milestone).
   await drawRoom(page, [3, 0], [4, 1])
   await drawRoom(page, [3, 3], [4, 4])
+  await page.getByRole('button', { name: 'Corridor tool' }).click()
+  await drag(page, await cellCenter(page, 1, 0), await cellCenter(page, 3, 0))
+  await drag(page, await cellCenter(page, 3, 1), await cellCenter(page, 3, 3))
+  await page.getByRole('button', { name: 'Select tool' }).click()
+  await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
   const seeded = await page.request.post(`/api/projects/${projectId}/sidecar`, {
     data: { patches: [{ action: 'set_stocking_seed', master_seed: '1234567' }] },
   })
   expect(seeded.ok()).toBeTruthy()
 
   await page.getByRole('button', { name: 'Roll stocking' }).click()
-  // The report lists the two swept rooms; the described room 1 is skipped.
+  // The report lists exactly the two blank rooms — the described room 1 is
+  // already stocked, so the sweep skips it — and carries the honest undo note.
   const report = page.getByTestId('stocking-report')
   await expect(report).toBeVisible()
-  await expect(report.getByText(/Undo restores the rooms/)).toHaveCount(0) // the note is in the header
+  await expect(report.locator('li')).toHaveCount(2)
+  await expect(report).toContainText('2')
+  await expect(report).toContainText('3')
+  await expect(page.getByText(/the dice stay advanced/i)).toBeVisible()
   await page.keyboard.press('Escape')
 
   // Publish into the osr-web-shaped checkout.
