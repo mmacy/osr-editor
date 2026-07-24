@@ -575,3 +575,29 @@ def test_a_residue_with_anything_else_in_it_is_still_somebodys_content(tmp_path:
     (residue / "thesis.txt").write_text("mine", encoding="utf-8")
     with pytest.raises(ProjectExistsError):
         check_destination(LocalProjectStore(), residue, allow_existing=True)
+
+
+# --- the reproducibility invariant survives conversion -------------------------
+
+
+def test_every_workdir_write_inside_a_session_is_forges_own(
+    service: DocumentService, warm_workdir: Path, minimod_fixtures: Path
+) -> None:
+    # The phase 5 invariant, carried through phase 6: the editor writes
+    # overrides.yaml and its own editor.json sidecar and nothing else. A
+    # conversion adds no editor write at all — every artifact below is forge's
+    # own code writing forge's own files, which is what keeps re-running the
+    # chain by hand byte-reproducible.
+    session = workdir_session(warm_workdir)
+    begin_run(session)
+    run_chain(session, service, Stage.SURVEY, FixtureProvider(minimod_fixtures), None)
+    assert session.snapshot().state == "completed"
+
+    produced = sorted(path.relative_to(warm_workdir).as_posix() for path in warm_workdir.rglob("*") if path.is_file())
+    forge_owned = {"adventure.json", "report.json", "run.json", "source.pdf"}
+    unexpected = [
+        name for name in produced if name not in forge_owned and not name.startswith(("pages/", "stages/", "previews/"))
+    ]
+    assert unexpected == []
+    # And no editor sidecar exists until a project is actually opened.
+    assert "editor.json" not in produced
