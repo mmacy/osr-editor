@@ -5,7 +5,6 @@ import type {
   AreaTreasureSpec,
   MonsterHitDice,
   StatblockPreviewRequest,
-  StatblockPreviewResponse,
   StockFollowUp,
   StockRoll,
   TreasurePreviewRequest,
@@ -53,24 +52,6 @@ function contentsLabel(roll: StockRoll): string {
 // The undo-does-not-rewind-the-dice note the report always shows.
 export const STOCKING_UNDO_NOTE =
   'Undo restores the rooms, but the dice stay advanced — re-rolling yields new content, never a replay.'
-
-// The derive-from-HD form fills: the values the statblock preview answers, mapped
-// to the monster editor's fields. The author still commits through the honest form.
-export interface StatblockFills {
-  xp: number
-  thac0: number
-  attack_bonus: number
-  saves: StatblockPreviewResponse['saves']
-}
-
-export function statblockFills(preview: StatblockPreviewResponse): StatblockFills {
-  return {
-    xp: preview.xp,
-    thac0: preview.thac0,
-    attack_bonus: preview.attack_bonus,
-    saves: preview.saves,
-  }
-}
 
 // The treasure preview request for an area's committed treasure spec — letters or
 // the unguarded band, mirroring AreaTreasureSpec's own shape.

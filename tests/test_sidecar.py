@@ -415,6 +415,17 @@ def test_stocking_streams_cascade_with_notes_on_dungeon_rename_and_level_renumbe
     )
     after_renumber = "dungeon:vaults/level:3/area:7"
     assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_renumber}
+    # Parity holds through undo/redo of both re-keying ops, and the stream state
+    # never rewinds — only the key follows history.
+    service.undo(project)  # undo the renumber
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_rename}
+    service.undo(project)  # undo the rename
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {addr}
+    assert project.sidecar.stocking.streams[addr].state == "7"
+    service.redo(project)
+    service.redo(project)
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_renumber}
+    assert project.sidecar.stocking.streams[after_renumber].state == "7"
 
 
 def test_a_stream_with_no_paired_note_still_cascades(tmp_path: Path) -> None:

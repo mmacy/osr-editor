@@ -95,7 +95,10 @@ class TestEncounterPreview:
             "thac0": 17,
             "attack_bonus": 2,
             "movement": [{"rate_feet": 120, "encounter_rate_feet": 40}],
-            "saves": {"values": {"death": 12, "wands": 13, "paralysis": 14, "breath": 15, "spells": 16}, "save_as": "3"},
+            "saves": {
+                "values": {"death": 12, "wands": 13, "paralysis": 14, "breath": 15, "spells": 16},
+                "save_as": "3",
+            },
             "morale": 9,
             "alignment": {"options": ["chaotic"]},
             "xp": 50,

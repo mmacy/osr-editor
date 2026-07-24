@@ -6,6 +6,7 @@ documents. The blank rooms are created first (the starter project has none), the
 stocked.
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -224,8 +225,16 @@ class TestForgeStocking:
         assert entry["encounter"]["monsters"][0]["template_id"] == "dwarf_monster"
         assert entry["encounter"]["hoard"] is False
         assert entry["reason"]
-        # The assembled document reflects the stocked encounter, and the editor wrote no
-        # adventure.json of its own — the workdir's is forge's stamped output.
+        # The mutation rode overrides.yaml alone: the editor's sanctioned forge
+        # artifacts are overrides.yaml and its own editor.json sidecar (which now
+        # carries the stocking seed) — it never writes adventure.json, which stays
+        # forge's stamped, re-assembled output.
+        sidecar = json.loads((forge_workdir / "editor.json").read_text())
+        assert sidecar["stocking"]["master_seed"] == "5"
+        workdir_document = json.loads((forge_workdir / "adventure.json").read_text())
+        # A valid stamped envelope — forge's own re-assembled write, not the editor's.
+        assert workdir_document["kind"] == "adventure" and workdir_document["engine_version"]
+        # The assembled document reflects the stocked encounter.
         after = client.get(f"/api/projects/{pid}").json()["document"]
         area = next(a for a in after["dungeons"][0]["levels"][0]["areas"] if a["id"] == "99")
         assert area["encounter"]["monsters"][0]["template_id"] == "dwarf_monster"

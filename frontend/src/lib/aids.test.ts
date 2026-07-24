@@ -2,13 +2,12 @@ import { describe, expect, test } from 'vitest'
 
 import {
   followUpLabel,
-  statblockFills,
   statblockPreviewFor,
   stockRollLine,
   trapFollowUpNote,
   treasurePreviewFor,
 } from '@/lib/aids'
-import type { StatblockPreviewResponse, StockRoll } from '@/types'
+import type { StockRoll } from '@/types'
 
 function roll(overrides: Partial<StockRoll> = {}): StockRoll {
   return {
@@ -92,24 +91,5 @@ describe('the preview request builders', () => {
   test('statblock request carries the hit dice', () => {
     const hd = { count: 2, die: 8, modifier: 2, asterisks: 1, average_hp: null, fixed_hp: null }
     expect(statblockPreviewFor(hd)).toEqual({ kind: 'statblock', hit_dice: hd })
-  })
-})
-
-describe('derive-from-HD fills', () => {
-  test('maps the statblock preview to the monster editor fields', () => {
-    const preview: StatblockPreviewResponse = {
-      kind: 'statblock',
-      xp: 35,
-      thac0: 17,
-      attack_bonus: 2,
-      save_band: '1–3',
-      saves: { death: 12, wands: 13, paralysis: 14, breath: 15, spells: 16 },
-    }
-    expect(statblockFills(preview)).toEqual({
-      xp: 35,
-      thac0: 17,
-      attack_bonus: 2,
-      saves: { death: 12, wands: 13, paralysis: 14, breath: 15, spells: 16 },
-    })
   })
 })

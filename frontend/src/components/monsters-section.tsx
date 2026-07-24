@@ -37,6 +37,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ListEditor } from '@/components/list-editor'
 import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
 import { monsterAddress } from '@/lib/address'
+import { statblockPreviewFor } from '@/lib/aids'
 import { api, ApiRequestError } from '@/lib/api'
 import {
   effectiveMonsterCatalog,
@@ -642,10 +643,7 @@ function MonsterDetail({
     const projectId = projectStore.getState().project?.id
     if (!projectId) return
     try {
-      const preview = await api.postAidsPreview(projectId, {
-        kind: 'statblock',
-        hit_dice: template.hit_dice,
-      })
+      const preview = await api.postAidsPreview(projectId, statblockPreviewFor(template.hit_dice))
       if (preview.kind !== 'statblock') return
       update((committed) => ({
         xp: preview.xp,
