@@ -34,7 +34,16 @@ from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION, engine_version
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
-from osreditor.aids import AidsStockRequest, AidsStockResponse
+from osreditor.aids import (
+    AidsPreviewRequest,
+    AidsPreviewResponse,
+    AidsProseRequest,
+    AidsProseResponse,
+    AidsStockRequest,
+    AidsStockResponse,
+    preview_aid,
+    run_prose,
+)
 from osreditor.catalogs import (
     EncounterTableCatalogResponse,
     EquipmentCatalogResponse,
@@ -888,9 +897,7 @@ def post_sidecar_patch(
 
 
 @router.post("/api/projects/{project_id}/aids/stock")
-def post_aids_stock(
-    request: Request, project_id: str, body: AidsStockRequest, user: CurrentUser
-) -> AidsStockResponse:
+def post_aids_stock(request: Request, project_id: str, body: AidsStockRequest, user: CurrentUser) -> AidsStockResponse:
     """Roll SRD stocking over a single blank room or a level's unstocked areas.
 
     Results apply as one ordinary op batch — one undo step for a sweep — so the
@@ -913,6 +920,57 @@ def post_aids_stock(
     project = service.get(project_id)
     _require_idle(request, project)
     return service.apply_stock(project, body)
+
+
+@router.post("/api/projects/{project_id}/aids/preview")
+def post_aids_preview(
+    request: Request, project_id: str, body: AidsPreviewRequest, user: CurrentUser
+) -> AidsPreviewResponse:
+    """Preview treasure hoards, an encounter's stat table, or derived stat-block values.
+
+    Pure reads — no revision, no document mutation, no sidecar contact. The
+    encounter kind resolves lines against the effective catalog (the document's
+    bundled templates included); the sampling kinds take an optional `seed` for
+    reproducible test output, server entropy otherwise.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The discriminated preview request.
+        user: The authenticated caller.
+
+    Returns:
+        The per-kind preview response.
+    """
+    project = _service(request).get(project_id)
+    return preview_aid(body, project.adventure)
+
+
+@router.post("/api/projects/{project_id}/aids/prose")
+def post_aids_prose(request: Request, project_id: str, body: AidsProseRequest, user: CurrentUser) -> AidsProseResponse:
+    """Draft read-aloud area prose or adventure hooks through the configured provider.
+
+    The provider is built at request time — a 422 `provider_not_configured` when
+    none is set. Facts assemble from a locked snapshot of the document; the
+    synchronous generate call runs outside the lock, so edits stay live and the
+    client may abandon the request. A failed generate is 502
+    `provider_request_failed` with forge's message verbatim. Acceptance is
+    client-side: the accepted draft commits as an ordinary op batch.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The discriminated prose target.
+        user: The authenticated caller.
+
+    Returns:
+        The draft, the call's token usage, and the model id.
+    """
+    project = _service(request).get(project_id)
+    provider = build_provider(resolve_provider(_provider_settings(request).settings))
+    with project.lock:
+        adventure = project.adventure
+    return run_prose(body, adventure, provider)
 
 
 @router.post("/api/projects/{project_id}/export")
