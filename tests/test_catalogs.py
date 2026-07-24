@@ -37,6 +37,21 @@ def test_monster_catalog_entries_carry_the_picker_fields(client: TestClient) -> 
     }
 
 
+def test_monster_detail_route_answers_a_shipped_template_verbatim(client: TestClient) -> None:
+    response = client.get("/api/catalogs/monsters/skeleton")
+    assert response.status_code == 200
+    assert response.json() == load_monsters().get("skeleton").model_dump(mode="json")
+
+
+def test_monster_detail_route_404s_an_unknown_id_with_the_code_and_remedy(client: TestClient) -> None:
+    response = client.get("/api/catalogs/monsters/no-such-monster")
+    assert response.status_code == 404
+    error = response.json()["error"]
+    assert error["code"] == "catalog_monster_not_found"
+    assert "'no-such-monster'" in error["message"]
+    assert "/api/catalogs/monsters" in error["remedy"]
+
+
 def test_equipment_catalog_serves_the_four_pickable_lists(client: TestClient) -> None:
     response = client.get("/api/catalogs/equipment")
     assert response.status_code == 200

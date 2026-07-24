@@ -9,6 +9,7 @@ import { DiagnosticsPanel } from '@/components/diagnostics-panel'
 import { ExportDialog } from '@/components/export-dialog'
 import { FidelityDialog } from '@/components/fidelity-dialog'
 import { MonsterResolutionPanel } from '@/components/monster-resolution-panel'
+import { MonstersSection } from '@/components/monsters-section'
 import { PipelinePanel } from '@/components/pipeline-panel'
 import { PublishDialog } from '@/components/publish-dialog'
 import { ReviewQueue } from '@/components/review-queue'
@@ -63,6 +64,21 @@ export function ProjectScreen() {
     setSection(target)
     setFocusToken((token) => token + 1)
   }
+
+  // Consume cross-surface navigation requests (the picker's create shortcut
+  // lives layers below this section state) — event-driven off the store, so
+  // the request navigates exactly once.
+  useEffect(
+    () =>
+      projectStore.subscribe((state) => {
+        const intent = state.navigationIntent
+        if (!intent) return
+        projectStore.getState().clearNavigationIntent()
+        setSection(intent)
+        setFocusToken((token) => token + 1)
+      }),
+    [],
+  )
 
   const removeEntry = (finding: Finding) => {
     void projectStore.getState().commit((document) => removeInvalidEdgeOps(finding, document))
@@ -189,9 +205,9 @@ export function ProjectScreen() {
                     onClick={() => setSection({ kind: 'pipeline' })}
                   />
                   <SectionButton
-                    label="Monsters"
-                    active={section.kind === 'monsters'}
-                    onClick={() => setSection({ kind: 'monsters' })}
+                    label="Monster resolution"
+                    active={section.kind === 'monster-resolution'}
+                    onClick={() => setSection({ kind: 'monster-resolution' })}
                   />
                 </>
               )}
@@ -204,6 +220,11 @@ export function ProjectScreen() {
                 label="Town"
                 active={section.kind === 'town'}
                 onClick={() => setSection({ kind: 'town' })}
+              />
+              <SectionButton
+                label="Monsters"
+                active={section.kind === 'monsters'}
+                onClick={() => setSection({ kind: 'monsters' })}
               />
               {project.document.dungeons.map((dungeon) => (
                 <div key={dungeon.id} className="mt-2 flex flex-col gap-0.5">
@@ -250,7 +271,10 @@ export function ProjectScreen() {
             <CorrectionsPanel project={project} onNavigate={navigateTo} />
           )}
           {section.kind === 'pipeline' && <PipelinePanel project={project} />}
-          {section.kind === 'monsters' && <MonsterResolutionPanel project={project} />}
+          {section.kind === 'monster-resolution' && <MonsterResolutionPanel project={project} />}
+          {section.kind === 'monsters' && (
+            <MonstersSection project={project} section={section} focusToken={focusToken} />
+          )}
           {section.kind === 'level' && (
             <MapEditor
               document={project.document}

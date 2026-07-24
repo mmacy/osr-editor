@@ -37,12 +37,14 @@ import secrets
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Literal, cast
 
 from osrforge.contracts.overrides import Overrides
 from osrforge.contracts.report import ExtractionReport
 from osrforge.contracts.run import RunMeta
+from osrlib.core.tables import EncounterTableRow
 from osrlib.crawl.adventure import Adventure
 from osrlib.crawl.dungeon import (
     AreaSpec,
@@ -53,10 +55,11 @@ from osrlib.crawl.dungeon import (
     Position,
     TransitionSpec,
 )
+from osrlib.data import load_monsters
 from osrlib.versioning import check_document, stamp_document
 from pydantic import ValidationError
 
-from osreditor.addresses import area_address, cell_address, dungeon_address, level_address
+from osreditor.addresses import area_address, cell_address, dungeon_address, level_address, monster_address
 from osreditor.diagnostics import compute_diagnostics, forge_findings
 from osreditor.errors import (
     OpInvariantError,
@@ -72,6 +75,7 @@ from osreditor.ops import (
     AddDungeon,
     AddFeature,
     AddLevel,
+    AddMonsterTemplate,
     AddTransition,
     AnyEditOp,
     CreateArea,
@@ -83,6 +87,7 @@ from osreditor.ops import (
     RemoveDungeon,
     RemoveFeature,
     RemoveLevel,
+    RemoveMonsterTemplate,
     RemoveTransition,
     RenameDungeon,
     RenumberLevel,
@@ -95,6 +100,7 @@ from osreditor.ops import (
     SetEncounter,
     SetEntrance,
     SetFeature,
+    SetMonsterTemplate,
     SetTownField,
     SetTrap,
     SetTreasure,
@@ -877,11 +883,13 @@ def _snapshot_pair(entry: HistoryEntry) -> tuple[bytes, tuple[str, ...]]:
 def _note_remap_rules(op: AnyEditOp) -> list[tuple[str, str]]:
     """The address-prefix remaps a re-keying op implies for the notes map.
 
-    The three re-keying ops are all native-mode ops (forge blocks every one),
+    The four re-keying ops are all native-mode ops (forge blocks every one),
     so the cascade never coincides with a forge commit.
     """
     if isinstance(op, RenameDungeon):
         return [(dungeon_address(op.old_id), dungeon_address(op.new_id))]
+    if isinstance(op, SetMonsterTemplate) and op.template.id != op.template_id:
+        return [(monster_address(op.template_id), monster_address(op.template.id))]
     if isinstance(op, RenumberLevel):
         return [
             (level_address(op.dungeon_id, op.old_number), level_address(op.dungeon_id, op.new_number)),
@@ -918,6 +926,12 @@ def _apply_op(adventure: Adventure, op: AnyEditOp, forge_mode: bool = False) -> 
     if isinstance(op, SetTownField):
         town = adventure.town.model_copy(update={op.field: op.value})
         return adventure.model_copy(update={"town": town}), "/town"
+    if isinstance(op, AddMonsterTemplate):
+        return _apply_add_monster_template(adventure, op)
+    if isinstance(op, SetMonsterTemplate):
+        return _apply_set_monster_template(adventure, op)
+    if isinstance(op, RemoveMonsterTemplate):
+        return _apply_remove_monster_template(adventure, op)
     if isinstance(op, SetWandering):
         return _apply_level_field(adventure, op, "wandering", op.wandering)
     if isinstance(op, SetEdges):
@@ -963,6 +977,118 @@ def _apply_op(adventure: Adventure, op: AnyEditOp, forge_mode: bool = False) -> 
     if isinstance(op, ResizeLevel):
         return _apply_resize_level(adventure, op)
     return _apply_remove_level(adventure, op)
+
+
+@cache
+def _shipped_monster_ids() -> frozenset[str]:
+    """The shipped catalog's ids — the collision invariant's other half, cached like osrlib's loader."""
+    return frozenset(template.id for template in load_monsters().monsters)
+
+
+def _resolve_monster_template(adventure: Adventure, template_id: str) -> int:
+    """Return the index of the first bundled template with `template_id` (authored order)."""
+    for index, template in enumerate(adventure.monsters):
+        if template.id == template_id:
+            return index
+    raise OpTargetNotFoundError(f"the document bundles no monster template {template_id!r}")
+
+
+def _require_monster_id_free(adventure: Adventure, template_id: str) -> None:
+    """Reject an empty or colliding bundled-template id — the `AddMonsterTemplate` id rules.
+
+    The invariant is "no op ever *introduces* a collision", so callers run it
+    on new or changed ids only. A rename can never collide with the template
+    it replaces: the target still carries the old id when the check runs, and
+    the rename branch runs only when the new id differs from it.
+    """
+    if not template_id:
+        raise OpInvariantError("monster template id must be non-empty")
+    if template_id in _shipped_monster_ids():
+        raise OpInvariantError(
+            f"monster template id {template_id!r} collides with the shipped catalog — "
+            "the shipped entry would shadow the bundled one"
+        )
+    if any(template.id == template_id for template in adventure.monsters):
+        raise OpInvariantError(f"the document already bundles a monster template {template_id!r}")
+
+
+def _apply_add_monster_template(adventure: Adventure, op: AddMonsterTemplate) -> tuple[Adventure, str]:
+    _require_monster_id_free(adventure, op.template.id)
+    return adventure.model_copy(update={"monsters": (*adventure.monsters, op.template)}), "/monsters"
+
+
+def _apply_set_monster_template(adventure: Adventure, op: SetMonsterTemplate) -> tuple[Adventure, str]:
+    index = _resolve_monster_template(adventure, op.template_id)
+    if op.template.id != op.template_id:
+        # A rename, under AddMonsterTemplate's id rules; an unchanged id —
+        # colliding or not — carries through, so a foreign document's
+        # colliding template stays editable and its finding stays navigable.
+        _require_monster_id_free(adventure, op.template.id)
+    monsters = (*adventure.monsters[:index], op.template, *adventure.monsters[index + 1 :])
+    adventure = adventure.model_copy(update={"monsters": monsters})
+    if op.template.id == op.template_id:
+        return adventure, "/monsters"
+    # The rename cascade, the RenameDungeon precedent: every in-document
+    # reference to the old id follows in the same commit, and the delta is
+    # honestly whole-document — the cascade may touch any area.
+    dungeons = tuple(
+        _retarget_dungeon_monsters(dungeon, op.template_id, op.template.id) for dungeon in adventure.dungeons
+    )
+    return adventure.model_copy(update={"dungeons": dungeons}), ""
+
+
+def _apply_remove_monster_template(adventure: Adventure, op: RemoveMonsterTemplate) -> tuple[Adventure, str]:
+    index = _resolve_monster_template(adventure, op.template_id)
+    monsters = (*adventure.monsters[:index], *adventure.monsters[index + 1 :])
+    return adventure.model_copy(update={"monsters": monsters}), "/monsters"
+
+
+def _retarget_dungeon_monsters(dungeon: DungeonSpec, old_id: str, new_id: str) -> DungeonSpec:
+    """Rebuild a dungeon with every monster reference to `old_id` retargeted; the original when nothing matches."""
+    changed = False
+    levels: list[LevelSpec] = []
+    for level in dungeon.levels:
+        retargeted = _retarget_level_monsters(level, old_id, new_id)
+        if retargeted is not level:
+            changed = True
+        levels.append(retargeted)
+    if not changed:
+        return dungeon
+    return dungeon.model_copy(update={"levels": tuple(levels)})
+
+
+def _retarget_level_monsters(level: LevelSpec, old_id: str, new_id: str) -> LevelSpec:
+    """Rewrite a level's keyed-encounter lines and wandering rows naming `old_id`; the original when none do."""
+    changed = False
+    areas: list[AreaSpec] = []
+    for area in level.areas:
+        encounter = area.encounter
+        if encounter is not None and any(keyed.template_id == old_id for keyed in encounter.monsters):
+            keyed_monsters = tuple(
+                keyed.model_copy(update={"template_id": new_id}) if keyed.template_id == old_id else keyed
+                for keyed in encounter.monsters
+            )
+            area = area.model_copy(update={"encounter": encounter.model_copy(update={"monsters": keyed_monsters})})
+            changed = True
+        areas.append(area)
+    wandering = level.wandering
+    table = wandering.table
+    if table is not None:
+        rows_changed = False
+        rows: list[EncounterTableRow] = []
+        for row in table.rows:
+            entry = row.entry
+            if entry.kind == "monster" and old_id in entry.monster_ids:
+                monster_ids = tuple(new_id if monster_id == old_id else monster_id for monster_id in entry.monster_ids)
+                row = row.model_copy(update={"entry": entry.model_copy(update={"monster_ids": monster_ids})})
+                rows_changed = True
+            rows.append(row)
+        if rows_changed:
+            wandering = wandering.model_copy(update={"table": table.model_copy(update={"rows": tuple(rows)})})
+            changed = True
+    if not changed:
+        return level
+    return level.model_copy(update={"areas": tuple(areas), "wandering": wandering})
 
 
 def _resolve_dungeon(adventure: Adventure, dungeon_id: str) -> int:

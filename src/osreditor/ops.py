@@ -10,9 +10,10 @@ never a silent overwrite.
 
 The envelope grows additively. The phase 1 ops and the `AnyEditOp` union landed
 here with the document service, built exactly as osrlib builds `AnyCommand`;
-phase 2 added the geometry and dungeon/level-management vocabulary; phase 3 adds
-the content vocabulary — encounters, traps, treasure, and features. The `forge`
-diagnostics tier arrives with forge-backed projects in phase 5.
+phase 2 added the geometry and dungeon/level-management vocabulary; phase 3 added
+the content vocabulary — encounters, traps, treasure, and features; phase 4 adds
+the bundled monster-template vocabulary. The `forge` diagnostics tier arrived
+with forge-backed projects in phase 5.
 
 The op-level philosophy, continuing phase 1's `travel_turns >= 0` guard:
 **reject what is never intentional and is not a transient editing state**
@@ -30,6 +31,7 @@ from typing import Annotated, Literal
 from osrforge.contracts.overrides import Overrides
 from osrforge.contracts.report import ExtractionReport
 from osrforge.contracts.run import RunMeta
+from osrlib.core.monsters import MonsterTemplate
 from osrlib.crawl.dungeon import (
     AreaTreasureSpec,
     Edge,
@@ -48,6 +50,7 @@ __all__ = [
     "AddDungeon",
     "AddFeature",
     "AddLevel",
+    "AddMonsterTemplate",
     "AddTransition",
     "AnyEditOp",
     "AreaOp",
@@ -64,6 +67,7 @@ __all__ = [
     "RemoveDungeon",
     "RemoveFeature",
     "RemoveLevel",
+    "RemoveMonsterTemplate",
     "RemoveTransition",
     "RenameDungeon",
     "RenumberLevel",
@@ -76,6 +80,7 @@ __all__ = [
     "SetEncounter",
     "SetEntrance",
     "SetFeature",
+    "SetMonsterTemplate",
     "SetTownField",
     "SetTrap",
     "SetTreasure",
@@ -148,6 +153,61 @@ class SetTownField(EditOp):
             if negative:
                 raise ValueError(f"travel_turns values must be >= 0, got negative turns for {negative}")
         return self
+
+
+class AddMonsterTemplate(EditOp):
+    """Add a bundled monster template, appended to `Adventure.monsters` in authored order.
+
+    Adventure-scoped, the `SetAdventureField` neighborhood — `Adventure.monsters`
+    is top-level, so there is no targeting base. The template's internal validity
+    (the AC/auto-hit coupling, dice grammars, the number-appearing XORs, every
+    scalar bound) is the model's own, enforced at request parse. Invariants at
+    apply: the id non-empty and free — an id colliding with the shipped catalog
+    or another bundled template is rejected as `op_invariant`, because osrlib's
+    first-occurrence-wins union would silently shadow the new template and a
+    collision is never intentional. The op never *introduces* a collision; a
+    foreign document already carrying one stays editable (see
+    [`SetMonsterTemplate`][osreditor.ops.SetMonsterTemplate]'s carry-through).
+    """
+
+    op: Literal["add_monster_template"] = "add_monster_template"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    template: MonsterTemplate
+
+
+class SetMonsterTemplate(EditOp):
+    """Replace one bundled template whole; a differing `template.id` is a rename.
+
+    Whole-value replacement at the stat-block card's commit grain — the
+    `SetEncounter`/`SetFeature` reasoning, an order of magnitude over: a
+    field-grained op over `MonsterTemplate`'s 25 fields would need a value union
+    undiscriminable on the wire. A rename falls under
+    [`AddMonsterTemplate`][osreditor.ops.AddMonsterTemplate]'s id rejections and
+    cascades: every `KeyedMonster.template_id` and wandering-row monster id
+    naming the old id is rewritten in the same commit (the `RenameDungeon`
+    precedent — template ids are referenced in-document), with the honest
+    whole-document delta. The collision invariant guards **new or changed ids
+    only**: a foreign template's unchanged colliding id passes through
+    untouched, so its other fields stay editable and the finding stays a
+    navigable diagnostic. Among foreign duplicate bundled ids, the first match
+    in authored order is the target — the `SetFeature` posture.
+    """
+
+    op: Literal["set_monster_template"] = "set_monster_template"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    template_id: str
+    template: MonsterTemplate
+
+
+class RemoveMonsterTemplate(EditOp):
+    """Remove one bundled template; first-match among foreign duplicate ids.
+
+    Removal admits dangling references: encounters and wandering rows naming
+    the removed id become `encounter_unknown_monster`/`wandering_unknown_monster`
+    diagnostics — legal while editing, the tier rule. The UI confirms first when
+    references exist.
+    """
+
+    op: Literal["remove_monster_template"] = "remove_monster_template"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    template_id: str
 
 
 class LevelOp(EditOp):
@@ -527,6 +587,9 @@ class RemoveLevel(LevelOp):
 AnyEditOp = Annotated[
     SetAdventureField
     | SetTownField
+    | AddMonsterTemplate
+    | SetMonsterTemplate
+    | RemoveMonsterTemplate
     | SetWandering
     | SetEdges
     | SetEntrance

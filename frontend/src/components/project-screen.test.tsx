@@ -5,7 +5,7 @@ import { beforeEach, expect, test } from 'vitest'
 
 import { ProjectScreen } from '@/components/project-screen'
 import { projectStore } from '@/store/project-store'
-import { makeProjectState } from '@/test/fixtures'
+import { makeForgeState, makeProjectState } from '@/test/fixtures'
 
 function renderScreen() {
   return render(
@@ -33,6 +33,22 @@ test('the project screen renders the header, sidebar, and adventure form', () =>
   expect(screen.getByRole('button', { name: 'Level 1' })).toBeInTheDocument()
   expect(screen.getByLabelText('Name')).toHaveValue('The mill on the moor')
   expect(screen.getByTestId('diagnostics-count')).toHaveTextContent('0')
+})
+
+test('the Monsters section is always present; the forge resolution entry is relabeled', () => {
+  // Native: the section sits beside Adventure and Town, no resolution entry.
+  // getByRole matches the full accessible name, so 'Monsters' never matches
+  // the relabeled 'Monster resolution' entry.
+  projectStore.getState().setProject(makeProjectState())
+  const { unmount } = renderScreen()
+  expect(screen.getByRole('button', { name: 'Monsters' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Monster resolution' })).not.toBeInTheDocument()
+  unmount()
+  // Forge: both entries render and never share a name.
+  projectStore.getState().setProject(makeProjectState({ type: 'forge', forge: makeForgeState() }))
+  renderScreen()
+  expect(screen.getByRole('button', { name: 'Monsters' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Monster resolution' })).toBeInTheDocument()
 })
 
 test('a diagnostics finding navigates by its address', () => {

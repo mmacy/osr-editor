@@ -356,7 +356,18 @@
                     1
                   ]
                 ],
-                "encounter": null,
+                "encounter": {
+                  "monsters": [
+                    {
+                      "template_id": "drowned-miller",
+                      "count_dice": null,
+                      "count_fixed": 1
+                    }
+                  ],
+                  "alignment": null,
+                  "aware": false,
+                  "stance": null
+                },
                 "features": [],
                 "trap": null,
                 "treasure": null
@@ -659,6 +670,114 @@
         ]
       }
     ],
-    "monsters": []
+    "monsters": [
+      {
+        "id": "drowned-miller",
+        "name": "The drowned miller",
+        "page": "",
+        "intro": "He went into the millrace owing everyone and surfaced owing nothing. What walks the spring cave still counts on its fingers.",
+        "ac": 7,
+        "ac_ascending": 12,
+        "ac_alternates": [],
+        "attack_roll_required": true,
+        "hit_dice": {
+          "count": 3,
+          "die": 8,
+          "modifier": 0,
+          "asterisks": 1,
+          "average_hp": null,
+          "fixed_hp": null
+        },
+        "attacks": [
+          {
+            "attacks": [
+              {
+                "count": 1,
+                "name": "sodden grasp",
+                "damage": "1d6",
+                "fixed_damage": null,
+                "fixed_damage_options": [],
+                "by_weapon": false,
+                "by_weapon_modifier": 0,
+                "effects": []
+              }
+            ]
+          }
+        ],
+        "thac0": 17,
+        "attack_bonus": 2,
+        "movement": [
+          {
+            "rate_feet": 60,
+            "encounter_rate_feet": 20,
+            "descriptor": null
+          },
+          {
+            "rate_feet": 120,
+            "encounter_rate_feet": 40,
+            "descriptor": "swimming"
+          }
+        ],
+        "saves": {
+          "values": {
+            "death": 12,
+            "wands": 13,
+            "paralysis": 14,
+            "breath": 15,
+            "spells": 16
+          },
+          "save_as": "3"
+        },
+        "morale": 12,
+        "morale_alternates": [],
+        "alignment": {
+          "options": [
+            "chaotic"
+          ],
+          "usual": null
+        },
+        "xp": 50,
+        "xp_notes": [],
+        "number_appearing": {
+          "dungeon": {
+            "dice": null,
+            "fixed": 1,
+            "see_below": false
+          },
+          "lair": {
+            "dice": null,
+            "fixed": 1,
+            "see_below": false
+          }
+        },
+        "treasure": {
+          "letters": [],
+          "parenthetical": [],
+          "extra_gp": 0,
+          "multiplier": 1,
+          "special": [],
+          "see_below": false
+        },
+        "abilities": [
+          {
+            "tag": "millrace_chill",
+            "name": "Chill of the millrace",
+            "prose": "A character grappled by the miller and dragged under the spring must save versus paralysis or lose their next round to the cold.",
+            "manual": true,
+            "params": {}
+          }
+        ],
+        "defenses": {
+          "harmed_only_by": [],
+          "reductions": [],
+          "energy": {},
+          "condition_immunities": []
+        },
+        "categories": [
+          "undead"
+        ],
+        "overrides_applied": []
+      }
+    ]
   }
 }

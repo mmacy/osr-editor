@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from osrlib.core.monsters import MonsterTemplate
 from osrlib.crawl.adventure import Adventure
 from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION, engine_version
@@ -37,6 +38,7 @@ from osreditor.catalogs import (
     EquipmentCatalogResponse,
     MonsterCatalogResponse,
     TreasureTypeCatalogResponse,
+    catalog_monster,
     encounter_table_catalog,
     equipment_catalog,
     monster_catalog,
@@ -46,6 +48,7 @@ from osreditor.config import RecentEntry, load_config, record_recent, save_confi
 from osreditor.documents import DocumentService, OpenProject, dump_adventure, forge_state_model, json_pointer
 from osreditor.errors import (
     ArtifactNotFoundError,
+    CatalogMonsterNotFoundError,
     DocumentPayloadInvalidError,
     ForgeOverrideInvalidError,
     ForgePageNotFoundError,
@@ -830,6 +833,20 @@ def get_monster_catalog(user: CurrentUser) -> MonsterCatalogResponse:
     return monster_catalog()
 
 
+@router.get("/api/catalogs/monsters/{monster_id}")
+def get_catalog_monster(monster_id: str, user: CurrentUser) -> MonsterTemplate:
+    """Report one shipped monster's full stat block — the clone-and-modify source.
+
+    Args:
+        monster_id: The shipped monster id.
+        user: The authenticated caller.
+
+    Returns:
+        The full template, verbatim from the shipped data.
+    """
+    return catalog_monster(monster_id)
+
+
 @router.get("/api/catalogs/equipment")
 def get_equipment_catalog(user: CurrentUser) -> EquipmentCatalogResponse:
     """Report the pickable equipment items.
@@ -1044,6 +1061,12 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
     OpRejectedError: (422, "op_rejected", None, _details_op_rejected),
     OpTargetNotFoundError: (422, "op_target_not_found", None, _details_none),
     OpInvariantError: (422, "op_invariant", None, _details_op_invariant),
+    CatalogMonsterNotFoundError: (
+        404,
+        "catalog_monster_not_found",
+        "The shipped ids are the GET /api/catalogs/monsters list; bundled templates live in the document itself.",
+        _details_none,
+    ),
     ImporterNotFoundError: (404, "importer_not_found", None, _details_none),
     ImportSourceInvalidError: (422, "import_source_invalid", None, _details_none),
     OsrWebNotConfiguredError: (

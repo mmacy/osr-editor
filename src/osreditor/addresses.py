@@ -9,7 +9,9 @@ numeric grammar, unambiguous without encoding; the general segment parse rule
 stays "kind is up to the first `:`, value is the remainder". The `edge:`
 segment ships with the grammar (the inspector and hover refs use edge
 addressing) even though no phase 2 finding emits it — `edge_invalid`
-deliberately addresses the level.
+deliberately addresses the level. Phase 4 adds the top-level `monster:<id>`
+segment for bundled monster templates, finer than the bare `monsters` scope
+phase 1 pinned.
 
 Three producers build addresses — the validation parser, the structural lint,
 and the `ResizeLevel` offender list — so the builders live here, in one place.
@@ -26,6 +28,7 @@ __all__ = [
     "edge_address",
     "encode_value",
     "level_address",
+    "monster_address",
 ]
 
 
@@ -39,6 +42,18 @@ def encode_value(value: str) -> str:
         The encoded segment value.
     """
     return quote(value, safe="")
+
+
+def monster_address(template_id: str) -> str:
+    """Build a bundled-monster-template address — a top-level segment kind, phase 4's.
+
+    Args:
+        template_id: The bundled template id.
+
+    Returns:
+        `monster:<id>`.
+    """
+    return f"monster:{encode_value(template_id)}"
 
 
 def dungeon_address(dungeon_id: str) -> str:

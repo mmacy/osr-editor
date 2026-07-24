@@ -11,6 +11,7 @@ import {
   SAVE_CATEGORIES,
   TIME_UNITS,
 } from '@/lib/content-builders'
+import { DAMAGE_KEYS, ELEMENTS } from '@/lib/monster-builders'
 import type {
   AddTransition,
   Alignment,
@@ -22,9 +23,11 @@ import type {
   CatalogMonster,
   Condition,
   CustomMonsterRecord,
+  DamageKey,
   Diagnostics,
   Edge,
   EditorSidecar,
+  Element,
   EncounterEntry,
   ExtractionReport,
   FeatureSpec,
@@ -37,6 +40,8 @@ import type {
   LevelSpec,
   LintFinding,
   MonsterSummary,
+  MonsterTemplate,
+  NumberAppearingValue,
   OpBatchResult,
   ProjectState,
   PublishResult,
@@ -103,9 +108,16 @@ test('the op vocabulary translations hold', () => {
     | 'renumber_level'
     | 'resize_level'
     | 'remove_level'
+    | 'add_monster_template'
+    | 'set_monster_template'
+    | 'remove_monster_template'
   >()
   expectTypeOf<Extract<AnyEditOp, { op: 'set_adventure_field' }>>().toHaveProperty('field')
   expectTypeOf<Extract<AnyEditOp, { op: 'set_wandering' }>>().toHaveProperty('dungeon_id')
+  expectTypeOf<Extract<AnyEditOp, { op: 'set_monster_template' }>>().toHaveProperty('template_id')
+  expectTypeOf<
+    Extract<AnyEditOp, { op: 'add_monster_template' }>['template']
+  >().toEqualTypeOf<MonsterTemplate>()
 
   // SetWandering carries the full WanderingSpec, inline table included.
   expectTypeOf<SetWandering['wandering']>().toEqualTypeOf<WanderingSpec>()
@@ -168,6 +180,24 @@ test('the enum option lists stay exhaustive', () => {
   expectTypeOf<
     Exclude<FeatureSpec['kind'], (typeof FEATURE_KINDS)[number]>
   >().toEqualTypeOf<never>()
+  expectTypeOf<Exclude<DamageKey, (typeof DAMAGE_KEYS)[number]>>().toEqualTypeOf<never>()
+  expectTypeOf<Exclude<Element, (typeof ELEMENTS)[number]>>().toEqualTypeOf<never>()
+})
+
+test('the monster template translations hold', () => {
+  // The AC pair admits null — the auto-hit sentinel's shape.
+  expectTypeOf<null extends MonsterTemplate['ac'] ? true : false>().toEqualTypeOf<true>()
+  expectTypeOf<null extends MonsterTemplate['ac_ascending'] ? true : false>().toEqualTypeOf<true>()
+
+  // Attacks nest routine-of-attacks, each routine a non-flattened list.
+  expectTypeOf<MonsterTemplate['attacks'][number]['attacks'][number]>().toHaveProperty('damage')
+
+  // NumberAppearingValue.dice is nullable — the dice/fixed/see-below XOR's shape.
+  expectTypeOf<null extends NumberAppearingValue['dice'] ? true : false>().toEqualTypeOf<true>()
+
+  // Morale is optional; the saves cluster carries the five values plus save_as.
+  expectTypeOf<null extends MonsterTemplate['morale'] ? true : false>().toEqualTypeOf<true>()
+  expectTypeOf<MonsterTemplate['saves']['values']>().toHaveProperty('death')
 })
 
 test('the forge state translations hold', () => {

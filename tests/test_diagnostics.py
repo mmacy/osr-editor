@@ -83,10 +83,24 @@ def restricted_alignment_case() -> tuple[str, Alignment]:
     return template.id, pinned
 
 
-def test_bundled_monster_collision() -> None:
-    finding = sole_finding(adventure(monsters=(load_monsters().monsters[0],)))
+def test_bundled_monster_collision_addresses_the_template() -> None:
+    shipped = load_monsters().monsters[0]
+    finding = sole_finding(adventure(monsters=(shipped,)))
     assert finding.code == "bundled_monster_collision"
-    assert finding.address == "monsters"
+    assert finding.address == f"monster:{quote(shipped.id, safe='')}"
+
+
+def test_bundled_monster_collision_degrades_when_the_id_does_not_resolve() -> None:
+    # A collision line the document's own bundled ids cannot confirm (here the
+    # message is parsed against a *different* document) degrades to the coarse
+    # `monsters` scope — always true, never a lie.
+    shipped = load_monsters().monsters[0]
+    fixture = adventure(monsters=(shipped,))
+    with pytest.raises(ContentValidationError) as excinfo:
+        validate_adventure(fixture, load_monsters(), load_equipment())
+    findings = parse_validation_error(str(excinfo.value), adventure())
+    assert [finding.code for finding in findings] == ["bundled_monster_collision"]
+    assert findings[0].address == "monsters"
 
 
 def test_travel_unknown_dungeon() -> None:

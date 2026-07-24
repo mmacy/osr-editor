@@ -61,9 +61,12 @@ export function MonsterResolutionPanel({ project }: { project: ProjectState }) {
   const customByName = new Map(report.monsters.custom.map((record) => [record.name, record]))
   for (const record of report.monsters.custom) names.add(record.name)
   return (
-    <section aria-label="Monsters" className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+    <section
+      aria-label="Monster resolution"
+      className="mx-auto flex w-full max-w-2xl flex-col gap-4"
+    >
       <header className="flex items-center gap-3">
-        <h2 className="text-lg font-semibold">Monsters</h2>
+        <h2 className="text-lg font-semibold">Monster resolution</h2>
         <span className="text-xs text-muted-foreground">
           {report.monsters.resolved} resolved · {report.monsters.unresolved.length} unresolved
         </span>
