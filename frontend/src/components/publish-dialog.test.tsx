@@ -110,6 +110,62 @@ describe('the publish dialog flow', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
+  test('a refusal from the lint confirm comes back and shows its answer', async () => {
+    // The bug the phase 6 milestone run surfaced: "Publish anyway" got a 409,
+    // the outcome landed in state the lint view does not render, and the modal
+    // sat there reading as a dead click.
+    const blocking: Finding = {
+      source: 'validation',
+      code: 'entrance_missing',
+      severity: 'error',
+      message: "dungeon 'cave-of-the-unknown' has no entrance on any level",
+      address: 'dungeon:cave-of-the-unknown',
+    }
+    publishProject.mockRejectedValueOnce(
+      rejection(409, 'publish_blocked', { findings: [blocking] }),
+    )
+    openDialog({ validation: [], lint: [LINT_FINDING], forge: [] })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Publish' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }))
+    await waitFor(() => expect(screen.getByText('entrance_missing')).toBeInTheDocument())
+    // Back on the form, where the outcome is rendered — not stuck on the confirm.
+    expect(screen.queryByRole('button', { name: 'Publish anyway' })).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Validation findings block publish — fix them first:'),
+    ).toBeInTheDocument()
+  })
+
+  test('a collision from the lint confirm reaches its overwrite offer too', async () => {
+    publishProject
+      .mockRejectedValueOnce(rejection(409, 'publish_destination_exists'))
+      .mockResolvedValueOnce({ path: '/osr-web/adventures/demo', mode: 'symlink' })
+    openDialog({ validation: [], lint: [LINT_FINDING], forge: [] })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Publish' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Publish anyway' }))
+    const overwrite = await screen.findByRole('button', { name: 'Publish with overwrite' })
+    fireEvent.click(overwrite)
+    await waitFor(() => expect(publishProject).toHaveBeenCalledTimes(2))
+    expect(publishProject.mock.calls[1][1]).toMatchObject({ overwrite: true })
+  })
+
+  test('validation findings skip the lint confirm — the warning question cannot matter', async () => {
+    const blocking: Finding = {
+      source: 'validation',
+      code: 'entrance_missing',
+      severity: 'error',
+      message: "dungeon 'caves-of-the-lizard-men' has no entrance on any level",
+      address: 'dungeon:caves-of-the-lizard-men',
+    }
+    publishProject.mockRejectedValueOnce(
+      rejection(409, 'publish_blocked', { findings: [blocking] }),
+    )
+    openDialog({ validation: [blocking], lint: [LINT_FINDING], forge: [] })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Publish' }))
+    // Straight to the attempt; the server stays the authority on validation.
+    expect(screen.queryByRole('button', { name: 'Publish anyway' })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('entrance_missing')).toBeInTheDocument())
+  })
+
   test('publish_destination_exists offers the explicit overwrite and resubmits with it', async () => {
     publishProject
       .mockRejectedValueOnce(rejection(409, 'publish_destination_exists'))
