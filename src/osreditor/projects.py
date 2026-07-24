@@ -22,6 +22,7 @@ from pydantic import ValidationError
 
 from osreditor.documents import (
     ADVENTURE_ARTIFACT,
+    RUN_ARTIFACT,
     DocumentService,
     ForgeProjectState,
     LoadedProject,
@@ -70,11 +71,18 @@ def utc_now_iso() -> str:
 def detect_project_type(store: ProjectStore, project_id: str) -> ProjectType | None:
     """Classify a project directory by shape alone.
 
-    Forge markers first — `run.json` plus at least one artifact under `stages/`
-    — because a forge workdir also contains an assembled `adventure.json` at its
-    root. A workdir with an *empty* `stages/` directory classifies as not a
-    project, an unreachable state for any workdir forge has actually written
-    into, because directories are layout, not artifacts.
+    The forge marker is `run.json`, and it is checked first because a forge
+    workdir also contains an assembled `adventure.json` at its root; checking
+    the native shape first would silently misclassify every workdir. `run.json`
+    alone is the whole marker: an estimated-but-unconfirmed workdir — the very
+    shape phase 6's estimate step manufactures — holds `run.json`, `source.pdf`,
+    and `pages/` with no stage caches at all, and it is a real, resumable
+    workdir that must open into the pipeline view rather than answering "not a
+    project".
+
+    Shape, never loadability: a `run.json` that does not parse still classifies
+    forge, so the open surfaces `forge_workdir_invalid` with its repair remedy
+    instead of a misleading `not_a_project`.
 
     Args:
         store: The store to read through.
@@ -84,7 +92,7 @@ def detect_project_type(store: ProjectStore, project_id: str) -> ProjectType | N
         `"forge"`, `"native"`, or `None` when the directory is not a project.
     """
     artifacts = store.list_artifacts(project_id)
-    if "run.json" in artifacts and any(name.startswith("stages/") for name in artifacts):
+    if RUN_ARTIFACT in artifacts:
         return "forge"
     if ADVENTURE_ARTIFACT in artifacts:
         return "native"
@@ -284,7 +292,8 @@ def open_project(service: DocumentService, path: Path) -> OpenProject:
         ForgeWorkdirInvalidError: If a workdir's `run.json` does not parse, or
             assembly finds a missing or stale stage cache.
         ForgeWorkdirIncompleteError: If a workdir's conversion never
-            completed; phase 6 turns this refusal into the pipeline view.
+            completed — the frontend routes this to the pipeline view, where
+            the same workdir resumes.
         ForgeOverrideInvalidError: If a workdir's `overrides.yaml` cannot load
             or an entry cannot take effect.
         osrlib.errors.SaveVersionError: If the document's schema is newer than

@@ -9,6 +9,12 @@ their members under [`OsrEditorError`][osreditor.errors.OsrEditorError].
 __all__ = [
     "ArtifactNotFoundError",
     "CatalogMonsterNotFoundError",
+    "ConversionCancelledError",
+    "ConversionDestinationExistsError",
+    "ConversionDestinationInvalidError",
+    "ConversionInProgressError",
+    "ConversionNotFoundError",
+    "ConversionStateInvalidError",
     "DocumentPayloadInvalidError",
     "ForgeOverrideInvalidError",
     "ForgePageNotFoundError",
@@ -29,11 +35,13 @@ __all__ = [
     "ProjectNotForgeError",
     "ProjectNotFoundError",
     "ProjectPathNotFoundError",
+    "ProviderNotConfiguredError",
     "PublishBlockedError",
     "PublishDestinationExistsError",
     "RedoStackEmptyError",
     "StaleRevisionError",
     "UndoStackEmptyError",
+    "WorkdirOpenAsProjectError",
 ]
 
 
@@ -68,8 +76,9 @@ class ForgeWorkdirInvalidError(OsrEditorError):
 class ForgeWorkdirIncompleteError(OsrEditorError):
     """The workdir's monsters stage is not `completed`, so it cannot assemble.
 
-    The message names the pending or failed stage; the remedy is the CLI's
-    `osrforge rerun <stage>` until phase 6 makes resume graphical.
+    The message names the pending or failed stage. Not a dead end: the remedy
+    is the pipeline view, and the frontend routes this code to the conversion
+    screen — where the same workdir resumes with progress and cancellation.
     """
 
 
@@ -250,6 +259,98 @@ class ImportSourceInvalidError(OsrEditorError):
     Wraps whatever the importer raised — an unreadable path, a sniff-negative
     source, a document that fails to load — with the importer's own message.
     """
+
+
+class ConversionNotFoundError(OsrEditorError):
+    """No conversion session has the requested id.
+
+    Typically a stale id after a server restart: sessions are in-memory and the
+    workdir's `run.json` is the durable record, so the remedy is to reopen the
+    workdir rather than to hunt for the session.
+    """
+
+
+class ConversionDestinationExistsError(OsrEditorError):
+    """The new-from-PDF destination already holds a forge workdir and the request did not allow it.
+
+    The overwrite handshake the family uses everywhere: refuse once, state what
+    would be superseded, proceed when the caller says so.
+
+    Attributes:
+        completed: Whether that workdir's monsters stage reads `completed` — a
+            finished conversion whose model stages would have to be paid for
+            again before it reviews.
+    """
+
+    def __init__(self, message: str, *, completed: bool) -> None:
+        """Build the error.
+
+        Args:
+            message: What is already at the destination.
+            completed: Whether the existing conversion completed.
+        """
+        super().__init__(message)
+        self.completed = completed
+
+
+class ConversionDestinationInvalidError(OsrEditorError):
+    """The conversion destination path exists and is not a directory."""
+
+
+class ConversionStateInvalidError(OsrEditorError):
+    """The session is in a state that does not admit the requested act.
+
+    Running or cancelling from a state that forbids it, regenerating previews
+    before the survey and content caches exist, or running a bound session with
+    `stage=assemble` — which has its own synchronous route.
+    """
+
+
+class ConversionInProgressError(OsrEditorError):
+    """A conversion is already running over this workdir.
+
+    Both directions of the exclusivity guard: creating a conversion over a busy
+    workdir, and touching a project whose bound session is active.
+    """
+
+
+class WorkdirOpenAsProjectError(OsrEditorError):
+    """A pdf-kind conversion named a workdir that is open as a project.
+
+    The remedy is the pipeline panel: its workdir-kind session covers every
+    rerun, preprocess included — `rerun preprocess` reads the workdir's own
+    `source.pdf`.
+    """
+
+
+class ConversionCancelledError(OsrEditorError):
+    """The cancel flag was raised at a stage boundary.
+
+    Internal control flow only: raised out of the `on_progress` callback so the
+    chain unwinds between stages, caught by the session runner, and never
+    crossing the API — a cancelled conversion is session state, not an error
+    response.
+    """
+
+
+class ProviderNotConfiguredError(OsrEditorError):
+    """No model provider can be built from the environment and the session settings.
+
+    Attributes:
+        missing: One entry per field that has no value, each naming the field
+            and the environment variable it can also come from.
+    """
+
+    def __init__(self, message: str, *, missing: list[dict[str, str]] | None = None) -> None:
+        """Build the error.
+
+        Args:
+            message: What is missing, or forge's own message when the provider
+                refused to build.
+            missing: One `{"field", "env"}` entry per unset field.
+        """
+        super().__init__(message)
+        self.missing = missing or []
 
 
 class DocumentPayloadInvalidError(OsrEditorError):

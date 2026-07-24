@@ -46,12 +46,13 @@ def test_detects_forge_workdir_before_native(tmp_path: Path) -> None:
     assert detect_project_type(LocalProjectStore(), str(workdir)) == "forge"
 
 
-def test_run_json_alone_is_not_a_forge_workdir(tmp_path: Path) -> None:
-    # An empty stages/ directory is layout, not an artifact — the directory
-    # classifies not-a-project, unreachable for a workdir forge actually wrote into.
-    (tmp_path / "stages").mkdir()
+def test_run_json_alone_is_a_forge_workdir(tmp_path: Path) -> None:
+    # The estimated-but-unconfirmed shape: run.json, source.pdf, and pages/,
+    # with no stage caches at all. It is a real, resumable workdir, so it must
+    # classify forge and open into the pipeline view.
+    (tmp_path / "pages").mkdir()
     (tmp_path / "run.json").write_text("{}", encoding="utf-8")
-    assert detect_project_type(LocalProjectStore(), str(tmp_path)) is None
+    assert detect_project_type(LocalProjectStore(), str(tmp_path)) == "forge"
 
 
 def test_non_project_directory_detects_none(tmp_path: Path) -> None:
