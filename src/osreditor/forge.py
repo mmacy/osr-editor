@@ -271,8 +271,10 @@ def check_workdir(path: Path) -> tuple[LintFinding, ...]:
 def rerun_assemble(path: Path, settings_updates: Mapping[str, object] | None) -> ConversionResult:
     """Re-run the assemble stage with optional assembly-owned knob updates.
 
-    Never a model stage in phase 5: `rerun(…, Stage.ASSEMBLE)` needs no
-    provider and is forge's documented correction-loop re-assembly. The editor
+    Never a model stage: `rerun(…, Stage.ASSEMBLE)` needs no provider and is
+    forge's documented correction-loop re-assembly — the fast path of the
+    correction loop, which is why it stays synchronous while every other stage
+    runs through a conversion session. The editor
     never discriminates forge's `ValueError`s by message-sniffing — every one
     maps to the single rerun-invalid code with the message verbatim; the
     knob→owning-stage guard's message already carries its remedy.

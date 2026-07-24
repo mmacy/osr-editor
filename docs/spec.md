@@ -160,7 +160,7 @@ The correction loop, graphical: open a workdir and the editor shows the assemble
 In scope from 1.0: the editor is the front door to the pipeline, not just the back office.
 
 - **New from PDF** — pick a PDF, pick or confirm the provider, and the editor runs `osrforge.estimate()` first, presenting the page count and rough cost as a confirmation gate (the forge spec's intended host behavior).
-- On confirm, `convert()` runs on a worker thread with `on_progress` streamed to a progress view — stage transitions, token usage, per-stage status. Cancellation is cooperative and takes effect at the next stage boundary, so completed stages persist (forge's own resume semantics) and `rerun` picks up where it stopped; the editor never hard-kills mid-stage, which is what keeps `run.json` consistent. On success the project opens directly into the review queue.
+- On confirm, the chain runs on a worker thread with `on_progress` streamed to a progress view — stage transitions, token usage, per-stage status. The confirm resumes rather than restarts: `estimate()` runs the real `preprocess()` into the workdir and leaves it warm (the licensing invariant forbids persisting module text anywhere else), so the editor calls `rerun(workdir, Stage.SURVEY, provider, …)` and never `convert()`, which would re-render every page. Cancellation is cooperative and takes effect at the next stage boundary, so completed stages persist (forge's own resume semantics) and `rerun` picks up where it stopped; the editor never hard-kills mid-stage, which is what keeps `run.json` consistent. Declining the confirm needs no cleanup: the warm workdir is honestly resumable and opens into the pipeline view. On success the project opens directly into the review queue.
 - **Provider configuration** reads the same environment the forge CLI reads (Foundry endpoint, deployment, key or Entra ID). A settings panel shows detected provider status and lets values be set for the session; secrets are never written to editor config on disk.
 
 ## Validation, playtesting, and publishing
@@ -260,7 +260,7 @@ Each phase ends with working, tested, documented software.
 
 **Phase 5 — forge-backed projects.** Workdir open and detection, the review queue over report flags with source pages and SVG previews, op→override translation with reasons, the assemble/check loop, stage controls with rerun knobs, detach. Milestone: take a real converted workdir from flagged draft to publishable entirely in the GUI, with `overrides.yaml` as the reviewable record.
 
-**Phase 6 — conversion.** New-from-PDF: provider settings, estimate and cost confirmation, subprocess convert with live progress, landing in the review queue. Milestone: PDF to published adventure without touching the CLI.
+**Phase 6 — conversion.** New-from-PDF: provider settings, estimate and cost confirmation, the conversion chain on a worker thread with live progress and cooperative cancellation, landing in the review queue. Milestone: PDF to published adventure without touching the CLI.
 
 **Phase 7 — authoring aids.** SRD stocking with seeded re-rolls, treasure and encounter previews, the prose assistant behind provider detection. Milestone: stock a blank level from the SRD tables, punch up its descriptions with the assistant, and publish.
 

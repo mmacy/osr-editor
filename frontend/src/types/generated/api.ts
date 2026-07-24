@@ -291,6 +291,11 @@ export interface paths {
          * Post Forge Rerun
          * @description Re-run the assemble stage with optional assembly-owned knob updates.
          *
+         *     The correction loop's fast path: assembly is pure by forge's contract, so it
+         *     needs no worker thread and no session. Every other stage runs through the
+         *     conversions API instead, which is why a bound session refuses
+         *     `stage=assemble` — one act, one path.
+         *
          *     Args:
          *         request: The current request (carries the app state).
          *         project_id: The server-minted project id.
@@ -2160,7 +2165,10 @@ export interface components {
         };
         /**
          * ForgeRerunRequest
-         * @description Assemble-stage rerun knobs — assembly-owned only in phase 5 (forge's guard is the backstop).
+         * @description Assemble-stage rerun knobs — assembly-owned only (forge's guard is the backstop).
+         *
+         *     Model stages have a home now, and it is the conversions API: a bound session
+         *     over the project's workdir, with progress and cancellation.
          */
         ForgeRerunRequest: {
             /**
