@@ -15,7 +15,7 @@ Two principles govern everything:
 ## Non-goals
 
 - **No hosting, multi-user, or auth.** Single-user, localhost-only, one process. Publishing to PyPI (a later phase) ships the same local tool, not a service. The design still keeps the door open rather than building into a corner: every route resolves its caller through a single auth dependency that today returns the local user, and persistence sits behind the `ProjectStore` protocol — the two seams a hosted future would swap (see future extensions).
-- **No rules implementation.** Validation, generation, and play all call osrlib. The one narrow exception is the SRD stocking procedure (see authoring aids), which consumes osrlib's shipped tables because osrlib doesn't yet ship the generator; it's a candidate to upstream.
+- **No rules implementation.** Validation, generation, and play all call osrlib — including the SRD stocking procedure, which osrlib grew when the editor became its first consumer; the editor owns only stocking seeds, target selection, and op assembly (see authoring aids).
 - **No party or pregen authoring.** `adventure.json` has no party surface and osr-web imports parties only from saves. Future work, contingent on the ecosystem growing a pregen surface (already an open question in the forge spec).
 - **No save editing.** Saves are session runtime owned by osrlib and the games.
 - **No SRD catalog editing.** Shipped osrlib data is immutable; bespoke monsters are adventure-bundled `MonsterTemplate`s, exactly as osrlib 1.2 defines them.
@@ -173,7 +173,7 @@ In scope from 1.0: the editor is the front door to the pipeline, not just the ba
 
 All three ship in 1.0; all three apply their results as ordinary op batches (undoable, editable, no special state):
 
-- **SRD stocking** — roll room contents for an empty area, or sweep a level's empty areas, using the SRD stocking, unguarded-treasure, and wandering tables shipped in osrlib's data, driven by a seeded RNG recorded in the sidecar (re-roll advances it; results are reproducible). This is the one rules procedure the editor implements, because osrlib ships the tables but defers the generator; upstreaming it to osrlib later is the expected end state.
+- **SRD stocking** — roll room contents for an empty area, or sweep a level's empty areas, through osrlib's stocking procedure over its shipped stocking, unguarded-treasure, and encounter tables, driven by a seeded RNG recorded in the sidecar (re-roll advances it; results are reproducible). The rules procedure is osrlib's — grown there as an additive release when this phase became its first consumer; the editor owns seed persistence, choosing targets, and applying results as ordinary op batches.
 - **Treasure and encounter preview** — sample what authored content actually yields: N example hoards for a treasure-type letter via osrlib's generator, rolled counts and a stat summary for an encounter. Pure preview; never mutates the document.
 - **Prose assistant** — optional, model-backed drafting of area descriptions and hooks from the authored facts (name, encounter, features, treasure, adventure tone), through the same `ModelProvider` interface and provider configuration as conversion. Suggestions are inserted only on explicit accept, token usage is displayed, and the feature is absent (not broken) when no provider is configured.
 
