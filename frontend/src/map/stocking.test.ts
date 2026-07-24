@@ -140,9 +140,10 @@ describe('key order and the walk', () => {
 })
 
 describe('the stocking menu builder', () => {
-  test('an empty area offers description, three adds, and add feature', () => {
+  test('an empty area offers description, roll-stocking, three adds, and add feature', () => {
     expect(stockingMenuEntries(area('1')).map((entry) => entry.id)).toEqual([
       'description',
+      'roll-stocking',
       'add-encounter',
       'add-treasure',
       'add-trap',
@@ -150,9 +151,11 @@ describe('the stocking menu builder', () => {
     ])
   })
 
-  test('present kinds offer edit plus remove, reflecting current state', () => {
+  test('a stocked area never offers roll-stocking — one predicate everywhere', () => {
     const stocked = area('1', { encounter: ENCOUNTER, trap: ROOM_TRAP })
-    expect(stockingMenuEntries(stocked).map((entry) => entry.id)).toEqual([
+    const ids = stockingMenuEntries(stocked).map((entry) => entry.id)
+    expect(ids).not.toContain('roll-stocking')
+    expect(ids).toEqual([
       'description',
       'edit-encounter',
       'remove-encounter',

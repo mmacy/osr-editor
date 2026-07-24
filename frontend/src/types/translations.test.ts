@@ -248,7 +248,12 @@ test('the override-edit and sidecar unions discriminate', () => {
   >().toEqualTypeOf<StatBlockPatch>()
 
   expectTypeOf<AnySidecarPatch['action']>().toEqualTypeOf<
-    'set_view_state' | 'set_note' | 'remove_note' | 'dismiss_flag' | 'undismiss_flag' | 'set_stocking_seed'
+    | 'set_view_state'
+    | 'set_note'
+    | 'remove_note'
+    | 'dismiss_flag'
+    | 'undismiss_flag'
+    | 'set_stocking_seed'
   >()
   expectTypeOf<Extract<AnySidecarPatch, { action: 'dismiss_flag' }>>().toHaveProperty('flag')
   expectTypeOf<EditorSidecar['review']>().toEqualTypeOf<ReviewMark[]>()

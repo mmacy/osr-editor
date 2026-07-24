@@ -12,10 +12,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
+import { ProseAssistant } from '@/components/prose-assistant'
 import { areaAddress } from '@/lib/address'
 import type { MapSelection } from '@/map/render'
 import { isAreaStocked } from '@/map/stocking'
-import { projectStore } from '@/store/project-store'
+import { projectStore, useProjectStore } from '@/store/project-store'
 import type { Adventure, AreaSpec, DoorSpec, Edge, LevelSpec, Position } from '@/types'
 
 function findLevel(document: Adventure, dungeonId: string, levelNumber: number): LevelSpec | null {
@@ -108,6 +109,7 @@ function AreaInspector({
   cardIntent: CardIntent | null
   onCardIntentConsumed?: () => void
 }) {
+  const projectId = useProjectStore((state) => state.project?.id ?? null)
   // The context menu's description intent lands focus in the prose field —
   // only the intent raised on this very area; a stale one focuses nothing.
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
@@ -178,6 +180,18 @@ function AreaInspector({
           onChange={description.onChange}
           onBlur={description.onBlur}
         />
+        {projectId && (
+          <ProseAssistant
+            projectId={projectId}
+            target={{
+              kind: 'area',
+              dungeon_id: dungeonId,
+              level_number: levelNumber,
+              area_id: area.id,
+            }}
+            onAcceptArea={(value) => commitField('description', value)}
+          />
+        )}
       </div>
       <p className="text-xs text-muted-foreground">
         <span className="font-mono">{area.cells.length}</span> cell(s)

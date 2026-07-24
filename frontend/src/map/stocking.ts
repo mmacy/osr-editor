@@ -70,22 +70,29 @@ export function walkAreas(
 }
 
 // One stocking-menu entry: a stable id for tests, the user-facing label, and
-// the card intent the panel consumes.
-export interface StockingMenuEntry {
-  id: string
-  label: string
-  card: 'description' | 'encounter' | 'treasure' | 'trap' | 'features'
-  action: 'edit' | 'add' | 'remove'
-}
+// the card intent the panel consumes. A discriminated union so the roll entry's
+// `stock` card pairs only with `roll`, and every card entry with edit/add/remove.
+export type StockingMenuEntry =
+  | { id: string; label: string; card: 'stock'; action: 'roll' }
+  | {
+      id: string
+      label: string
+      card: 'description' | 'encounter' | 'treasure' | 'trap' | 'features'
+      action: 'edit' | 'add' | 'remove'
+    }
 
 // The stocking context menu's entries: exactly what the area can hold,
 // reflecting current state — description; encounter, treasure, and trap each
-// as add or edit-plus-remove; add feature. The roll-stocking entry arrives
-// with phase 7, absent rather than disabled (the phase 1 rule).
+// as add or edit-plus-remove; add feature. A blank room also offers "Roll SRD
+// stocking" (offered exactly when the area is unstocked, one predicate
+// everywhere), absent rather than disabled on a stocked room (the phase 1 rule).
 export function stockingMenuEntries(area: AreaSpec): StockingMenuEntry[] {
   const entries: StockingMenuEntry[] = [
     { id: 'description', label: 'Edit description', card: 'description', action: 'edit' },
   ]
+  if (!isAreaStocked(area)) {
+    entries.push({ id: 'roll-stocking', label: 'Roll SRD stocking', card: 'stock', action: 'roll' })
+  }
   const contentKinds = [
     { card: 'encounter' as const, label: 'encounter', present: Boolean(area.encounter) },
     { card: 'treasure' as const, label: 'treasure', present: Boolean(area.treasure) },

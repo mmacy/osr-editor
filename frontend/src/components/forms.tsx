@@ -1,10 +1,11 @@
 import { ListEditor } from '@/components/list-editor'
+import { ProseAssistant } from '@/components/prose-assistant'
 import { TravelTurnsEditor } from '@/components/travel-turns-editor'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
-import { projectStore } from '@/store/project-store'
+import { projectStore, useProjectStore } from '@/store/project-store'
 import type { Adventure } from '@/types'
 
 // Every form commits through the store's single-flight queue: one committed
@@ -54,6 +55,7 @@ export function AdventureForm({ document }: { document: Adventure }) {
   const description = useCommittedField(document.description, (value) =>
     commitScalar('description', value),
   )
+  const projectId = useProjectStore((state) => state.project?.id ?? null)
   return (
     <section aria-label="Adventure" className="flex max-w-2xl flex-col gap-6">
       <h2 className="font-serif text-xl font-semibold">Adventure</h2>
@@ -71,13 +73,26 @@ export function AdventureForm({ document }: { document: Adventure }) {
           onBlur={description.onBlur}
         />
       </div>
-      <ListEditor
-        label="Hooks"
-        serif
-        items={document.hooks}
-        placeholder="A rumor, a debt, a missing miller…"
-        onCommit={commitHooks}
-      />
+      <div className="flex flex-col gap-2">
+        <ListEditor
+          label="Hooks"
+          serif
+          items={document.hooks}
+          placeholder="A rumor, a debt, a missing miller…"
+          onCommit={commitHooks}
+        />
+        {projectId && (
+          <ProseAssistant
+            projectId={projectId}
+            target={{ kind: 'hooks' }}
+            onAcceptHooks={(hooks) =>
+              void projectStore
+                .getState()
+                .commit([{ op: 'set_adventure_field', field: 'hooks', value: hooks }])
+            }
+          />
+        )}
+      </div>
     </section>
   )
 }

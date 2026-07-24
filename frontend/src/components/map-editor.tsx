@@ -20,6 +20,7 @@ import {
 import type { CardIntent } from '@/components/area-content-cards'
 import { ForgePreviewDialog } from '@/components/forge-preview-dialog'
 import { ImportDialog } from '@/components/import-dialog'
+import { StockingReportDialog } from '@/components/stocking-report'
 import { MapCanvas } from '@/components/map-canvas'
 import { SourcePagesPane } from '@/components/source-pages-pane'
 import {
@@ -68,7 +69,7 @@ import {
 } from '@/map/stocking'
 import { cellSizePx, fitView, resetView, zoomAt, type ViewTransform } from '@/map/view'
 import { projectStore, useProjectStore } from '@/store/project-store'
-import type { Adventure, Diagnostics, LevelSpec, Position } from '@/types'
+import type { Adventure, Diagnostics, LevelSpec, Position, StockRoll } from '@/types'
 
 // The persisted camera, restored: the sidecar's view state keyed by level
 // address, read once per level entry (not reactive — the map owns the live
@@ -177,6 +178,9 @@ export function MapEditor({
   const [unstockedFilter, setUnstockedFilter] = useState(false)
   const [cardIntent, setCardIntent] = useState<CardIntent | null>(null)
   const [menuAreaId, setMenuAreaId] = useState<string | null>(null)
+  // The stocking report: the rolls from the last sweep or single-room roll, or
+  // null while the dialog is closed.
+  const [stockingRolls, setStockingRolls] = useState<StockRoll[] | null>(null)
   const intentToken = useRef(0)
   const [dialog, setDialog] = useState<
     | 'add-dungeon'
@@ -529,9 +533,22 @@ export function MapEditor({
       else if (entry.card === 'trap') void projectStore.getState().commit(areaTrapOps(target, null))
       return
     }
+    if (entry.card === 'stock') {
+      void rollStocking(areaId)
+      return
+    }
     intentToken.current += 1
     setCardIntent({ areaId, card: entry.card, action: entry.action, token: intentToken.current })
   }
+
+  // Roll SRD stocking over one blank room (an area id) or the level's unstocked
+  // areas (null), then open the report. The batch already applied through the
+  // store — key numbers fill and glyphs appear at once.
+  const rollStocking = async (areaId: string | null) => {
+    const response = await projectStore.getState().stock(dungeonId, levelNumber, areaId)
+    if (response) setStockingRolls([...response.rolls])
+  }
+  const unstockedCount = level.areas.filter((area) => !isAreaStocked(area)).length
 
   // The hover line: the cell/edge ref plus the hovered area's one-line
   // contents in module notation.
@@ -701,6 +718,23 @@ export function MapEditor({
             </Button>
           </TooltipTrigger>
           <TooltipContent>Dim stocked areas (F)</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={unstockedCount === 0}
+              onClick={() => void rollStocking(null)}
+            >
+              Roll stocking
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {unstockedCount === 0
+              ? 'Every room is stocked'
+              : `Roll SRD stocking over ${unstockedCount} blank room${unstockedCount === 1 ? '' : 's'} — one undo step`}
+          </TooltipContent>
         </Tooltip>
         {forgeProject && (
           <>
@@ -876,6 +910,7 @@ export function MapEditor({
           sourceCell={transitionCell}
         />
       )}
+      <StockingReportDialog rolls={stockingRolls} onClose={() => setStockingRolls(null)} />
     </div>
   )
 }

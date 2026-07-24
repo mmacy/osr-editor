@@ -2,6 +2,12 @@
 // Errors arrive in the one structured envelope; ApiRequestError carries it so
 // every caller can toast the message and remedy generically.
 import type {
+  AidsPreviewRequest,
+  AidsPreviewResponse,
+  AidsProseRequest,
+  AidsProseResponse,
+  AidsStockRequest,
+  AidsStockResponse,
   AnyEditOp,
   AnyOverrideEdit,
   AnySidecarPatch,
@@ -124,6 +130,14 @@ export const api = {
     request<ProjectState>(`/api/projects/${id}/forge/detach`, jsonPost({ path })),
   postSidecar: (id: string, patches: AnySidecarPatch[]) =>
     request<EditorSidecar>(`/api/projects/${id}/sidecar`, jsonPost({ patches })),
+  postAidsStock: (id: string, body: AidsStockRequest) =>
+    request<AidsStockResponse>(`/api/projects/${id}/aids/stock`, jsonPost(body)),
+  postAidsPreview: (id: string, body: AidsPreviewRequest) =>
+    request<AidsPreviewResponse>(`/api/projects/${id}/aids/preview`, jsonPost(body)),
+  // Prose is a synchronous call that can run a minute; the caller may abandon it
+  // with an AbortController signal (there is no server-side cancel).
+  postAidsProse: (id: string, body: AidsProseRequest, signal?: AbortSignal) =>
+    request<AidsProseResponse>(`/api/projects/${id}/aids/prose`, { ...jsonPost(body), signal }),
   getProvider: () => request<ProviderStatus>('/api/provider'),
   setProvider: (body: ProviderSettingsRequest) =>
     request<ProviderStatus>('/api/provider', jsonPost(body)),

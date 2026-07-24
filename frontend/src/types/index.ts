@@ -174,13 +174,9 @@ export type TokenUsage = components['schemas']['TokenUsage']
 // The discriminated aid unions, composed from their members (the route bodies
 // and responses carry the union, not a named schema — the AnyEditOp pattern).
 export type AidsPreviewRequest =
-  | TreasurePreviewRequest
-  | EncounterPreviewRequest
-  | StatblockPreviewRequest
+  TreasurePreviewRequest | EncounterPreviewRequest | StatblockPreviewRequest
 export type AidsPreviewResponse =
-  | TreasurePreviewResponse
-  | EncounterPreviewResponse
-  | StatblockPreviewResponse
+  TreasurePreviewResponse | EncounterPreviewResponse | StatblockPreviewResponse
 export type AidsProseRequest = ProseAreaTarget | ProseHooksTarget
 export type AidsProseResponse = ProseAreaResponse | ProseHooksResponse
 

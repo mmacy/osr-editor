@@ -85,7 +85,13 @@ describe('encounter builders patch only their own field', () => {
   })
 
   test('adding to an existing encounter appends, carrying every other field', () => {
-    const existing = { monsters: [LINE], alignment: 'chaotic' as const, aware: true, stance: null, hoard: true }
+    const existing = {
+      monsters: [LINE],
+      alignment: 'chaotic' as const,
+      aware: true,
+      stance: null,
+      hoard: true,
+    }
     const second: KeyedMonster = { template_id: 'skeleton', count_dice: null, count_fixed: 6 }
     const ops = encounterAddLineOps(withArea({ encounter: existing }), TARGET, second)
     expect(ops[0]).toMatchObject({
@@ -97,6 +103,27 @@ describe('encounter builders patch only their own field', () => {
     const existing = { monsters: [LINE], alignment: null, aware: false, stance: null, hoard: true }
     const ops = encounterPatchOps(withArea({ encounter: existing }), TARGET, { aware: true })
     expect(ops[0]).toMatchObject({ encounter: { ...existing, aware: true } })
+  })
+
+  test('a new encounter defaults hoard on; a patch never drops the field', () => {
+    // The forcing reason: a whole-value SetEncounter commit that omitted hoard
+    // would silently reset what stocking set.
+    const added = encounterAddLineOps(withArea({}), TARGET, LINE)
+    expect(added[0]).toMatchObject({ encounter: { hoard: true } })
+    // A hoard-off encounter (a stocked treasure-absent monster room) survives an
+    // unrelated field patch.
+    const hoardless = {
+      monsters: [LINE],
+      alignment: null,
+      aware: false,
+      stance: null,
+      hoard: false,
+    }
+    const patched = encounterPatchOps(withArea({ encounter: hoardless }), TARGET, { aware: true })
+    expect(patched[0]).toMatchObject({ encounter: { hoard: false, aware: true } })
+    // And the toggle itself commits.
+    const toggled = encounterPatchOps(withArea({ encounter: hoardless }), TARGET, { hoard: true })
+    expect(toggled[0]).toMatchObject({ encounter: { hoard: true } })
   })
 
   test('the last line never removes — monsters has min_length 1', () => {
@@ -303,7 +330,13 @@ describe('the queue-time update builders', () => {
   test('encounterLinePatchOps patches the committed line, not a render-time copy', () => {
     const second: KeyedMonster = { template_id: 'skeleton', count_dice: null, count_fixed: 6 }
     const document = withArea({
-      encounter: { monsters: [LINE, second], alignment: null, aware: false, stance: null, hoard: true },
+      encounter: {
+        monsters: [LINE, second],
+        alignment: null,
+        aware: false,
+        stance: null,
+        hoard: true,
+      },
     })
     const ops = encounterLinePatchOps(document, TARGET, 1, { count_dice: '2d4', count_fixed: null })
     expect(ops[0]).toMatchObject({

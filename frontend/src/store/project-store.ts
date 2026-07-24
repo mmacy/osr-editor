@@ -15,6 +15,7 @@ import { applyDelta } from '@/lib/apply-delta'
 import { isActive } from '@/lib/conversion'
 import type {
   Adventure,
+  AidsStockResponse,
   AnyEditOp,
   AnyOverrideEdit,
   AnySidecarPatch,
@@ -88,6 +89,14 @@ export interface ProjectStoreState {
   runForgeRerun: (settings: Record<string, unknown>) => Promise<boolean>
   detach: (path: string) => Promise<ProjectState | null>
   patchSidecar: (patches: AnySidecarPatch[]) => Promise<void>
+  // Roll SRD stocking over one blank room or a level's unstocked areas. The
+  // batch result feeds applyResult exactly like an /ops response; the report is
+  // returned for the surface to render.
+  stock: (
+    dungeonId: string,
+    levelNumber: number,
+    areaId: string | null,
+  ) => Promise<AidsStockResponse | null>
 }
 
 export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreState> {
@@ -302,6 +311,26 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
             }
           } catch (error) {
             handleError(error)
+          }
+        }),
+
+      stock: (dungeonId, levelNumber, areaId) =>
+        enqueue(async () => {
+          const { project } = get()
+          if (!project || busy()) return null
+          try {
+            const response = await client.postAidsStock(project.id, {
+              revision: project.revision,
+              dungeon_id: dungeonId,
+              level_number: levelNumber,
+              area_id: areaId,
+            })
+            // The ordinary batch result — null when only empty/special rooms rolled.
+            if (response.result) applyResult(response.result)
+            return response
+          } catch (error) {
+            handleError(error)
+            return null
           }
         }),
     }
