@@ -114,6 +114,7 @@ from osreditor.store import ProjectStore
 __all__ = [
     "ADVENTURE_ARTIFACT",
     "OVERRIDES_ARTIFACT",
+    "RUN_ARTIFACT",
     "DocumentService",
     "ForgeProjectState",
     "HistoryEntry",
@@ -130,6 +131,7 @@ __all__ = [
 
 ADVENTURE_ARTIFACT = "adventure.json"
 OVERRIDES_ARTIFACT = "overrides.yaml"
+RUN_ARTIFACT = "run.json"
 MAX_UNDO_DEPTH = 100
 
 ProjectType = Literal["native", "forge"]
@@ -400,6 +402,22 @@ class DocumentService:
         if project is None:
             raise ProjectNotFoundError(f"no open project with id {project_id!r}")
         return project
+
+    def open_at(self, path: Path) -> OpenProject | None:
+        """Return the project already open at a resolved path, or `None`.
+
+        The conversion guards' question: a pdf-kind conversion may not target a
+        workdir somebody is editing, and a workdir-kind session binds to the
+        project at its path when there is one.
+
+        Args:
+            path: The resolved project directory path.
+
+        Returns:
+            The open project, or `None`.
+        """
+        with self._registry_lock:
+            return self._by_path.get(str(path))
 
     def get_or_open(self, path: Path, loader: Callable[[], LoadedProject]) -> OpenProject:
         """Return the already-open project for a resolved path, or admit a new one.
@@ -748,6 +766,25 @@ class DocumentService:
             result = rerun_assemble(forge.workdir, settings_updates if settings_updates else None)
             self._adopt_assembly(project, result.adventure, result.report)
             return self._result(project, _whole_document_delta(project.adventure))
+
+    def adopt_conversion(self, project: OpenProject, adventure: Adventure, report: ExtractionReport) -> None:
+        """Install a bound conversion session's chain result — the same adoption every assembly gets.
+
+        Not an undo step, and the undo history survives it: the forge stack
+        snapshots `overrides.yaml` and the reason ledger, and the document is
+        derived state, so undo after a monsters rerun restores earlier
+        corrections and re-assembles them against the *new* caches. That is
+        exactly the semantics a cache regeneration should have; where a knob
+        change made a snapshot's entries unsatisfiable, the undo fails loudly
+        with forge's message and restores, never silently.
+
+        Args:
+            project: The bound forge-backed project.
+            adventure: The chain's assembled draft.
+            report: The chain's report, as written to the workdir.
+        """
+        with project.lock:
+            self._adopt_assembly(project, adventure, report)
 
     def _restore_forge_snapshot(self, project: OpenProject, entry: HistoryEntry) -> None:
         """Write a snapshot pair back and re-assemble; restore the current pair on failure."""

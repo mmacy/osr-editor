@@ -5,7 +5,8 @@
 // findings as the diagnostics panel's own click-to-navigate rows;
 // publish_destination_exists offers the explicit overwrite; a lint-warnings
 // confirm interposes when lint findings exist — secret-only access is
-// sometimes the point.
+// sometimes the point — but never when validation findings already block, and
+// any failed attempt returns to this view, where the outcome is rendered.
 import { useState } from 'react'
 import { BookUpIcon } from 'lucide-react'
 import { toast } from 'sonner'
@@ -87,6 +88,10 @@ export function PublishDialog({ onNavigate }: { onNavigate: (target: NavTarget) 
       toast.success(`Published to ${result.path}`)
       setOpen(false)
     } catch (caught) {
+      // Back to the form view, always: the lint confirm renders none of the
+      // outcomes below, so leaving it up would swallow the answer and read as
+      // a dead click.
+      setLintConfirm(false)
       if (!(caught instanceof ApiRequestError)) {
         setError(caught instanceof Error ? caught.message : String(caught))
         return
@@ -111,8 +116,14 @@ export function PublishDialog({ onNavigate }: { onNavigate: (target: NavTarget) 
 
   const submit = () => {
     // Lint never blocks server-side; the confirm interposes client-side when
-    // lint findings exist, listing them.
-    if (lintFindings.length > 0 && !lintConfirm) {
+    // lint findings exist, listing them. Not when validation findings exist
+    // too, though: the server refuses those outright, so asking "publish
+    // despite warnings?" would be asking about the wrong thing. Go straight to
+    // the attempt and let the refusal name the blockers — the server stays the
+    // authority on validation, and the client just declines to ask a question
+    // whose answer cannot matter.
+    const blocking = project.diagnostics.validation.length > 0
+    if (lintFindings.length > 0 && !lintConfirm && !blocking) {
       setLintConfirm(true)
       return
     }

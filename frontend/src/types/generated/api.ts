@@ -291,6 +291,11 @@ export interface paths {
          * Post Forge Rerun
          * @description Re-run the assemble stage with optional assembly-owned knob updates.
          *
+         *     The correction loop's fast path: assembly is pure by forge's contract, so it
+         *     needs no worker thread and no session. Every other stage runs through the
+         *     conversions API instead, which is why a bound session refuses
+         *     `stage=assemble` — one act, one path.
+         *
          *     Args:
          *         request: The current request (carries the app state).
          *         project_id: The server-minted project id.
@@ -494,6 +499,266 @@ export interface paths {
          *         The published path and mode.
          */
         post: operations["publish_project_api_projects__project_id__publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/provider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Provider
+         * @description Report the effective provider configuration — presence and provenance, never a secret.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The merged session-over-environment status.
+         */
+        get: operations["get_provider_api_provider_get"];
+        put?: never;
+        /**
+         * Post Provider
+         * @description Set or clear session provider settings, answering the new status.
+         *
+         *     Session values live in memory until the editor closes; the
+         *     `OSRFORGE_FOUNDRY_*` environment variables are the durable configuration.
+         *     Nothing here reaches disk — the config file's schema does not grow.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         body: The fields to set (a value) or clear (an explicit `null`);
+         *             unmentioned fields are left alone.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The new status.
+         */
+        post: operations["post_provider_api_provider_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find Conversion
+         * @description Look up a workdir's conversion session, in whatever state it is in.
+         *
+         *     Recovery is a lookup, not a guess: every surface that hits a busy conflict
+         *     comes here and then renders the live session — a reload during the
+         *     estimate, a second tab, the pipeline panel re-attaching on mount. After a
+         *     server restart this 404s, and the workdir's `run.json` is the durable truth
+         *     the open flow already handles.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         workdir: The workdir path to look up.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The session's state.
+         */
+        get: operations["find_conversion_api_conversions_get"];
+        put?: never;
+        /**
+         * Create Conversion
+         * @description Start a new-from-PDF conversion, or attach a session to an existing workdir.
+         *
+         *     The pdf kind spawns its worker immediately — the estimate really
+         *     preprocesses, rendering every page, which is far too slow for a request
+         *     thread — and lands in `estimating`. The workdir kind starts nothing:
+         *     creating it for a path that already holds a session **returns that
+         *     session**, the idempotency that keeps one workdir on one session however
+         *     many surfaces ask, and it binds to the open project at that path when there
+         *     is one.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         body: The kind, the destination workdir, the source PDF (pdf kind),
+         *             optional knobs, and the existing-workdir handshake flag.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The session's state.
+         */
+        post: operations["create_conversion_api_conversions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversions/{conversion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Conversion
+         * @description Report one conversion session's state — the progress view's poll.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         conversion_id: The server-minted session id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The session's state.
+         */
+        get: operations["get_conversion_api_conversions__conversion_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversions/{conversion_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Conversion
+         * @description Resume the chain from a stage — the confirm-and-run, and every later rerun.
+         *
+         *     Everything rejectable rejects before the thread spawns: the stage against
+         *     forge's `RUNNABLE_STAGES`, the knobs against `ConversionSettings` and the
+         *     knob→owning-stage guard, and the provider — built here, exactly when the
+         *     resumed chain contains a model stage. What remains inside the worker can
+         *     only fail as session state.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         conversion_id: The server-minted session id.
+         *         body: The stage to resume from (absent means the first incomplete one)
+         *             and any knob updates.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The session's state, now `running`.
+         */
+        post: operations["run_conversion_api_conversions__conversion_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversions/{conversion_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Conversion
+         * @description Ask a conversion to stop at the next stage boundary.
+         *
+         *     Cooperative by construction: the flag is read on `running` events only, so
+         *     the stage in flight always finishes and `run.json` never records a stage
+         *     the chain abandoned mid-write. A cancel during the estimate is read when
+         *     preprocess returns, keeping the warm workdir; an idle session cancels
+         *     immediately.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         conversion_id: The server-minted session id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The session's state.
+         */
+        post: operations["cancel_conversion_api_conversions__conversion_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversions/{conversion_id}/previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Conversion Previews
+         * @description Regenerate the SVG previews from the survey and content caches alone.
+         *
+         *     The one place this control is actionable: a workdir that cannot assemble
+         *     yet, where eyeballing geometry before paying for the remaining model stages
+         *     is the whole point. For *open* projects the phase 5 posture stands — every
+         *     commit re-assembles and previews follow.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         conversion_id: The server-minted session id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The regenerated levels, in survey order.
+         */
+        post: operations["post_conversion_previews_api_conversions__conversion_id__previews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversions/{conversion_id}/previews/{dungeon_id}/{level_number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Conversion Preview
+         * @description Serve one regenerated level preview from the conversion's workdir.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         conversion_id: The server-minted session id.
+         *         dungeon_id: The dungeon id (forge's canonical slug).
+         *         level_number: The 1-based level number.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The SVG bytes.
+         */
+        get: operations["get_conversion_preview_api_conversions__conversion_id__previews__dungeon_id___level_number__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1217,6 +1482,103 @@ export interface components {
             unresolved_fallback: "best-effort" | "omit";
         };
         /**
+         * ConversionStageRow
+         * @description One stage's row: the stage, and forge's own status entry for it.
+         *
+         *     `status` is forge's whole `StageStatus` — state, error, timestamps, and
+         *     token usage — rather than a hand-picked subset, so the conversion screen
+         *     renders the same shape the pipeline panel already renders from
+         *     `run.json`. A live `running` row carries no timestamps because forge has
+         *     not written one yet; every other row is re-read from disk.
+         */
+        ConversionStageRow: {
+            stage: components["schemas"]["Stage"];
+            status: components["schemas"]["StageStatus"];
+        };
+        /**
+         * ConversionState
+         * @description The poll answer, and every conversion route's response.
+         *
+         *     `estimate` is forge's own frozen `CostEstimate` dataclass riding the
+         *     OpenAPI surface directly — pydantic serializes stdlib dataclasses, and a
+         *     hand-written mirror of a forge contract is exactly what the family rule
+         *     forbids.
+         */
+        ConversionState: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "pdf" | "workdir";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "estimating" | "estimated" | "ready" | "running" | "completed" | "failed" | "cancelled";
+            /** Workdir Path */
+            workdir_path: string;
+            /** Pdf Path */
+            pdf_path: string | null;
+            estimate: components["schemas"]["CostEstimate"] | null;
+            /** Stages */
+            stages: components["schemas"]["ConversionStageRow"][];
+            /** Error */
+            error: string | null;
+            /** Project Id */
+            project_id: string | null;
+        };
+        /**
+         * CostEstimate
+         * @description The estimate: per-stage token predictions and the USD figure hosts surface.
+         *
+         *     Attributes:
+         *         page_count: The source's page count.
+         *         text_tokens: Estimated tokens in the text layers, all pages.
+         *         image_tokens: Estimated page-image tokens, all pages.
+         *         survey_window_count: How many requests the survey runs as — 1 at or
+         *             under `survey_max_pages` pages, one per chunked page window above.
+         *         survey_input_tokens: Estimated survey input, all windows.
+         *         survey_output_tokens: Estimated survey output, all windows.
+         *         content_input_tokens: Estimated content-pass input, all batches.
+         *         content_output_tokens: Estimated content output.
+         *         monsters_input_tokens: The flat monsters-stage input constant.
+         *         monsters_output_tokens: The flat monsters-stage output constant.
+         *         input_tokens: The input total.
+         *         output_tokens: The output total.
+         *         usd: The estimated cost, with each survey window priced at the doubled
+         *             tier when that window's estimated input crosses the 272K cliff.
+         */
+        CostEstimate: {
+            /** Page Count */
+            page_count: number;
+            /** Text Tokens */
+            text_tokens: number;
+            /** Image Tokens */
+            image_tokens: number;
+            /** Survey Window Count */
+            survey_window_count: number;
+            /** Survey Input Tokens */
+            survey_input_tokens: number;
+            /** Survey Output Tokens */
+            survey_output_tokens: number;
+            /** Content Input Tokens */
+            content_input_tokens: number;
+            /** Content Output Tokens */
+            content_output_tokens: number;
+            /** Monsters Input Tokens */
+            monsters_input_tokens: number;
+            /** Monsters Output Tokens */
+            monsters_output_tokens: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Usd */
+            usd: number;
+        };
+        /**
          * CreateArea
          * @description Create a keyed area over a cell cluster.
          *
@@ -1253,6 +1615,38 @@ export interface components {
              * @default
              */
             description: string;
+        };
+        /**
+         * CreateConversionRequest
+         * @description A new conversion session: new-from-PDF, or a resume over an existing workdir.
+         *
+         *     `allow_existing` is the destination handshake's second half: the first
+         *     request over an existing workdir is refused with
+         *     `conversion_destination_exists`, the dialog confirms with copy naming what
+         *     the *estimate itself* would re-render, and the retry carries the flag.
+         */
+        CreateConversionRequest: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "pdf" | "workdir";
+            /** Workdir Path */
+            workdir_path: string;
+            /** Pdf Path */
+            pdf_path?: string | null;
+            /**
+             * Settings
+             * @default {}
+             */
+            settings: {
+                [key: string]: unknown;
+            };
+            /**
+             * Allow Existing
+             * @default false
+             */
+            allow_existing: boolean;
         };
         /**
          * CreateProjectRequest
@@ -1771,7 +2165,10 @@ export interface components {
         };
         /**
          * ForgeRerunRequest
-         * @description Assemble-stage rerun knobs — assembly-owned only in phase 5 (forge's guard is the backstop).
+         * @description Assemble-stage rerun knobs — assembly-owned only (forge's guard is the backstop).
+         *
+         *     Model stages have a home now, and it is the conversions API: a bound session
+         *     over the project's workdir, with progress and cancellation.
          */
         ForgeRerunRequest: {
             /**
@@ -2526,6 +2923,24 @@ export interface components {
             module?: components["schemas"]["ModuleOverride"] | null;
         };
         /**
+         * PreviewLevel
+         * @description One regenerated preview's address.
+         */
+        PreviewLevel: {
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+        };
+        /**
+         * PreviewResult
+         * @description Which level previews the regeneration wrote, in survey order.
+         */
+        PreviewResult: {
+            /** Levels */
+            levels: components["schemas"]["PreviewLevel"][];
+        };
+        /**
          * ProjectListResponse
          * @description The home screen's data: probed recents plus the CLI's launch path.
          */
@@ -2574,6 +2989,62 @@ export interface components {
              *     }
              */
             sidecar: components["schemas"]["EditorSidecar"];
+        };
+        /**
+         * ProviderFieldStatus
+         * @description One configured field: its value and where that value came from.
+         */
+        ProviderFieldStatus: {
+            /** Value */
+            value?: string | null;
+            /** Source */
+            source?: ("env" | "session") | null;
+        };
+        /**
+         * ProviderSettingsRequest
+         * @description A set-or-clear request over the session settings.
+         *
+         *     Three-state per field, read off `model_fields_set`: an absent field is left
+         *     alone, an explicit `null` clears the session override (falling back to the
+         *     environment), and a value sets it.
+         */
+        ProviderSettingsRequest: {
+            /** Kind */
+            kind?: ("foundry" | "fixtures") | null;
+            /** Endpoint */
+            endpoint?: string | null;
+            /** Deployment */
+            deployment?: string | null;
+            /** Api Key */
+            api_key?: string | null;
+            /** Fixtures Dir */
+            fixtures_dir?: string | null;
+        };
+        /**
+         * ProviderStatus
+         * @description What `GET /api/provider` answers — presence and provenance, never a secret.
+         *
+         *     `api_key_present` and `api_key_source` are the whole truth this surface
+         *     tells about the key: the bytes never leave the process, and the type-level
+         *     suite pins that no field named `api_key` exists here at all.
+         */
+        ProviderStatus: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "foundry" | "fixtures";
+            endpoint: components["schemas"]["ProviderFieldStatus"];
+            deployment: components["schemas"]["ProviderFieldStatus"];
+            /** Api Key Present */
+            api_key_present: boolean;
+            /** Api Key Source */
+            api_key_source: ("env" | "session") | null;
+            /** Entra Available */
+            entra_available: boolean;
+            /** Configured */
+            configured: boolean;
+            fixtures_dir: components["schemas"]["ProviderFieldStatus"];
         };
         /**
          * PublishRequest
@@ -2909,6 +3380,23 @@ export interface components {
             address: string;
             /** Flag */
             flag: string;
+        };
+        /**
+         * RunConversionRequest
+         * @description Confirm-and-run: which stage to resume from, and any knob updates.
+         *
+         *     An absent `stage` resumes from the first incomplete stage in `run.json` —
+         *     survey, for a freshly estimated workdir.
+         */
+        RunConversionRequest: {
+            stage?: components["schemas"]["Stage"] | null;
+            /**
+             * Settings
+             * @default {}
+             */
+            settings: {
+                [key: string]: unknown;
+            };
         };
         /**
          * RunMeta
@@ -4496,6 +4984,284 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublishResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_provider_api_provider_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderStatus"];
+                };
+            };
+        };
+    };
+    post_provider_api_provider_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_conversion_api_conversions_get: {
+        parameters: {
+            query: {
+                workdir: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversionState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_conversion_api_conversions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConversionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversionState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_conversion_api_conversions__conversion_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversionState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_conversion_api_conversions__conversion_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunConversionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversionState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_conversion_api_conversions__conversion_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversionState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_conversion_previews_api_conversions__conversion_id__previews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_conversion_preview_api_conversions__conversion_id__previews__dungeon_id___level_number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversion_id: string;
+                dungeon_id: string;
+                level_number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

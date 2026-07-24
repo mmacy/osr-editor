@@ -27,11 +27,12 @@ from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from osrforge.contracts.run import Stage
 from osrlib.core.monsters import MonsterTemplate
 from osrlib.crawl.adventure import Adventure
 from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION, engine_version
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from osreditor.catalogs import (
     EncounterTableCatalogResponse,
@@ -45,10 +46,37 @@ from osreditor.catalogs import (
     treasure_type_catalog,
 )
 from osreditor.config import RecentEntry, load_config, record_recent, save_config
+from osreditor.conversions import (
+    ConversionKind,
+    ConversionRegistry,
+    ConversionSession,
+    ConversionState,
+    begin_run,
+    bind,
+    check_destination,
+    first_incomplete_stage,
+    needs_provider,
+    new_session_id,
+    open_session,
+    request_cancel,
+    require_run_meta,
+    require_runnable,
+    run_chain,
+    run_estimate,
+    settings_from,
+    spawn,
+    validate_settings_updates,
+    validate_stage,
+)
 from osreditor.documents import DocumentService, OpenProject, dump_adventure, forge_state_model, json_pointer
 from osreditor.errors import (
     ArtifactNotFoundError,
     CatalogMonsterNotFoundError,
+    ConversionDestinationExistsError,
+    ConversionDestinationInvalidError,
+    ConversionInProgressError,
+    ConversionNotFoundError,
+    ConversionStateInvalidError,
     DocumentPayloadInvalidError,
     ForgeOverrideInvalidError,
     ForgePageNotFoundError,
@@ -68,16 +96,26 @@ from osreditor.errors import (
     ProjectNotForgeError,
     ProjectNotFoundError,
     ProjectPathNotFoundError,
+    ProviderNotConfiguredError,
     PublishBlockedError,
     PublishDestinationExistsError,
     RedoStackEmptyError,
     StaleRevisionError,
     UndoStackEmptyError,
+    WorkdirOpenAsProjectError,
 )
+from osreditor.forge import build_provider, provider_status, render_workdir_previews
 from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
 from osreditor.ops import Diagnostics, ForgeState, OpBatch, OpBatchResult
 from osreditor.overrides import AnyOverrideEdit, apply_override_edits
-from osreditor.projects import create_native_project, detach_project, open_project, utc_now_iso
+from osreditor.projects import (
+    create_native_project,
+    detach_project,
+    detect_project_type,
+    open_project,
+    utc_now_iso,
+)
+from osreditor.providers import ProviderSessionStore, ProviderSettingsRequest, ProviderStatus, resolve_provider
 from osreditor.publish import PublishMode, PublishResult, check_osr_web_checkout, publish_adventure
 from osreditor.sidecar import AnySidecarPatch, EditorSidecar
 from osreditor.store import LocalProjectStore, atomic_write_bytes
@@ -85,6 +123,7 @@ from osreditor.store import LocalProjectStore, atomic_write_bytes
 __all__ = [
     "ApiError",
     "ApiErrorDetail",
+    "CreateConversionRequest",
     "CreateProjectRequest",
     "CurrentUser",
     "ExportRequest",
@@ -93,10 +132,12 @@ __all__ = [
     "ImporterListResponse",
     "ImporterPathRequest",
     "OpenProjectRequest",
+    "PreviewResult",
     "ProjectListResponse",
     "ProjectState",
     "PublishRequest",
     "RecentProject",
+    "RunConversionRequest",
     "SniffResult",
     "StatusResponse",
     "User",
@@ -279,7 +320,11 @@ class ForgeOverridesRequest(BaseModel):
 
 
 class ForgeRerunRequest(BaseModel):
-    """Assemble-stage rerun knobs — assembly-owned only in phase 5 (forge's guard is the backstop)."""
+    """Assemble-stage rerun knobs — assembly-owned only (forge's guard is the backstop).
+
+    Model stages have a home now, and it is the conversions API: a bound session
+    over the project's workdir, with progress and cancellation.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -296,6 +341,67 @@ class SidecarPatchRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     patches: tuple[AnySidecarPatch, ...] = Field(min_length=1)
+
+
+class CreateConversionRequest(BaseModel):
+    """A new conversion session: new-from-PDF, or a resume over an existing workdir.
+
+    `allow_existing` is the destination handshake's second half: the first
+    request over an existing workdir is refused with
+    `conversion_destination_exists`, the dialog confirms with copy naming what
+    the *estimate itself* would re-render, and the retry carries the flag.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: ConversionKind
+    workdir_path: str
+    pdf_path: str | None = None
+    settings: dict[str, object] = {}
+    allow_existing: bool = False
+
+    @field_validator("workdir_path", "pdf_path")
+    @classmethod
+    def _paths_must_be_absolute(cls, value: str | None) -> str | None:
+        if value is not None and not Path(value).is_absolute():
+            raise ValueError(f"path must be absolute, got {value!r}")
+        return value
+
+    @model_validator(mode="after")
+    def _pdf_kind_needs_a_source(self) -> CreateConversionRequest:
+        if self.kind == "pdf" and not self.pdf_path:
+            raise ValueError("a pdf conversion needs pdf_path")
+        return self
+
+
+class RunConversionRequest(BaseModel):
+    """Confirm-and-run: which stage to resume from, and any knob updates.
+
+    An absent `stage` resumes from the first incomplete stage in `run.json` —
+    survey, for a freshly estimated workdir.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    stage: Stage | None = None
+    settings: dict[str, object] = {}
+
+
+class PreviewLevel(BaseModel):
+    """One regenerated preview's address."""
+
+    model_config = ConfigDict(frozen=True)
+
+    dungeon_id: str
+    level_number: int
+
+
+class PreviewResult(BaseModel):
+    """Which level previews the regeneration wrote, in survey order."""
+
+    model_config = ConfigDict(frozen=True)
+
+    levels: tuple[PreviewLevel, ...]
 
 
 class RecentProject(BaseModel):
@@ -372,6 +478,34 @@ router = APIRouter()
 
 def _service(request: Request) -> DocumentService:
     return request.app.state.service
+
+
+def _conversions(request: Request) -> ConversionRegistry:
+    registry: ConversionRegistry = request.app.state.conversions
+    return registry
+
+
+def _provider_settings(request: Request) -> ProviderSessionStore:
+    store: ProviderSessionStore = request.app.state.provider_settings
+    return store
+
+
+def _effective_provider(request: Request) -> ProviderStatus:
+    return provider_status(resolve_provider(_provider_settings(request).settings))
+
+
+def _require_idle(request: Request, project: OpenProject) -> None:
+    """Refuse a project act while a conversion is running over its workdir.
+
+    Every route that mutates the document or touches workdir artifacts asks
+    this; sidecar patches deliberately do not, because annotation state never
+    contacts the workdir. The frontend renders the refusal as the panel's busy
+    state, never a toast loop.
+    """
+    if _conversions(request).active_for(project.path) is not None:
+        raise ConversionInProgressError(
+            f"a conversion is running over {project.path}; the pipeline panel shows its progress"
+        )
 
 
 def _project_state(project: OpenProject) -> ProjectState:
@@ -479,7 +613,14 @@ def open_project_by_path(request: Request, body: OpenProjectRequest, user: Curre
         The project's full state — the same project id for the same resolved
         path, however many tabs open it.
     """
-    project = open_project(_service(request), Path(body.path))
+    resolved = Path(body.path).resolve()
+    active = _conversions(request).active_for(resolved)
+    if active is not None and active.project_id is None:
+        # An open re-assembles, and that would race the running chain. A *bound*
+        # active session means the project is already open, and this open
+        # returns it from the registry without re-assembling — legal.
+        raise ConversionInProgressError(f"a conversion is running over {resolved}")
+    project = open_project(_service(request), resolved)
     _record_recent(project)
     return _project_state(project)
 
@@ -514,7 +655,9 @@ def post_ops(request: Request, project_id: str, batch: OpBatch, user: CurrentUse
         diagnostics.
     """
     service = _service(request)
-    return service.apply_batch(service.get(project_id), batch)
+    project = service.get(project_id)
+    _require_idle(request, project)
+    return service.apply_batch(project, batch)
 
 
 @router.post("/api/projects/{project_id}/undo")
@@ -530,7 +673,9 @@ def post_undo(request: Request, project_id: str, user: CurrentUser) -> OpBatchRe
         The result, carrying the whole-document delta.
     """
     service = _service(request)
-    return service.undo(service.get(project_id))
+    project = service.get(project_id)
+    _require_idle(request, project)
+    return service.undo(project)
 
 
 @router.post("/api/projects/{project_id}/redo")
@@ -546,7 +691,9 @@ def post_redo(request: Request, project_id: str, user: CurrentUser) -> OpBatchRe
         The result, carrying the whole-document delta.
     """
     service = _service(request)
-    return service.redo(service.get(project_id))
+    project = service.get(project_id)
+    _require_idle(request, project)
+    return service.redo(project)
 
 
 def _require_forge(project: OpenProject) -> None:
@@ -578,6 +725,7 @@ def post_forge_overrides(
     service = _service(request)
     project = service.get(project_id)
     _require_forge(project)
+    _require_idle(request, project)
     with project.lock:
         forge = project.forge
         assert forge is not None
@@ -601,12 +749,18 @@ def post_forge_check(request: Request, project_id: str, user: CurrentUser) -> Op
     service = _service(request)
     project = service.get(project_id)
     _require_forge(project)
+    _require_idle(request, project)
     return service.apply_check(project)
 
 
 @router.post("/api/projects/{project_id}/forge/rerun")
 def post_forge_rerun(request: Request, project_id: str, body: ForgeRerunRequest, user: CurrentUser) -> OpBatchResult:
     """Re-run the assemble stage with optional assembly-owned knob updates.
+
+    The correction loop's fast path: assembly is pure by forge's contract, so it
+    needs no worker thread and no session. Every other stage runs through the
+    conversions API instead, which is why a bound session refuses
+    `stage=assemble` — one act, one path.
 
     Args:
         request: The current request (carries the app state).
@@ -620,6 +774,7 @@ def post_forge_rerun(request: Request, project_id: str, body: ForgeRerunRequest,
     service = _service(request)
     project = service.get(project_id)
     _require_forge(project)
+    _require_idle(request, project)
     try:
         return service.apply_rerun(project, body.settings)
     except ValidationError as error:
@@ -645,6 +800,7 @@ def post_forge_detach(request: Request, project_id: str, body: DetachRequest, us
     service = _service(request)
     project = service.get(project_id)
     _require_forge(project)
+    _require_idle(request, project)
     detached = detach_project(service, project, Path(body.path))
     _record_recent(detached)
     return _project_state(detached)
@@ -751,6 +907,7 @@ def export_project(request: Request, project_id: str, body: ExportRequest, user:
     """
     service = _service(request)
     project = service.get(project_id)
+    _require_idle(request, project)
     with project.lock:
         data = _document_bytes(service, project)
     atomic_write_bytes(Path(body.path), data)
@@ -793,6 +950,7 @@ def publish_project(request: Request, project_id: str, body: PublishRequest, use
     """
     service = _service(request)
     project = service.get(project_id)
+    _require_idle(request, project)
     config = load_config()
     checkout_value = body.checkout_path or config.osr_web_checkout
     if checkout_value is None:
@@ -818,6 +976,273 @@ def publish_project(request: Request, project_id: str, body: PublishRequest, use
         mode=body.mode,
         overwrite=body.overwrite,
     )
+
+
+@router.get("/api/provider")
+def get_provider(request: Request, user: CurrentUser) -> ProviderStatus:
+    """Report the effective provider configuration — presence and provenance, never a secret.
+
+    Args:
+        request: The current request (carries the app state).
+        user: The authenticated caller.
+
+    Returns:
+        The merged session-over-environment status.
+    """
+    return _effective_provider(request)
+
+
+@router.post("/api/provider")
+def post_provider(request: Request, body: ProviderSettingsRequest, user: CurrentUser) -> ProviderStatus:
+    """Set or clear session provider settings, answering the new status.
+
+    Session values live in memory until the editor closes; the
+    `OSRFORGE_FOUNDRY_*` environment variables are the durable configuration.
+    Nothing here reaches disk — the config file's schema does not grow.
+
+    Args:
+        request: The current request (carries the app state).
+        body: The fields to set (a value) or clear (an explicit `null`);
+            unmentioned fields are left alone.
+        user: The authenticated caller.
+
+    Returns:
+        The new status.
+    """
+    _provider_settings(request).update(body)
+    return _effective_provider(request)
+
+
+@router.post("/api/conversions", status_code=201)
+def create_conversion(request: Request, body: CreateConversionRequest, user: CurrentUser) -> ConversionState:
+    """Start a new-from-PDF conversion, or attach a session to an existing workdir.
+
+    The pdf kind spawns its worker immediately — the estimate really
+    preprocesses, rendering every page, which is far too slow for a request
+    thread — and lands in `estimating`. The workdir kind starts nothing:
+    creating it for a path that already holds a session **returns that
+    session**, the idempotency that keeps one workdir on one session however
+    many surfaces ask, and it binds to the open project at that path when there
+    is one.
+
+    Args:
+        request: The current request (carries the app state).
+        body: The kind, the destination workdir, the source PDF (pdf kind),
+            optional knobs, and the existing-workdir handshake flag.
+        user: The authenticated caller.
+
+    Returns:
+        The session's state.
+    """
+    service = _service(request)
+    registry = _conversions(request)
+    workdir = Path(body.workdir_path).resolve()
+    project = service.open_at(workdir)
+    if body.kind == "workdir":
+        if detect_project_type(service.store, str(workdir)) != "forge":
+            raise ForgeWorkdirInvalidError(f"{workdir} is not a forge workdir: it has no run.json")
+        return open_session(registry, workdir, project.id if project is not None else None).snapshot()
+    if project is not None:
+        raise WorkdirOpenAsProjectError(f"{workdir} is open as a project")
+    if registry.active_for(workdir) is not None:
+        raise ConversionInProgressError(f"a conversion is already running over {workdir}")
+    check_destination(service.store, workdir, body.allow_existing)
+    assert body.pdf_path is not None  # the model validator guarantees it
+    try:
+        settings = settings_from(body.settings)
+    except ValidationError as error:
+        raise RequestValidationError(error.errors()) from error
+    pdf_path = Path(body.pdf_path).resolve()
+    # The exclusivity test above answers first, for the honest error ordering;
+    # this one is the atomic backstop, so two submitted dialogs can never spawn
+    # two workers rendering into one directory.
+    session = registry.register_new(
+        lambda: ConversionSession(
+            session_id=new_session_id(),
+            kind="pdf",
+            workdir=workdir,
+            run=None,
+            pdf_path=pdf_path,
+            settings=settings,
+        ),
+        workdir,
+    )
+    spawn(run_estimate, session)
+    return session.snapshot()
+
+
+@router.get("/api/conversions")
+def find_conversion(request: Request, workdir: str, user: CurrentUser) -> ConversionState:
+    """Look up a workdir's conversion session, in whatever state it is in.
+
+    Recovery is a lookup, not a guess: every surface that hits a busy conflict
+    comes here and then renders the live session — a reload during the
+    estimate, a second tab, the pipeline panel re-attaching on mount. After a
+    server restart this 404s, and the workdir's `run.json` is the durable truth
+    the open flow already handles.
+
+    Args:
+        request: The current request (carries the app state).
+        workdir: The workdir path to look up.
+        user: The authenticated caller.
+
+    Returns:
+        The session's state.
+    """
+    session = _conversions(request).find(Path(workdir).resolve())
+    if session is None:
+        raise ConversionNotFoundError(f"no conversion for workdir {workdir}")
+    return session.snapshot()
+
+
+@router.get("/api/conversions/{conversion_id}")
+def get_conversion(request: Request, conversion_id: str, user: CurrentUser) -> ConversionState:
+    """Report one conversion session's state — the progress view's poll.
+
+    Args:
+        request: The current request (carries the app state).
+        conversion_id: The server-minted session id.
+        user: The authenticated caller.
+
+    Returns:
+        The session's state.
+    """
+    return _conversions(request).get(conversion_id).snapshot()
+
+
+@router.post("/api/conversions/{conversion_id}/run")
+def run_conversion(
+    request: Request, conversion_id: str, body: RunConversionRequest, user: CurrentUser
+) -> ConversionState:
+    """Resume the chain from a stage — the confirm-and-run, and every later rerun.
+
+    Everything rejectable rejects before the thread spawns: the stage against
+    forge's `RUNNABLE_STAGES`, the knobs against `ConversionSettings` and the
+    knob→owning-stage guard, and the provider — built here, exactly when the
+    resumed chain contains a model stage. What remains inside the worker can
+    only fail as session state.
+
+    Args:
+        request: The current request (carries the app state).
+        conversion_id: The server-minted session id.
+        body: The stage to resume from (absent means the first incomplete one)
+            and any knob updates.
+        user: The authenticated caller.
+
+    Returns:
+        The session's state, now `running`.
+    """
+    service = _service(request)
+    session = _conversions(request).get(conversion_id)
+    require_runnable(session)
+    # Re-resolve the binding every run: one workdir keeps one session for the
+    # process lifetime, but the project at its path comes and goes — a session
+    # that ran unbound would adopt nothing and leave the open project showing a
+    # document the workdir no longer holds.
+    project = service.open_at(session.workdir)
+    bind(session, project.id if project is not None else None)
+    run = require_run_meta(session)
+    stage = validate_stage(body.stage) if body.stage is not None else first_incomplete_stage(run)
+    if session.project_id is not None and stage is Stage.ASSEMBLE:
+        raise ConversionStateInvalidError(
+            "re-assembly for an open project is the synchronous rerun route "
+            "(POST /api/projects/{id}/forge/rerun) — one act, one path"
+        )
+    try:
+        validate_settings_updates(run, stage, body.settings)
+    except ValidationError as error:
+        raise RequestValidationError(error.errors()) from error
+    provider = build_provider(resolve_provider(_provider_settings(request).settings)) if needs_provider(stage) else None
+    begin_run(session)
+    spawn(run_chain, session, service, stage, provider, body.settings or None)
+    return session.snapshot()
+
+
+@router.post("/api/conversions/{conversion_id}/cancel")
+def cancel_conversion(request: Request, conversion_id: str, user: CurrentUser) -> ConversionState:
+    """Ask a conversion to stop at the next stage boundary.
+
+    Cooperative by construction: the flag is read on `running` events only, so
+    the stage in flight always finishes and `run.json` never records a stage
+    the chain abandoned mid-write. A cancel during the estimate is read when
+    preprocess returns, keeping the warm workdir; an idle session cancels
+    immediately.
+
+    Args:
+        request: The current request (carries the app state).
+        conversion_id: The server-minted session id.
+        user: The authenticated caller.
+
+    Returns:
+        The session's state.
+    """
+    session = _conversions(request).get(conversion_id)
+    request_cancel(session)
+    return session.snapshot()
+
+
+@router.post("/api/conversions/{conversion_id}/previews")
+def post_conversion_previews(request: Request, conversion_id: str, user: CurrentUser) -> PreviewResult:
+    """Regenerate the SVG previews from the survey and content caches alone.
+
+    The one place this control is actionable: a workdir that cannot assemble
+    yet, where eyeballing geometry before paying for the remaining model stages
+    is the whole point. For *open* projects the phase 5 posture stands — every
+    commit re-assembles and previews follow.
+
+    Args:
+        request: The current request (carries the app state).
+        conversion_id: The server-minted session id.
+        user: The authenticated caller.
+
+    Returns:
+        The regenerated levels, in survey order.
+    """
+    session = _conversions(request).get(conversion_id)
+    if session.active:
+        raise ConversionStateInvalidError(f"conversion {conversion_id} is running; previews follow its assembly")
+    run = require_run_meta(session)
+    for stage in (Stage.SURVEY, Stage.CONTENT):
+        status = run.stages.get(stage)
+        state = status.status if status is not None else "pending"
+        if state != "completed":
+            raise ConversionStateInvalidError(
+                f"previews are rendered from the survey and content caches; the {stage.value} stage is {state}"
+            )
+    paths = render_workdir_previews(session.workdir)
+    return PreviewResult(levels=tuple(_preview_level(path.name) for path in paths))
+
+
+def _preview_level(name: str) -> PreviewLevel:
+    """Split a `previews/<dungeon>.<level>.svg` filename; the canonical slug alphabet has no dots."""
+    dungeon_id, level, _ = name.rsplit(".", 2)
+    return PreviewLevel(dungeon_id=dungeon_id, level_number=int(level))
+
+
+@router.get("/api/conversions/{conversion_id}/previews/{dungeon_id}/{level_number}")
+def get_conversion_preview(
+    request: Request, conversion_id: str, dungeon_id: str, level_number: int, user: CurrentUser
+) -> Response:
+    """Serve one regenerated level preview from the conversion's workdir.
+
+    Args:
+        request: The current request (carries the app state).
+        conversion_id: The server-minted session id.
+        dungeon_id: The dungeon id (forge's canonical slug).
+        level_number: The 1-based level number.
+        user: The authenticated caller.
+
+    Returns:
+        The SVG bytes.
+    """
+    session = _conversions(request).get(conversion_id)
+    if not dungeon_id or "/" in dungeon_id or "\\" in dungeon_id or dungeon_id in (".", ".."):
+        raise ForgePageNotFoundError(f"the workdir has no preview for dungeon {dungeon_id!r}")
+    try:
+        data = _service(request).store.read_artifact(str(session.workdir), f"previews/{dungeon_id}.{level_number}.svg")
+    except ArtifactNotFoundError as error:
+        raise ForgePageNotFoundError(f"the workdir has no preview for {dungeon_id} level {level_number}") from error
+    return Response(content=data, media_type=_PREVIEW_MEDIA_TYPE)
 
 
 @router.get("/api/catalogs/monsters")
@@ -1007,6 +1432,16 @@ def _details_publish_blocked(error: Exception) -> dict[str, object] | None:
     return {"findings": error.findings}
 
 
+def _details_destination_exists(error: Exception) -> dict[str, object] | None:
+    assert isinstance(error, ConversionDestinationExistsError)
+    return {"completed": error.completed}
+
+
+def _details_provider_not_configured(error: Exception) -> dict[str, object] | None:
+    assert isinstance(error, ProviderNotConfiguredError)
+    return {"missing": error.missing}
+
+
 _UPGRADE_REMEDY = "This document was written by a newer osrlib. Upgrade osrlib, then reopen it."
 
 # Every typed error a route can raise, mapped to the envelope:
@@ -1032,8 +1467,40 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
     ForgeWorkdirIncompleteError: (
         422,
         "forge_workdir_incomplete",
-        "Complete the conversion from the CLI (osrforge rerun <stage>), then reopen.",
+        "Open the workdir to resume the conversion in the pipeline view.",
         _details_none,
+    ),
+    ConversionNotFoundError: (
+        404,
+        "unknown_conversion",
+        "The editor restarted; reopen the workdir to resume the conversion.",
+        _details_none,
+    ),
+    ConversionDestinationExistsError: (
+        409,
+        "conversion_destination_exists",
+        "Choose another destination, or convert again allowing the existing workdir to be superseded.",
+        _details_destination_exists,
+    ),
+    ConversionDestinationInvalidError: (422, "conversion_destination_invalid", None, _details_none),
+    ConversionStateInvalidError: (409, "conversion_state_invalid", None, _details_none),
+    ConversionInProgressError: (
+        409,
+        "conversion_in_progress",
+        "Watch or cancel the running conversion, then try again.",
+        _details_none,
+    ),
+    WorkdirOpenAsProjectError: (
+        409,
+        "workdir_open_as_project",
+        "Re-run stages from the project's pipeline panel; it covers every stage, preprocess included.",
+        _details_none,
+    ),
+    ProviderNotConfiguredError: (
+        422,
+        "provider_not_configured",
+        "Set the OSRFORGE_FOUNDRY_* environment variables, or fill the fields in the provider settings.",
+        _details_provider_not_configured,
     ),
     ForgeOverrideInvalidError: (
         422,
@@ -1142,6 +1609,11 @@ def create_app(open_at_launch: Path | None = None) -> FastAPI:
     # factory, and tests must not leak open projects across app instances.
     app.state.service = DocumentService(LocalProjectStore())
     app.state.open_at_launch = str(open_at_launch) if open_at_launch is not None else None
+    # Conversion sessions and provider overrides live beside the project
+    # registry, for the same reason: in-memory, per-app, never leaked between
+    # test app instances — and, for the provider, never written to disk at all.
+    app.state.conversions = ConversionRegistry()
+    app.state.provider_settings = ProviderSessionStore()
     # The importer registry is built once per app: discovery walks installed
     # entry points, which cannot change under a running process.
     app.state.importers = discover_importers()
