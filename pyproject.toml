@@ -85,6 +85,9 @@ select = ["E", "F", "W", "I", "D", "UP", "B", "SIM", "RUF"]
 ignore = [
     "D105", # missing docstring in magic method — __str__ and friends are self-evident
 ]
+# The multiplication sign is intentional module notation (e.g. "5 × acolyte"),
+# matching the frontend's own count rendering; it is not a confusable typo.
+allowed-confusables = ["×"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

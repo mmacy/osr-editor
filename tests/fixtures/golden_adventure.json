@@ -1,7 +1,7 @@
 {
   "kind": "adventure",
   "schema_version": 2,
-  "engine_version": "1.2.0",
+  "engine_version": "1.2.1",
   "payload": {
     "name": "The mill on the moor",
     "description": "A ruined mill hides the entrance to the caves its miller dug too deep.",
@@ -73,7 +73,8 @@
                   ],
                   "alignment": null,
                   "aware": false,
-                  "stance": null
+                  "stance": null,
+                  "hoard": true
                 },
                 "features": [],
                 "trap": null,

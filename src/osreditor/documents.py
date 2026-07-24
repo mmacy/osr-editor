@@ -60,6 +60,17 @@ from osrlib.versioning import check_document, stamp_document
 from pydantic import ValidationError
 
 from osreditor.addresses import area_address, cell_address, dungeon_address, level_address, monster_address
+from osreditor.aids import (
+    AidsStockRequest,
+    AidsStockResponse,
+    StockRoll,
+    derive_or_restore_stream,
+    effective_catalog,
+    mint_master_seed,
+    roll_area,
+    snapshot_stream,
+    stock_targets,
+)
 from osreditor.diagnostics import compute_diagnostics, forge_findings
 from osreditor.errors import (
     OpInvariantError,
@@ -108,7 +119,13 @@ from osreditor.ops import (
     SubtreeChange,
 )
 from osreditor.overrides import ForgeTranslationState, TranslationResult, ensure_forge_supported, translate_batch
-from osreditor.sidecar import SIDECAR_ARTIFACT, AnySidecarPatch, EditorSidecar, apply_sidecar_patches
+from osreditor.sidecar import (
+    SIDECAR_ARTIFACT,
+    AnySidecarPatch,
+    EditorSidecar,
+    StockingState,
+    apply_sidecar_patches,
+)
 from osreditor.store import ProjectStore
 
 __all__ = [
@@ -301,9 +318,11 @@ class LoadedProject:
 class HistoryEntry:
     """One undo-stack step.
 
-    Native entries carry the prior document plus the note key-remaps the
+    Native entries carry the prior document plus the address key-remaps the
     commit's re-keying ops performed (undo replays them inversely, redo
-    forward, on the live notes map — note *content* never rides the stack).
+    forward, on the live sidecar's addressed maps — the per-entity `notes` and
+    the per-area stocking `streams` — in lockstep, so the two maps can never
+    drift; the addressed *content* never rides the stack, only the keys).
     Forge entries carry the snapshot pair instead: the `overrides.yaml` bytes
     and the `auto_reasons` tuple together — the document is derived state, and
     `auto_reasons` is derived state of the same commit, so one is never
@@ -311,7 +330,7 @@ class HistoryEntry:
     """
 
     document: Adventure | None = None
-    note_remap: tuple[tuple[str, str], ...] = ()
+    key_remap: tuple[tuple[str, str], ...] = ()
     forge_snapshot: tuple[bytes, tuple[str, ...]] | None = None
 
 
@@ -508,40 +527,112 @@ class DocumentService:
                 workdir is unchanged (forge fails before any artifact write).
         """
         with project.lock:
-            if batch.revision != project.revision:
+            return self._apply_batch_locked(project, batch)
+
+    def _apply_batch_locked(self, project: OpenProject, batch: OpBatch) -> OpBatchResult:
+        """The body of `apply_batch`. Caller holds the lock.
+
+        Extracted so a compound act that both mutates its own state and applies
+        an ordinary batch — the stocking roll — can hold the lock across the
+        whole gesture (the project lock is non-reentrant), turning one roll and
+        its commit into a single atomic step with the standard 409 discipline.
+        """
+        if batch.revision != project.revision:
+            raise StaleRevisionError(
+                f"batch was computed against revision {batch.revision}, but the current revision is {project.revision}",
+                current_revision=project.revision,
+            )
+        if project.forge is not None:
+            return self._apply_forge_batch(project, batch)
+        candidate = project.adventure
+        touched: list[str] = []
+        remap_rules: list[tuple[str, str]] = []
+        for op in batch.ops:
+            candidate, pointer = _apply_op(candidate, op)
+            touched.append(pointer)
+            remap_rules.extend(_remap_rules(op))
+        try:
+            validated = Adventure.model_validate(candidate.model_dump())
+        except ValidationError as error:
+            raise OpRejectedError(
+                "the batch would produce an invalid document and was rejected whole",
+                errors=[{"path": json_pointer(detail["loc"]), "message": detail["msg"]} for detail in error.errors()],
+            ) from error
+        previous = project.adventure
+        self._commit(project, validated)
+        applied_remap = self._remap_sidecar_keys(project, remap_rules)
+        project.undo_stack.append(HistoryEntry(document=previous, key_remap=applied_remap))
+        if len(project.undo_stack) > MAX_UNDO_DEPTH:
+            project.undo_stack.pop(0)
+        project.redo_stack.clear()
+        payload = validated.model_dump(mode="json")
+        delta = _coalesce_delta(payload, touched)
+        return self._result(project, delta)
+
+    def apply_stock(self, project: OpenProject, request: AidsStockRequest) -> AidsStockResponse:
+        """Roll SRD stocking over a target and apply it as one atomic batch.
+
+        One lock acquisition around the whole act: the stale-revision refusal
+        comes before any die is cast (a mechanical refusal must never consume
+        seed state, and a split critical section would let a concurrent commit
+        409 *after* the dice rolled), then per target the area's stream is
+        derived-or-restored, `stock_area` rolls, and its ops accumulate into one
+        `OpBatch` — one undo step for a sweep. The advanced stream states and any
+        newly minted master seed persist in the same critical section; stocking
+        never mints twice. Streams only ever advance — undo never rewinds them.
+
+        In forge-backed projects the batch rides `_apply_batch_locked` →
+        `_apply_forge_batch` unchanged: every emitted content op translates.
+
+        Args:
+            project: The open project.
+            request: The dungeon, level, and single area (or `None` for a sweep),
+                plus the revision the roll was computed against.
+
+        Returns:
+            The per-target report and the ordinary batch result (`None` when no
+            ops rolled — no revision bump).
+
+        Raises:
+            StaleRevisionError: If `request.revision` is not current.
+            OpTargetNotFoundError: If the dungeon, level, or named area is absent.
+            AidTargetStockedError: If a single-room target already holds content.
+        """
+        with project.lock:
+            if request.revision != project.revision:
                 raise StaleRevisionError(
-                    f"batch was computed against revision {batch.revision}, "
+                    f"stocking was computed against revision {request.revision}, "
                     f"but the current revision is {project.revision}",
                     current_revision=project.revision,
                 )
-            if project.forge is not None:
-                return self._apply_forge_batch(project, batch)
-            candidate = project.adventure
-            touched: list[str] = []
-            remap_rules: list[tuple[str, str]] = []
-            for op in batch.ops:
-                candidate, pointer = _apply_op(candidate, op)
-                touched.append(pointer)
-                remap_rules.extend(_note_remap_rules(op))
-            try:
-                validated = Adventure.model_validate(candidate.model_dump())
-            except ValidationError as error:
-                raise OpRejectedError(
-                    "the batch would produce an invalid document and was rejected whole",
-                    errors=[
-                        {"path": json_pointer(detail["loc"]), "message": detail["msg"]} for detail in error.errors()
-                    ],
-                ) from error
-            previous = project.adventure
-            self._commit(project, validated)
-            applied_remap = self._remap_notes(project, remap_rules)
-            project.undo_stack.append(HistoryEntry(document=previous, note_remap=applied_remap))
-            if len(project.undo_stack) > MAX_UNDO_DEPTH:
-                project.undo_stack.pop(0)
-            project.redo_stack.clear()
-            payload = validated.model_dump(mode="json")
-            delta = _coalesce_delta(payload, touched)
-            return self._result(project, delta)
+            adventure = project.adventure
+            dungeon_index, level_index = _resolve_level(adventure, request.dungeon_id, request.level_number)
+            level = adventure.dungeons[dungeon_index].levels[level_index]
+            targets = stock_targets(level, request.area_id)
+            if not targets:
+                return AidsStockResponse(rolls=(), result=None)
+            catalog = effective_catalog(adventure)
+            table = level.wandering.table
+            stocking = project.sidecar.stocking
+            master_seed = stocking.master_seed or mint_master_seed()
+            streams = dict(stocking.streams)
+            ops: list[AnyEditOp] = []
+            rolls: list[StockRoll] = []
+            for area in targets:
+                address = area_address(request.dungeon_id, request.level_number, area.id)
+                stream = derive_or_restore_stream(master_seed, address, streams.get(address))
+                outcome = roll_area(request.dungeon_id, request.level_number, area, catalog, stream, table)
+                streams[address] = snapshot_stream(stream)
+                ops.extend(outcome.ops)
+                rolls.append(outcome.roll)
+            project.sidecar = project.sidecar.model_copy(
+                update={"stocking": StockingState(master_seed=master_seed, streams=streams)}
+            )
+            result = (
+                self._apply_batch_locked(project, OpBatch(revision=project.revision, ops=tuple(ops))) if ops else None
+            )
+            self.persist_sidecar(project)
+            return AidsStockResponse(rolls=tuple(rolls), result=result)
 
     def _apply_forge_batch(self, project: OpenProject, batch: OpBatch) -> OpBatchResult:
         """The forge half of `apply_batch`: apply, validate, translate, commit. Caller holds the lock."""
@@ -683,9 +774,9 @@ class DocumentService:
             assert entry.document is not None
             previous = project.adventure
             self._commit(project, entry.document)
-            self._remap_notes(project, [(new, old) for old, new in reversed(entry.note_remap)])
+            self._remap_sidecar_keys(project, [(new, old) for old, new in reversed(entry.key_remap)])
             project.undo_stack.pop()
-            project.redo_stack.append(HistoryEntry(document=previous, note_remap=entry.note_remap))
+            project.redo_stack.append(HistoryEntry(document=previous, key_remap=entry.key_remap))
             return self._result(project, _whole_document_delta(project.adventure))
 
     def redo(self, project: OpenProject) -> OpBatchResult:
@@ -713,9 +804,9 @@ class DocumentService:
             assert entry.document is not None
             previous = project.adventure
             self._commit(project, entry.document)
-            self._remap_notes(project, list(entry.note_remap))
+            self._remap_sidecar_keys(project, list(entry.key_remap))
             project.redo_stack.pop()
-            project.undo_stack.append(HistoryEntry(document=previous, note_remap=entry.note_remap))
+            project.undo_stack.append(HistoryEntry(document=previous, key_remap=entry.key_remap))
             return self._result(project, _whole_document_delta(project.adventure))
 
     def apply_check(self, project: OpenProject) -> OpBatchResult:
@@ -801,30 +892,42 @@ class DocumentService:
         self._adopt_assembly(project, result.adventure, result.report)
         forge.overrides = read_overrides_value(forge.workdir)
 
-    def _remap_notes(self, project: OpenProject, rules: Sequence[tuple[str, str]]) -> tuple[tuple[str, str], ...]:
-        """Apply note key-remap rules to the live notes map, persisting when anything moved.
+    def _remap_sidecar_keys(
+        self, project: OpenProject, rules: Sequence[tuple[str, str]]
+    ) -> tuple[tuple[str, str], ...]:
+        """Apply address-prefix remap rules to the sidecar's addressed maps in lockstep.
 
-        Each rule is an address-prefix pair; a note key matches when it equals
-        the old prefix or continues it with a `/` segment. Returns the actual
-        `(old key, new key)` pairs applied — the entry undo replays. A rule
-        landing on a key where a dormant note sits overwrites it: the live
-        entity's note wins, pinned as acceptable.
+        The two maps keyed by the diagnostics address grammar — per-entity
+        `notes` and per-area stocking `streams` — move together under the same
+        rules, so they can never drift. Each rule is an address-prefix pair; a
+        key matches when it equals the old prefix or continues it with a `/`
+        segment. Returns the actual `(old key, new key)` pairs applied across
+        the union of both maps — the entry undo replays inversely. A rule
+        landing on a key where a dormant entry sits overwrites it: the live
+        entity's entry wins, an acceptable outcome. Stream *state* never moves —
+        only its key; a re-keyed stream keeps its advanced snapshot.
         """
-        if not rules or not project.sidecar.notes:
-            return ()
         notes = dict(project.sidecar.notes)
+        streams = dict(project.sidecar.stocking.streams)
+        if not rules or (not notes and not streams):
+            return ()
         applied: list[tuple[str, str]] = []
         for old_prefix, new_prefix in rules:
             moved: dict[str, str] = {}
-            for key in list(notes):
-                if key == old_prefix or key.startswith(f"{old_prefix}/"):
+            for key in (*notes, *streams):
+                if (key == old_prefix or key.startswith(f"{old_prefix}/")) and key not in moved:
                     moved[key] = f"{new_prefix}{key[len(old_prefix) :]}"
             for old_key, new_key in moved.items():
-                notes[new_key] = notes.pop(old_key)
+                if old_key in notes:
+                    notes[new_key] = notes.pop(old_key)
+                if old_key in streams:
+                    streams[new_key] = streams.pop(old_key)
                 applied.append((old_key, new_key))
         if not applied:
             return ()
-        project.sidecar = project.sidecar.model_copy(update={"notes": notes})
+        project.sidecar = project.sidecar.model_copy(
+            update={"notes": notes, "stocking": project.sidecar.stocking.model_copy(update={"streams": streams})}
+        )
         self.persist_sidecar(project)
         return tuple(applied)
 
@@ -917,8 +1020,8 @@ def _snapshot_pair(entry: HistoryEntry) -> tuple[bytes, tuple[str, ...]]:
     return entry.forge_snapshot
 
 
-def _note_remap_rules(op: AnyEditOp) -> list[tuple[str, str]]:
-    """The address-prefix remaps a re-keying op implies for the notes map.
+def _remap_rules(op: AnyEditOp) -> list[tuple[str, str]]:
+    """The address-prefix remaps a re-keying op implies for the sidecar's addressed maps.
 
     The four re-keying ops are all native-mode ops (forge blocks every one),
     so the cascade never coincides with a forge commit.

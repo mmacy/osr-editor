@@ -1,7 +1,7 @@
 {
   "kind": "adventure",
   "schema_version": 2,
-  "engine_version": "1.2.0",
+  "engine_version": "1.2.1",
   "payload": {
     "name": "The Mill on the Moor",
     "description": "A ruined mill above a wind-scoured hamlet hides the caves its miller dug, died in, and never left.",
@@ -115,7 +115,8 @@
                   ],
                   "alignment": "chaotic",
                   "aware": true,
-                  "stance": "hostile"
+                  "stance": "hostile",
+                  "hoard": true
                 },
                 "features": [],
                 "trap": null,
@@ -366,7 +367,8 @@
                   ],
                   "alignment": null,
                   "aware": false,
-                  "stance": null
+                  "stance": null,
+                  "hoard": true
                 },
                 "features": [],
                 "trap": null,

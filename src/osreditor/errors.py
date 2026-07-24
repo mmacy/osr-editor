@@ -7,6 +7,7 @@ their members under [`OsrEditorError`][osreditor.errors.OsrEditorError].
 """
 
 __all__ = [
+    "AidTargetStockedError",
     "ArtifactNotFoundError",
     "CatalogMonsterNotFoundError",
     "ConversionCancelledError",
@@ -36,6 +37,7 @@ __all__ = [
     "ProjectNotFoundError",
     "ProjectPathNotFoundError",
     "ProviderNotConfiguredError",
+    "ProviderRequestFailedError",
     "PublishBlockedError",
     "PublishDestinationExistsError",
     "RedoStackEmptyError",
@@ -47,6 +49,25 @@ __all__ = [
 
 class OsrEditorError(Exception):
     """Base class for all osr-editor exceptions."""
+
+
+class AidTargetStockedError(OsrEditorError):
+    """A single-room stocking roll named an area that already holds content.
+
+    Stocking fills blank rooms; a stocked area is refused so a roll never
+    silently overwrites authored content. The remedy is to undo or clear the
+    room first, and the frontend never offers the roll on a stocked area — but
+    the typed route still refuses it.
+    """
+
+
+class ProviderRequestFailedError(OsrEditorError):
+    """A synchronous provider call (the prose assistant) failed upstream.
+
+    Carries forge's own message verbatim — a `ProviderError` or
+    `SchemaValidationError` from the generate call is a gateway failure on a
+    synchronous route, distinct from an unconfigured provider.
+    """
 
 
 class ArtifactNotFoundError(OsrEditorError):

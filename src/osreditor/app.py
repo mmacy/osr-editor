@@ -34,6 +34,7 @@ from osrlib.errors import ContentValidationError, SaveVersionError
 from osrlib.versioning import SCHEMA_VERSION, engine_version
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from osreditor.aids import AidsStockRequest, AidsStockResponse
 from osreditor.catalogs import (
     EncounterTableCatalogResponse,
     EquipmentCatalogResponse,
@@ -70,6 +71,7 @@ from osreditor.conversions import (
 )
 from osreditor.documents import DocumentService, OpenProject, dump_adventure, forge_state_model, json_pointer
 from osreditor.errors import (
+    AidTargetStockedError,
     ArtifactNotFoundError,
     CatalogMonsterNotFoundError,
     ConversionDestinationExistsError,
@@ -97,6 +99,7 @@ from osreditor.errors import (
     ProjectNotFoundError,
     ProjectPathNotFoundError,
     ProviderNotConfiguredError,
+    ProviderRequestFailedError,
     PublishBlockedError,
     PublishDestinationExistsError,
     RedoStackEmptyError,
@@ -884,6 +887,34 @@ def post_sidecar_patch(
     return service.apply_sidecar_patch(service.get(project_id), body.patches)
 
 
+@router.post("/api/projects/{project_id}/aids/stock")
+def post_aids_stock(
+    request: Request, project_id: str, body: AidsStockRequest, user: CurrentUser
+) -> AidsStockResponse:
+    """Roll SRD stocking over a single blank room or a level's unstocked areas.
+
+    Results apply as one ordinary op batch — one undo step for a sweep — so the
+    store consumes `result` exactly like an `/ops` response. Reproducible from
+    the sidecar's seeded streams; re-rolls advance them order-independently and
+    undo never rewinds them.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The dungeon, level, and single area (or `None` for a sweep), plus
+            the revision the roll was computed against.
+        user: The authenticated caller.
+
+    Returns:
+        The per-target report and the ordinary batch result (`None` when no ops
+        rolled).
+    """
+    service = _service(request)
+    project = service.get(project_id)
+    _require_idle(request, project)
+    return service.apply_stock(project, body)
+
+
 @router.post("/api/projects/{project_id}/export")
 def export_project(request: Request, project_id: str, body: ExportRequest, user: CurrentUser) -> ExportResult:
     """Write the current document's stamped bytes to a user-chosen path.
@@ -1523,6 +1554,13 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
         "The document changed in another tab; the editor resyncs automatically.",
         _details_stale_revision,
     ),
+    AidTargetStockedError: (
+        409,
+        "aid_target_stocked",
+        "Undo or clear the room, then roll stocking again.",
+        _details_none,
+    ),
+    ProviderRequestFailedError: (502, "provider_request_failed", None, _details_none),
     UndoStackEmptyError: (409, "nothing_to_undo", None, _details_none),
     RedoStackEmptyError: (409, "nothing_to_redo", None, _details_none),
     OpRejectedError: (422, "op_rejected", None, _details_op_rejected),
