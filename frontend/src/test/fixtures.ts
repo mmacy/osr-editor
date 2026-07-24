@@ -73,6 +73,7 @@ export function makeProjectState(overrides: Partial<ProjectState> = {}): Project
       notes: {},
       review: [],
       auto_reasons: [],
+      stocking: { master_seed: null, streams: {} },
     },
     ...overrides,
   }

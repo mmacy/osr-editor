@@ -15,6 +15,7 @@ const ENCOUNTER: KeyedEncounter = {
   alignment: null,
   aware: false,
   stance: null,
+  hoard: true,
 }
 
 const ROOM_TRAP: TrapSpec = {

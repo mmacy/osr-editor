@@ -113,6 +113,7 @@ describe('monsterReferenceCount', () => {
           alignment: null,
           aware: false,
           stance: null,
+          hoard: true,
         },
         features: [],
         trap: null,

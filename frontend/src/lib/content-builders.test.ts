@@ -79,13 +79,13 @@ describe('encounter builders patch only their own field', () => {
         dungeon_id: 'dungeon-1',
         level_number: 1,
         area_id: '1',
-        encounter: { monsters: [LINE], alignment: null, aware: false, stance: null },
+        encounter: { monsters: [LINE], alignment: null, aware: false, stance: null, hoard: true },
       },
     ])
   })
 
   test('adding to an existing encounter appends, carrying every other field', () => {
-    const existing = { monsters: [LINE], alignment: 'chaotic' as const, aware: true, stance: null }
+    const existing = { monsters: [LINE], alignment: 'chaotic' as const, aware: true, stance: null, hoard: true }
     const second: KeyedMonster = { template_id: 'skeleton', count_dice: null, count_fixed: 6 }
     const ops = encounterAddLineOps(withArea({ encounter: existing }), TARGET, second)
     expect(ops[0]).toMatchObject({
@@ -94,14 +94,14 @@ describe('encounter builders patch only their own field', () => {
   })
 
   test('a patch carries the committed encounter with one field changed', () => {
-    const existing = { monsters: [LINE], alignment: null, aware: false, stance: null }
+    const existing = { monsters: [LINE], alignment: null, aware: false, stance: null, hoard: true }
     const ops = encounterPatchOps(withArea({ encounter: existing }), TARGET, { aware: true })
     expect(ops[0]).toMatchObject({ encounter: { ...existing, aware: true } })
   })
 
   test('the last line never removes — monsters has min_length 1', () => {
     const document = withArea({
-      encounter: { monsters: [LINE], alignment: null, aware: false, stance: null },
+      encounter: { monsters: [LINE], alignment: null, aware: false, stance: null, hoard: true },
     })
     expect(encounterRemoveLineOps(document, TARGET, 0)).toEqual([])
   })
@@ -303,7 +303,7 @@ describe('the queue-time update builders', () => {
   test('encounterLinePatchOps patches the committed line, not a render-time copy', () => {
     const second: KeyedMonster = { template_id: 'skeleton', count_dice: null, count_fixed: 6 }
     const document = withArea({
-      encounter: { monsters: [LINE, second], alignment: null, aware: false, stance: null },
+      encounter: { monsters: [LINE, second], alignment: null, aware: false, stance: null, hoard: true },
     })
     const ops = encounterLinePatchOps(document, TARGET, 1, { count_dice: '2d4', count_fixed: null })
     expect(ops[0]).toMatchObject({
