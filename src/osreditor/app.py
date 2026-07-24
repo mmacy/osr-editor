@@ -52,6 +52,7 @@ from osreditor.conversions import (
     ConversionSession,
     ConversionState,
     begin_run,
+    bind,
     check_destination,
     first_incomplete_stage,
     needs_provider,
@@ -1051,15 +1052,21 @@ def create_conversion(request: Request, body: CreateConversionRequest, user: Cur
         settings = settings_from(body.settings)
     except ValidationError as error:
         raise RequestValidationError(error.errors()) from error
-    session = ConversionSession(
-        session_id=new_session_id(),
-        kind="pdf",
-        workdir=workdir,
-        run=None,
-        pdf_path=Path(body.pdf_path).resolve(),
-        settings=settings,
+    pdf_path = Path(body.pdf_path).resolve()
+    # The exclusivity test above answers first, for the honest error ordering;
+    # this one is the atomic backstop, so two submitted dialogs can never spawn
+    # two workers rendering into one directory.
+    session = registry.register_new(
+        lambda: ConversionSession(
+            session_id=new_session_id(),
+            kind="pdf",
+            workdir=workdir,
+            run=None,
+            pdf_path=pdf_path,
+            settings=settings,
+        ),
+        workdir,
     )
-    registry.register(session)
     spawn(run_estimate, session)
     return session.snapshot()
 
@@ -1128,6 +1135,12 @@ def run_conversion(
     service = _service(request)
     session = _conversions(request).get(conversion_id)
     require_runnable(session)
+    # Re-resolve the binding every run: one workdir keeps one session for the
+    # process lifetime, but the project at its path comes and goes — a session
+    # that ran unbound would adopt nothing and leave the open project showing a
+    # document the workdir no longer holds.
+    project = service.open_at(session.workdir)
+    bind(session, project.id if project is not None else None)
     run = require_run_meta(session)
     stage = validate_stage(body.stage) if body.stage is not None else first_incomplete_stage(run)
     if session.project_id is not None and stage is Stage.ASSEMBLE:

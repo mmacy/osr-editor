@@ -481,7 +481,9 @@ def test_previews_are_gated_on_the_caches_they_are_rendered_from(
     assert (early.status_code, early.json()["error"]["code"]) == (409, "conversion_state_invalid")
     assert "survey stage is pending" in early.json()["error"]["message"]
 
-    # Stop after content: the pre-assemble state where the control earns its keep.
+    # The pre-assemble state — survey and content cached, assembly impossible —
+    # is proven in test_conversions.py, where a stage boundary can be held. Here
+    # the route's own gate and its writes are what is under test.
     client.post(f"/api/conversions/{session['id']}/run", json={"stage": "survey"})
     spawn.drain()
     shutil.rmtree(warm_workdir / "previews")
@@ -536,3 +538,82 @@ def test_a_conversion_state_carries_every_field_the_progress_view_renders(
     assert state["workdir_path"] == str(tmp_path / "minimod.forge")
     assert state["project_id"] is None
     assert [row["stage"] for row in state["stages"]] == [stage.value for stage in STAGE_ORDER]
+
+
+# --- run-time binding ---------------------------------------------------------
+
+
+def test_a_session_binds_to_the_project_at_its_path_on_every_run(
+    client: TestClient, spawn: SpawnRecorder, warm_workdir: Path, fixtures_provider: None
+) -> None:
+    # The mainline flow after a conversion: the *pdf* session that just ran is
+    # still this workdir's session when the finished conversion is opened, and
+    # the pipeline panel reuses it. A session that ran unbound would complete
+    # on disk and adopt nothing, leaving the open project showing a document
+    # the workdir no longer holds.
+    session = convert(client, spawn, warm_workdir)
+    assert session["project_id"] is None
+    project = open_project(client, warm_workdir)
+
+    started = client.post(f"/api/conversions/{session['id']}/run", json={"stage": "monsters"})
+    assert started.status_code == 200, started.text
+    assert started.json()["project_id"] == project["id"]
+    spawn.drain()
+
+    after = client.get(f"/api/projects/{project['id']}").json()
+    assert after["revision"] != project["revision"]
+    assert after["forge"]["checked"] is False
+
+
+def test_a_session_unbinds_when_its_project_closes(
+    client: TestClient, spawn: SpawnRecorder, warm_workdir: Path, fixtures_provider: None, tmp_path: Path
+) -> None:
+    session = convert(client, spawn, warm_workdir)
+    project = open_project(client, warm_workdir)
+    client.post(f"/api/conversions/{session['id']}/run", json={"stage": "monsters"})
+    spawn.drain()
+    assert client.get(f"/api/conversions/{session['id']}").json()["project_id"] == project["id"]
+
+    # Detach drops the workdir from the open registry; the next run must not
+    # keep claiming a project id nothing answers to.
+    detached = client.post(f"/api/projects/{project['id']}/forge/detach", json={"path": str(tmp_path / "native.osr")})
+    assert detached.status_code == 200, detached.text
+    rerun = client.post(f"/api/conversions/{session['id']}/run", json={"stage": "monsters"})
+    assert rerun.status_code == 200, rerun.text
+    assert rerun.json()["project_id"] is None
+
+
+def test_the_bound_assemble_refusal_follows_the_run_time_binding(
+    client: TestClient, spawn: SpawnRecorder, warm_workdir: Path, fixtures_provider: None
+) -> None:
+    session = convert(client, spawn, warm_workdir)
+    # Unbound: assemble is a legal resume on the conversion screen.
+    assert client.post(f"/api/conversions/{session['id']}/run", json={"stage": "assemble"}).status_code == 200
+    spawn.drain()
+    # Bound: it points at the synchronous route instead.
+    open_project(client, warm_workdir)
+    refused = client.post(f"/api/conversions/{session['id']}/run", json={"stage": "assemble"})
+    assert (refused.status_code, refused.json()["error"]["code"]) == (409, "conversion_state_invalid")
+
+
+def test_the_editors_own_failed_estimate_residue_can_be_superseded(
+    client: TestClient, spawn: SpawnRecorder, encrypted_pdf: Path, minimod_pdf: Path, tmp_path: Path
+) -> None:
+    destination = tmp_path / "oops.forge"
+    status, body = create_pdf(client, encrypted_pdf, destination)
+    assert status == 201
+    spawn.drain()
+    assert client.get(f"/api/conversions/{body['id']}").json()["state"] == "failed"
+    # Forge copied source.pdf in before it opened the PDF.
+    assert (destination / "source.pdf").is_file()
+    assert not (destination / "run.json").exists()
+
+    # Retrying the right file into the prefilled destination confirms rather
+    # than dead-ending on "somebody's content".
+    again, error = create_pdf(client, minimod_pdf, destination)
+    assert (again, error["error"]["code"]) == (409, "conversion_destination_exists")
+    assert error["error"]["details"] == {"completed": False}
+    retried, _ = create_pdf(client, minimod_pdf, destination, allow_existing=True)
+    assert retried == 201
+    spawn.drain()
+    assert client.get("/api/conversions", params={"workdir": str(destination)}).json()["state"] == "estimated"

@@ -35,7 +35,6 @@ from typing import Literal
 
 from osrforge.contracts.run import RunMeta, Stage, StageStatus
 from osrforge.convert import ConversionResult, StageEvent
-from osrforge.errors import OsrForgeError
 from osrforge.estimate import CostEstimate
 from osrforge.providers.base import ModelProvider
 from osrforge.settings import ConversionSettings
@@ -48,6 +47,7 @@ from osreditor.errors import (
     ConversionCancelledError,
     ConversionDestinationExistsError,
     ConversionDestinationInvalidError,
+    ConversionInProgressError,
     ConversionNotFoundError,
     ConversionStateInvalidError,
     ForgeRerunInvalidError,
@@ -59,6 +59,8 @@ from osreditor.store import ProjectStore
 
 __all__ = [
     "MODEL_STAGES",
+    "PAGES_PREFIX",
+    "SOURCE_ARTIFACT",
     "STAGE_ORDER",
     "ConversionKind",
     "ConversionRegistry",
@@ -98,6 +100,9 @@ STAGE_ORDER: tuple[Stage, ...] = (
 Geometry has no independent run — it completes inside every assembly — but it
 carries a `run.json` status, so it carries a row.
 """
+
+SOURCE_ARTIFACT = "source.pdf"
+PAGES_PREFIX = "pages"
 
 MODEL_STAGES = frozenset({Stage.SURVEY, Stage.CONTENT, Stage.MONSTERS})
 """The stages that call a provider; forge requires one exactly when the resumed chain contains any."""
@@ -340,19 +345,56 @@ class ConversionRegistry:
         session = self.find(workdir)
         return session if session is not None and session.active else None
 
-    def register(self, session: ConversionSession) -> ConversionSession:
-        """Index a new session by id and by workdir, replacing any terminal predecessor.
+    def get_or_create(self, workdir: Path, factory: Callable[[], ConversionSession]) -> tuple[ConversionSession, bool]:
+        """Return the workdir's session, minting one under the registry lock on a miss.
+
+        Atomic by construction — the same discipline `get_or_open` uses for
+        projects: two surfaces asking at once get the *same* session, never two
+        racing workers over one directory.
 
         Args:
-            session: The session to register.
+            workdir: The resolved workdir root.
+            factory: Builds the session; called only on a miss.
+
+        Returns:
+            The session, and whether this call minted it.
+        """
+        with self._lock:
+            existing = self._by_workdir.get(str(workdir))
+            if existing is not None:
+                return existing, False
+            session = factory()
+            self._by_id[session.id] = session
+            self._by_workdir[str(session.workdir)] = session
+            return session, True
+
+    def register_new(self, factory: Callable[[], ConversionSession], workdir: Path) -> ConversionSession:
+        """Mint a session for a workdir, superseding a terminal predecessor and refusing an active one.
+
+        The pdf kind's registration: a fresh conversion replaces whatever
+        terminal session the path last held, but two workers may never render
+        into one directory at once — so the exclusivity test and the
+        registration happen under one lock rather than as a check-then-act.
+
+        Args:
+            factory: Builds the session.
+            workdir: The resolved workdir root.
 
         Returns:
             The registered session.
+
+        Raises:
+            ConversionInProgressError: If the path already holds an active
+                session.
         """
         with self._lock:
+            existing = self._by_workdir.get(str(workdir))
+            if existing is not None and existing.active:
+                raise ConversionInProgressError(f"a conversion is already running over {workdir}")
+            session = factory()
             self._by_id[session.id] = session
             self._by_workdir[str(session.workdir)] = session
-        return session
+            return session
 
 
 def new_session_id() -> str:
@@ -367,12 +409,21 @@ def new_session_id() -> str:
 def check_destination(store: ProjectStore, path: Path, allow_existing: bool) -> None:
     """Refuse a new-from-PDF destination that would silently supersede somebody's work.
 
-    Four outcomes, the family's overwrite pattern: a nonexistent or empty
+    Five outcomes, the family's overwrite pattern: a nonexistent or empty
     directory proceeds; an existing forge workdir needs `allow_existing`,
     because the *estimate itself* re-renders `pages/` and resets `run.json` to
-    preprocess-only; a non-empty directory that is not a workdir is somebody's
+    preprocess-only; an interrupted preprocess's residue needs the same
+    handshake; a non-empty directory that is anything else is somebody's
     content and is never touched; a path that is not a directory at all cannot
     become one.
+
+    The residue case earns its own branch because the editor causes it. Forge
+    copies `source.pdf` into the destination *before* it opens the PDF, so a
+    rejected source — encrypted, over a page cap, corrupt — leaves a directory
+    holding `source.pdf` and possibly a partial `pages/`, with no `run.json`.
+    Without this branch the obvious next act (pick the right file, keep the
+    prefilled destination) would be refused as somebody else's content, and the
+    only remedy would be deleting by hand a directory the editor itself made.
 
     Args:
         store: The store to probe through.
@@ -382,10 +433,10 @@ def check_destination(store: ProjectStore, path: Path, allow_existing: bool) -> 
     Raises:
         ConversionDestinationInvalidError: If the path exists and is not a
             directory.
-        ConversionDestinationExistsError: If the path is a forge workdir and
-            `allow_existing` is false.
-        ProjectExistsError: If the path is a non-empty directory that is not a
-            forge workdir.
+        ConversionDestinationExistsError: If the path is a forge workdir or an
+            interrupted preprocess's residue, and `allow_existing` is false.
+        ProjectExistsError: If the path is a non-empty directory that is
+            neither.
     """
     # The one probe the artifact seam cannot express: a *file* at the path is
     # indistinguishable from a missing directory through `project_exists`.
@@ -399,7 +450,13 @@ def check_destination(store: ProjectStore, path: Path, allow_existing: bool) -> 
         return
     run = _read_run(path) if RUN_ARTIFACT in artifacts else None
     if run is None:
-        raise ProjectExistsError(f"directory {path} already exists and is not empty")
+        if not _is_preprocess_residue(artifacts):
+            raise ProjectExistsError(f"directory {path} already exists and is not empty")
+        if allow_existing:
+            return
+        raise ConversionDestinationExistsError(
+            f"{path} holds an interrupted conversion's rendered pages", completed=False
+        )
     if allow_existing:
         return
     monsters = run.stages.get(Stage.MONSTERS)
@@ -407,6 +464,11 @@ def check_destination(store: ProjectStore, path: Path, allow_existing: bool) -> 
         f"{path} is already a forge workdir",
         completed=monsters is not None and monsters.status == "completed",
     )
+
+
+def _is_preprocess_residue(artifacts: list[str]) -> bool:
+    """Whether a run.json-less directory holds nothing but what an interrupted preprocess writes."""
+    return all(name == SOURCE_ARTIFACT or name.startswith(f"{PAGES_PREFIX}/") for name in artifacts)
 
 
 def validate_stage(stage: Stage) -> Stage:
@@ -490,17 +552,22 @@ def run_estimate(session: ConversionSession) -> None:
     worker answered long ago, so a source rejection is session state and never
     an HTTP error.
 
+    The catch is `Exception`, deliberately wider than forge's hierarchy. The
+    destination is a path the user typed, so an `OSError` (an unwritable
+    parent, a full disk) is entirely reachable — and a worker that dies with
+    the session still `estimating` would leave the registry claiming the
+    workdir active forever, refusing every open, retry, and cancel until the
+    server restarts. Every failure is session state; none is silence.
+
     Args:
         session: The pdf-kind session, in state `estimating`.
     """
     assert session.pdf_path is not None
     try:
         estimate = forge.estimate_pdf(session.pdf_path, session.workdir, session.settings)
-    except OsrForgeError as error:
+    except Exception as error:
         session.refresh_stages()
-        with session.lock:
-            session.state = "failed"
-            session.error = str(error)
+        _land(session, "failed", _message(error))
         return
     session.refresh_stages()
     with session.lock:
@@ -520,17 +587,22 @@ def run_chain(
     """Resume the chain from `stage` through assemble, streaming progress into the session.
 
     Everything rejectable was rejected at the route, so what remains can only
-    become session state: the catch set is forge's own error hierarchy plus the
-    `ValueError` stage preconditions the route cannot pre-check, and no
-    editor-typed error can escape it and wedge a session in `running`.
+    become session state. The catch is `Exception`, deliberately wider than
+    forge's hierarchy plus the `ValueError` stage preconditions: a worker that
+    dies with the session still `running` would leave the registry claiming the
+    workdir active forever, refusing every open, retry, and cancel until the
+    server restarts. One failing act, one honest terminal state.
 
     A bound session adopts its result through the project's existing assembly
     path — whole-document delta, revision bump, diagnostics recomputed,
-    `checked` cleared. A failing chain adopts nothing: the project keeps its
-    pre-rerun state and its revision, while the disk caches are whatever the
-    chain wrote before failing — honest and recoverable, because every later
-    assembly runs against the new caches and surfaces forge's error through the
-    snapshot protocol.
+    `checked` cleared — and adopts it *before* the terminal state lands, which
+    is what makes the busy guard cover adoption too: the moment the state is no
+    longer active, a poll can refetch the project and a request can commit
+    against it, and both must see the adopted document. A failing chain adopts
+    nothing: the project keeps its pre-rerun state and its revision, while the
+    disk caches are whatever the chain wrote before failing — honest and
+    recoverable, because every later assembly runs against the new caches and
+    surfaces forge's error through the snapshot protocol.
 
     Args:
         session: The session, already moved to `running` by the route.
@@ -552,27 +624,30 @@ def run_chain(
 
     try:
         result = forge.run_chain(session.workdir, stage, provider, settings_updates, on_progress)
+        session.refresh_stages()
+        _adopt(session, service, result)
     except ConversionCancelledError:
         session.refresh_stages()
-        with session.lock:
-            session.state = "cancelled"
-        session.cancel.clear()
+        _land(session, "cancelled", None)
         return
-    except (OsrForgeError, ValueError) as error:
+    except Exception as error:
         session.refresh_stages()
-        with session.lock:
-            session.state = "failed"
-            session.error = str(error)
-        session.cancel.clear()
+        _land(session, "failed", _message(error))
         return
-    session.refresh_stages()
+    _land(session, "completed", None)
+
+
+def _message(error: Exception) -> str:
+    """The failure text a session carries: forge's message verbatim, or the type when there is none."""
+    return str(error) or type(error).__name__
+
+
+def _land(session: ConversionSession, state: ConversionStateName, error: str | None) -> None:
+    """Move a session to a terminal state and release the cancel flag."""
     with session.lock:
-        session.state = "completed"
-        session.error = None
+        session.state = state
+        session.error = error
     session.cancel.clear()
-    # After the state lands, never before: the chain *did* complete, and
-    # adoption is a separate act on a separate object.
-    _adopt(session, service, result)
 
 
 def _adopt(session: ConversionSession, service: DocumentService, result: ConversionResult) -> None:
@@ -717,6 +792,14 @@ def begin_run(session: ConversionSession) -> None:
 def bind(session: ConversionSession, project_id: str | None) -> None:
     """Bind an idle session to an open project (or unbind it), so its result is adopted.
 
+    Re-resolved at every run, not just at creation, because one workdir keeps
+    one session for the process lifetime while the project at its path comes
+    and goes: the pdf-kind session that just converted a module is still the
+    session for that workdir when the finished conversion is opened and the
+    pipeline panel reruns a stage over it. A session that ran unbound would
+    complete correctly on disk and adopt nothing, leaving the open project
+    showing a document the workdir no longer holds.
+
     An active session's binding is left alone: it was bound when it started,
     and the busy guard is what keeps that true.
 
@@ -749,17 +832,18 @@ def open_session(
     Returns:
         The session.
     """
-    existing = registry.find(workdir)
-    if existing is not None:
-        bind(existing, project_id)
-        return existing
-    session = ConversionSession(
-        session_id=new_session_id(),
-        kind="workdir",
-        workdir=workdir,
-        run=_read_run(workdir),
-        project_id=project_id,
+    session, minted = registry.get_or_create(
+        workdir,
+        lambda: ConversionSession(
+            session_id=new_session_id(),
+            kind="workdir",
+            workdir=workdir,
+            run=_read_run(workdir),
+            project_id=project_id,
+        ),
     )
-    registry.register(session)
+    if not minted:
+        bind(session, project_id)
+        return session
     _record_recent(workdir, workdir.stem)
     return session

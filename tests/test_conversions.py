@@ -5,6 +5,7 @@ wrapper calls — so nothing sleeps and nothing is flaky. The threaded path is
 covered once, by the Playwright suite's real server.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from osrforge.providers.base import ModelProvider, ModelRequest, ModelResponse
 from osrforge.providers.fixtures import FixtureProvider
 from osrforge.settings import ConversionSettings
 
+import osreditor.forge
 from osreditor.config import load_config
 from osreditor.conversions import (
     ConversionRegistry,
@@ -35,6 +37,7 @@ from osreditor.documents import DocumentService
 from osreditor.errors import (
     ConversionDestinationExistsError,
     ConversionDestinationInvalidError,
+    ConversionInProgressError,
     ConversionNotFoundError,
     ConversionStateInvalidError,
     ForgeRerunInvalidError,
@@ -426,3 +429,149 @@ def test_first_incomplete_stage_falls_back_to_assemble_when_everything_is_done(w
         }
     )
     assert first_incomplete_stage(completed) is Stage.ASSEMBLE
+
+
+# --- nothing may wedge a session ---------------------------------------------
+
+
+def test_a_non_forge_failure_lands_the_session_rather_than_wedging_it(
+    service: DocumentService, warm_workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The destination is a path the user typed, so an OSError is entirely
+    # reachable. A worker that died here would leave the registry claiming the
+    # workdir active forever, refusing every open, retry, and cancel.
+    def explode(*args: object, **kwargs: object) -> object:
+        raise PermissionError(13, "Permission denied", str(warm_workdir))
+
+    monkeypatch.setattr(osreditor.forge, "run_chain", explode)
+    session = workdir_session(warm_workdir)
+    begin_run(session)
+    run_chain(session, service, Stage.SURVEY, None, None)
+    state = session.snapshot()
+    assert state.state == "failed"
+    assert state.error is not None and "Permission denied" in state.error
+    assert session.active is False
+    require_runnable(session)
+
+
+def test_a_non_forge_estimate_failure_lands_the_session_too(
+    minimod_pdf: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def explode(*args: object, **kwargs: object) -> object:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(osreditor.forge, "estimate_pdf", explode)
+    session = pdf_session(minimod_pdf, tmp_path / "minimod.forge")
+    run_estimate(session)
+    assert session.snapshot().state == "failed"
+    assert session.active is False
+
+
+def test_a_message_less_failure_still_names_itself(
+    service: DocumentService, warm_workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def explode(*args: object, **kwargs: object) -> object:
+        raise RuntimeError()
+
+    monkeypatch.setattr(osreditor.forge, "run_chain", explode)
+    session = workdir_session(warm_workdir)
+    begin_run(session)
+    run_chain(session, service, Stage.SURVEY, None, None)
+    assert session.snapshot().error == "RuntimeError"
+
+
+# --- previews in the state the control exists for ----------------------------
+
+
+def test_previews_render_in_the_pre_assemble_state(
+    service: DocumentService, warm_workdir: Path, minimod_fixtures: Path
+) -> None:
+    # Stop after content: survey and content cached, monsters pending, assembly
+    # impossible — the one place the standalone control earns its keep.
+    session = workdir_session(warm_workdir)
+    begin_run(session)
+    content_tag = "content.the-root-cellar-of-old-wenna.1.b01"
+    provider = CancellingProvider(FixtureProvider(minimod_fixtures), session, after_tag=content_tag)
+    run_chain(session, service, Stage.SURVEY, provider, None)
+    assert session.snapshot().state == "cancelled"
+    assert stage_states(session)["content"] == "completed"
+    assert stage_states(session)["monsters"] == "pending"
+    assert not (warm_workdir / "adventure.json").exists()
+
+    written = osreditor.forge.render_workdir_previews(warm_workdir)
+    assert [path.name for path in written] == ["the-root-cellar-of-old-wenna.1.svg"]
+    assert written[0].read_bytes().startswith(b"<svg")
+    # Rendered from the caches alone: no assembly happened, and none could.
+    assert not (warm_workdir / "adventure.json").exists()
+
+
+# --- the registry is atomic ---------------------------------------------------
+
+
+def test_the_registry_mints_at_most_one_session_per_workdir(warm_workdir: Path) -> None:
+    registry = ConversionRegistry()
+    minted: list[bool] = []
+    for _ in range(3):
+        session, was_new = registry.get_or_create(
+            warm_workdir,
+            lambda: ConversionSession(session_id=new_session_id(), kind="workdir", workdir=warm_workdir, run=None),
+        )
+        minted.append(was_new)
+        assert session is registry.find(warm_workdir)
+    assert minted == [True, False, False]
+
+
+def pdf_factory(workdir: Path) -> Callable[[], ConversionSession]:
+    return lambda: ConversionSession(session_id=new_session_id(), kind="pdf", workdir=workdir, run=None)
+
+
+def test_a_fresh_conversion_never_spawns_a_second_worker_over_a_busy_workdir(
+    warm_workdir: Path,
+) -> None:
+    registry = ConversionRegistry()
+    busy = registry.get_or_create(warm_workdir, lambda: workdir_session(warm_workdir))[0]
+    begin_run(busy)
+    # The exclusivity test and the registration are one locked act, so two
+    # submitted dialogs can never both render into one directory.
+    with pytest.raises(ConversionInProgressError):
+        registry.register_new(pdf_factory(warm_workdir), warm_workdir)
+    assert registry.find(warm_workdir) is busy
+
+
+def test_a_fresh_conversion_supersedes_an_idle_session_which_stays_reachable_by_id(
+    warm_workdir: Path,
+) -> None:
+    registry = ConversionRegistry()
+    first = registry.get_or_create(warm_workdir, lambda: workdir_session(warm_workdir))[0]
+    second = registry.register_new(pdf_factory(warm_workdir), warm_workdir)
+    assert second is not first
+    assert registry.find(warm_workdir) is second
+    # Terminal sessions stay for the process lifetime — a stale tab still polls.
+    assert registry.get(first.id) is first
+
+
+# --- the editor's own failure residue -----------------------------------------
+
+
+def test_an_interrupted_preprocess_residue_rides_the_same_handshake(tmp_path: Path) -> None:
+    # Forge copies source.pdf in before it opens the PDF, so a rejected source
+    # leaves exactly this. The editor made it; it must not refuse it as
+    # somebody else's content.
+    residue = tmp_path / "nope.forge"
+    (residue / "pages").mkdir(parents=True)
+    (residue / "source.pdf").write_bytes(b"%PDF-1.4\n")
+    (residue / "pages" / "0001.png").write_bytes(b"png")
+    store = LocalProjectStore()
+    with pytest.raises(ConversionDestinationExistsError) as caught:
+        check_destination(store, residue, allow_existing=False)
+    assert caught.value.completed is False
+    check_destination(store, residue, allow_existing=True)
+
+
+def test_a_residue_with_anything_else_in_it_is_still_somebodys_content(tmp_path: Path) -> None:
+    residue = tmp_path / "mixed"
+    residue.mkdir()
+    (residue / "source.pdf").write_bytes(b"%PDF-1.4\n")
+    (residue / "thesis.txt").write_text("mine", encoding="utf-8")
+    with pytest.raises(ProjectExistsError):
+        check_destination(LocalProjectStore(), residue, allow_existing=True)
