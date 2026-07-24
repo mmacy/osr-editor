@@ -142,6 +142,40 @@ class TestProseGating:
         )
         assert response.status_code == 422 and response.json()["error"]["code"] == "op_target_not_found"
 
+    def test_committed_fixtures_replay_the_milestone_scenario(self, client: TestClient, tmp_path: Path) -> None:
+        # The committed fixtures in tests/assets/prose/ must stay in step with the
+        # facts assembly — a prompt/facts change moves the fingerprint and strands
+        # them. This replays them over the exact scenario they were recorded for
+        # (a native "Stocking demo" project with a blank area 1).
+        committed = Path(__file__).parent / "assets" / "prose"
+        state = client.post(
+            "/api/projects", json={"path": str(tmp_path / "stocking-demo.osr"), "name": "Stocking demo"}
+        ).json()
+        pid = state["id"]
+        client.post(
+            f"/api/projects/{pid}/ops",
+            json={
+                "revision": state["revision"],
+                "ops": [
+                    {
+                        "op": "create_area",
+                        "dungeon_id": "dungeon-1",
+                        "level_number": 1,
+                        "area_id": "1",
+                        "cells": [[0, 0]],
+                    }
+                ],
+            },
+        )
+        client.post("/api/provider", json={"kind": "fixtures", "fixtures_dir": str(committed)})
+        area = client.post(
+            f"/api/projects/{pid}/aids/prose",
+            json={"kind": "area", "dungeon_id": "dungeon-1", "level_number": 1, "area_id": "1"},
+        )
+        assert area.status_code == 200 and area.json()["description"]
+        hooks = client.post(f"/api/projects/{pid}/aids/prose", json={"kind": "hooks"})
+        assert hooks.status_code == 200 and len(hooks.json()["hooks"]) >= 1
+
     def test_response_carries_no_secret(self, client: TestClient, app: FastAPI, tmp_path: Path) -> None:
         pid, adventure = project_with_room(client, app, tmp_path)
         fixtures = tmp_path / "prose"

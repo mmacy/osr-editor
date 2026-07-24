@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "fingerprint": "94cf51837cf82e5a1c9b7fbb4a2c50990f9d9f3323ccf7173508a622e7f3f068",
+  "tag": "prose.area-description",
+  "request": {
+    "system": "You draft the read-aloud description a referee speaks when the party enters a keyed dungeon room. Write in the second person, present tense, evocative but concise — two to four sentences. Describe only what the facts state: the room, its named monsters (as atmosphere, never as a stat block), any treasure or trap as sensory hints, not mechanics. Never invent monsters, treasure, exits, or numbers the facts do not give. Do not restate dice, hit dice, or rules. Return the description as JSON.",
+    "parts": [
+      {
+        "text": "Adventure: Stocking demo\nAdventure description: (none)\nDungeon: dungeon-1\nLevel: 1\nArea key: 1\nArea name: (unnamed)\nExisting description: (none)\nMonsters: (none)\nTreasure: (none)\nTrap: (none)\nFeatures: (none)"
+      }
+    ],
+    "schema": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "response": {
+    "data": {
+      "description": "A low, close room, the air stale with dust and old smoke. Something has nested in the far corner, and small bones crunch underfoot as you cross the threshold."
+    },
+    "usage": {
+      "input_tokens": 180,
+      "output_tokens": 64
+    },
+    "model_id": "fixture-prose-1"
+  }
+}

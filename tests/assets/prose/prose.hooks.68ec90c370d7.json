@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "fingerprint": "68ec90c370d7c037cddebeb80bad31240ef5d6489c17e66ace1cae8908b27966",
+  "tag": "prose.hooks",
+  "request": {
+    "system": "You draft the adventure hooks that draw a party to an adventure — rumors, jobs, and reasons to delve. Each hook is one or two sentences a referee can drop into a tavern or a patron's offer. Ground every hook in the stated facts (the adventure, its town, its dungeons); never invent places, factions, or rewards the facts do not give. Preserve the sense of any existing hooks worth keeping and return the complete replacement list as JSON — the accepted list replaces the current one wholesale.",
+    "parts": [
+      {
+        "text": "Adventure: Stocking demo\nAdventure description: (none)\nTown: (unnamed) — services: (none)\nDungeons: dungeon-1\nExisting hooks:\n(none)"
+      }
+    ],
+    "schema": {
+      "type": "object",
+      "properties": {
+        "hooks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "hooks"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "response": {
+    "data": {
+      "hooks": [
+        "A miller's widow will pay in silver for word of what became of her husband.",
+        "Lights have been seen at night among the ruined mill on the moor."
+      ]
+    },
+    "usage": {
+      "input_tokens": 180,
+      "output_tokens": 64
+    },
+    "model_id": "fixture-prose-1"
+  }
+}
