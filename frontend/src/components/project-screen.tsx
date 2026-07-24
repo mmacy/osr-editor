@@ -12,6 +12,7 @@ import { FidelityDialog } from '@/components/fidelity-dialog'
 import { MonsterResolutionPanel } from '@/components/monster-resolution-panel'
 import { MonstersSection } from '@/components/monsters-section'
 import { PipelinePanel } from '@/components/pipeline-panel'
+import { ProviderSettingsButton } from '@/components/provider-dialog'
 import { PublishDialog } from '@/components/publish-dialog'
 import { ReviewQueue } from '@/components/review-queue'
 import { AdventureForm, TownForm } from '@/components/forms'
@@ -180,6 +181,7 @@ export function ProjectScreen() {
           </TooltipTrigger>
           <TooltipContent>Redo (Shift+Ctrl/Cmd+Z)</TooltipContent>
         </Tooltip>
+        <ProviderSettingsButton />
         <ExportDialog />
         <PublishDialog onNavigate={navigateTo} />
       </header>

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { api, ApiRequestError } from '@/lib/api'
+import { refreshProviderStatus, useProviderStatus } from '@/lib/provider-status'
 import type { AidsProseRequest, AidsProseResponse } from '@/types'
 
 type Phase =
@@ -25,22 +26,24 @@ export function ProseAssistant({
   onAcceptArea?: (description: string) => void
   onAcceptHooks?: (hooks: string[]) => void
 }) {
-  const [configured, setConfigured] = useState<boolean | null>(null)
+  // The shared provider status decides whether the affordance renders at all,
+  // so configuring a provider from the header makes it appear here at once —
+  // absent (not broken) until then.
+  const status = useProviderStatus()
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const controller = useRef<AbortController | null>(null)
+  const configured = status?.configured ?? false
 
-  // Provider status decides whether the affordance renders at all.
+  // Re-check on mount while no provider is known, so a provider configured out
+  // of band (another tab, the typed route) is picked up when this surface
+  // appears rather than staying absent until a reload. Once one is known the
+  // dialog keeps the shared status current, so this costs nothing per area.
   useEffect(() => {
-    let live = true
-    api.getProvider().then(
-      (status) => live && setConfigured(status.configured),
-      () => live && setConfigured(false),
-    )
-    return () => {
-      live = false
-      controller.current?.abort()
-    }
-  }, [])
+    if (!configured) void refreshProviderStatus()
+  }, [configured])
+
+  // Abandon an in-flight draft when the surface goes away.
+  useEffect(() => () => controller.current?.abort(), [])
 
   if (!configured) return null
 

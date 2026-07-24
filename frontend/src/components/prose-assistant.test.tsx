@@ -4,11 +4,15 @@ import { beforeEach, expect, test, vi } from 'vitest'
 
 import { ProseAssistant } from '@/components/prose-assistant'
 import { api } from '@/lib/api'
+import { resetProviderStatus } from '@/lib/provider-status'
 import { makeProviderStatus } from '@/test/fixtures'
 import type { AidsProseResponse } from '@/types'
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  // The provider status is process-wide state; drop the cache so each test's
+  // own mocked status is the one the assistant reads.
+  resetProviderStatus()
 })
 
 const AREA_TARGET = {

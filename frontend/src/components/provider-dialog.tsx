@@ -18,7 +18,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, ApiRequestError } from '@/lib/api'
+import { setProviderStatus, useProviderStatus } from '@/lib/provider-status'
 import type { ProviderFieldStatus, ProviderStatus } from '@/types'
 
 export const ENDPOINT_ENV = 'OSRFORGE_FOUNDRY_ENDPOINT'
@@ -47,6 +49,50 @@ export function ProviderStrip({ status, onOpen }: { status: ProviderStatus; onOp
         Provider settings…
       </Button>
     </div>
+  )
+}
+
+// The project chrome's provider entry. The assistant is gated on a configured
+// provider and is deliberately absent without one, so every project type needs a
+// way to reach these settings — the conversion surfaces' strips only exist while
+// converting, which left a native project with no path to configure one at all.
+export function ProviderSettingsButton() {
+  const status = useProviderStatus()
+  const [open, setOpen] = useState(false)
+  if (!status) return null
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setOpen(true)}
+            data-testid="provider-settings-button"
+          >
+            Assistant
+            <Badge
+              variant={status.configured ? 'secondary' : 'outline'}
+              className="ml-2"
+              data-testid="provider-settings-state"
+            >
+              {status.configured ? 'ready' : 'off'}
+            </Badge>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {status.configured
+            ? `Model provider ready${status.deployment.value ? ` — ${status.deployment.value}` : ''}`
+            : 'Set up a model provider to draft prose with the assistant'}
+        </TooltipContent>
+      </Tooltip>
+      <ProviderDialog
+        open={open}
+        onOpenChange={setOpen}
+        status={status}
+        onStatus={setProviderStatus}
+      />
+    </>
   )
 }
 
