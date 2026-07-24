@@ -7,6 +7,7 @@ import type {
   AnySidecarPatch,
   ApiError,
   ApiErrorDetail,
+  ConversionState,
   EditorSidecar,
   EncounterTableCatalogResponse,
   EquipmentCatalogResponse,
@@ -16,10 +17,14 @@ import type {
   MonsterCatalogResponse,
   MonsterTemplate,
   OpBatchResult,
+  PreviewResult,
   ProjectListResponse,
   ProjectState,
+  ProviderSettingsRequest,
+  ProviderStatus,
   PublishResult,
   SniffResult,
+  Stage,
   StatusResponse,
   TreasureTypeCatalogResponse,
 } from '@/types'
@@ -29,6 +34,13 @@ export interface PublishRequest {
   name?: string
   overwrite?: boolean
   checkout_path?: string
+}
+
+export interface CreatePdfConversion {
+  pdf_path: string
+  workdir_path: string
+  settings?: Record<string, unknown>
+  allow_existing?: boolean
 }
 
 export class ApiRequestError extends Error {
@@ -112,6 +124,27 @@ export const api = {
     request<ProjectState>(`/api/projects/${id}/forge/detach`, jsonPost({ path })),
   postSidecar: (id: string, patches: AnySidecarPatch[]) =>
     request<EditorSidecar>(`/api/projects/${id}/sidecar`, jsonPost({ patches })),
+  getProvider: () => request<ProviderStatus>('/api/provider'),
+  setProvider: (body: ProviderSettingsRequest) =>
+    request<ProviderStatus>('/api/provider', jsonPost(body)),
+  createPdfConversion: (body: CreatePdfConversion) =>
+    request<ConversionState>('/api/conversions', jsonPost({ kind: 'pdf', ...body })),
+  createWorkdirConversion: (workdirPath: string) =>
+    request<ConversionState>(
+      '/api/conversions',
+      jsonPost({ kind: 'workdir', workdir_path: workdirPath }),
+    ),
+  // The recovery lookup: every surface that hits a busy conflict comes here
+  // rather than guessing which session it collided with.
+  findConversion: (workdirPath: string) =>
+    request<ConversionState>(`/api/conversions?workdir=${encodeURIComponent(workdirPath)}`),
+  getConversion: (id: string) => request<ConversionState>(`/api/conversions/${id}`),
+  runConversion: (id: string, stage: Stage | null, settings: Record<string, unknown>) =>
+    request<ConversionState>(`/api/conversions/${id}/run`, jsonPost({ stage, settings })),
+  cancelConversion: (id: string) =>
+    request<ConversionState>(`/api/conversions/${id}/cancel`, jsonPost()),
+  regenerateConversionPreviews: (id: string) =>
+    request<PreviewResult>(`/api/conversions/${id}/previews`, jsonPost()),
 }
 
 // Image sources for the review surfaces — plain URLs, not fetches: the browser
@@ -122,6 +155,14 @@ export function forgePageUrl(projectId: string, pageNumber: number): string {
 
 export function forgePreviewUrl(projectId: string, dungeonId: string, levelNumber: number): string {
   return `/api/projects/${projectId}/forge/previews/${encodeURIComponent(dungeonId)}/${levelNumber}`
+}
+
+export function conversionPreviewUrl(
+  conversionId: string,
+  dungeonId: string,
+  levelNumber: number,
+): string {
+  return `/api/conversions/${conversionId}/previews/${encodeURIComponent(dungeonId)}/${levelNumber}`
 }
 
 export type ApiClient = typeof api

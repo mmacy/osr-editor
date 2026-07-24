@@ -132,6 +132,25 @@ export type ZoomPan = components['schemas']['ZoomPan']
 export type ForgeOverridesRequest = components['schemas']['ForgeOverridesRequest']
 export type SidecarPatchRequest = components['schemas']['SidecarPatchRequest']
 
+// Phase 6: the conversion surface — forge's own `Stage`, `StageStatus`,
+// `TokenUsage`, and `CostEstimate` riding the generated types, never mirrored.
+export type Stage = components['schemas']['Stage']
+export type ConversionState = components['schemas']['ConversionState']
+export type ConversionStageRow = components['schemas']['ConversionStageRow']
+export type CostEstimate = components['schemas']['CostEstimate']
+export type CreateConversionRequest = components['schemas']['CreateConversionRequest']
+export type RunConversionRequest = components['schemas']['RunConversionRequest']
+export type PreviewResult = components['schemas']['PreviewResult']
+export type PreviewLevel = components['schemas']['PreviewLevel']
+export type ProviderStatus = components['schemas']['ProviderStatus']
+export type ProviderFieldStatus = components['schemas']['ProviderFieldStatus']
+export type ProviderSettingsRequest = components['schemas']['ProviderSettingsRequest']
+
+// The conversion lifecycle, as ConversionState actually carries it — the union
+// the screen discriminates on.
+export type ConversionStateName = ConversionState['state']
+export type ConversionKind = ConversionState['kind']
+
 // The discriminated op union, as OpBatch actually carries it.
 export type AnyEditOp = OpBatch['ops'][number]
 

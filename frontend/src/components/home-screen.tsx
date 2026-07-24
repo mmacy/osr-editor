@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { FolderOpenIcon, MapPinOffIcon, PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { ConvertPdfDialog } from '@/components/convert-pdf-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,6 +38,23 @@ export function HomeScreen() {
   const navigate = useNavigate()
   const [listing, setListing] = useState<ProjectListResponse | null>(null)
 
+  // An incomplete workdir is not a dead end: it opens into the pipeline view,
+  // where the same conversion resumes. A busy workdir routes the same way,
+  // through the recovery lookup, onto its live progress.
+  const openConversion = useCallback(
+    async (path: string, lookup: boolean) => {
+      try {
+        const session = lookup
+          ? await api.findConversion(path)
+          : await api.createWorkdirConversion(path)
+        navigate(`/conversions/${session.id}`)
+      } catch (error) {
+        toastApiError(error)
+      }
+    },
+    [navigate],
+  )
+
   const openByPath = useCallback(
     async (path: string) => {
       try {
@@ -44,11 +62,27 @@ export function HomeScreen() {
         projectStore.getState().setProject(state)
         navigate(`/projects/${state.id}`)
       } catch (error) {
+        if (error instanceof ApiRequestError && error.detail.code === 'forge_workdir_incomplete') {
+          await openConversion(path, false)
+          return
+        }
+        if (error instanceof ApiRequestError && error.detail.code === 'conversion_in_progress') {
+          await openConversion(path, true)
+          return
+        }
         toastApiError(error)
       }
     },
-    [navigate],
+    [navigate, openConversion],
   )
+
+  const refreshListing = useCallback(async () => {
+    try {
+      setListing(await api.listProjects())
+    } catch (error) {
+      toastApiError(error)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -91,6 +125,7 @@ export function HomeScreen() {
         </div>
         <div className="flex gap-2">
           <NewAdventureDialog onCreate={create} />
+          <ConvertPdfDialog onConverted={() => void refreshListing()} />
           <OpenProjectDialog onOpen={openByPath} />
         </div>
       </header>

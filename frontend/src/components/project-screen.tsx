@@ -4,6 +4,7 @@ import { HomeIcon, Redo2Icon, Undo2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { BlockedOpDialog } from '@/components/blocked-op-dialog'
+import { ConversionWatcher } from '@/components/conversion-watcher'
 import { CorrectionsPanel } from '@/components/corrections-panel'
 import { DiagnosticsPanel } from '@/components/diagnostics-panel'
 import { ExportDialog } from '@/components/export-dialog'
@@ -22,6 +23,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, ApiRequestError } from '@/lib/api'
 import type { NavTarget } from '@/lib/address'
+import { isActive } from '@/lib/conversion'
 import { removeInvalidEdgeOps } from '@/lib/lint-actions'
 import { cn } from '@/lib/utils'
 import { projectStore, useProjectStore } from '@/store/project-store'
@@ -32,6 +34,10 @@ export function ProjectScreen() {
   const navigate = useNavigate()
   const project = useProjectStore((state) => state.project)
   const gone = useProjectStore((state) => state.gone)
+  // Every workdir-touching act is refused server-side while a bound rerun
+  // runs; the chrome says so up front rather than letting each gesture 409.
+  const conversion = useProjectStore((state) => state.conversion)
+  const conversionBusy = conversion !== null && isActive(conversion.state)
   const [section, setSection] = useState<NavTarget>({ kind: 'adventure' })
   // Bumped on every diagnostics navigation so clicking the same finding twice
   // re-applies its focus (re-select, re-scroll, re-open properties).
@@ -152,7 +158,7 @@ export function ProjectScreen() {
               variant="ghost"
               size="icon-sm"
               aria-label="Undo"
-              disabled={!project.can_undo}
+              disabled={!project.can_undo || conversionBusy}
               onClick={() => void projectStore.getState().undo()}
             >
               <Undo2Icon />
@@ -166,7 +172,7 @@ export function ProjectScreen() {
               variant="ghost"
               size="icon-sm"
               aria-label="Redo"
-              disabled={!project.can_redo}
+              disabled={!project.can_redo || conversionBusy}
               onClick={() => void projectStore.getState().redo()}
             >
               <Redo2Icon />
@@ -297,6 +303,7 @@ export function ProjectScreen() {
       />
       <FidelityDialog />
       <BlockedOpDialog />
+      {project.forge && <ConversionWatcher workdirPath={project.path} />}
     </div>
   )
 }

@@ -1,7 +1,18 @@
 // Typed test fixtures mirroring the backend's starter project shape. tsc
 // checks these against the generated types, so a schema change breaks them
 // loudly here rather than silently drifting.
-import type { Adventure, ExtractionReport, ForgeState, ProjectState } from '@/types'
+import type {
+  Adventure,
+  ConversionStageRow,
+  ConversionState,
+  CostEstimate,
+  ExtractionReport,
+  ForgeState,
+  ProjectState,
+  ProviderStatus,
+  Stage,
+  StageStatus,
+} from '@/types'
 
 export function makeDocument(overrides: Partial<Adventure> = {}): Adventure {
   return {
@@ -181,6 +192,72 @@ export function makeForgeState(overrides: Partial<ForgeState> = {}): ForgeState 
       module: null,
     },
     checked: false,
+    ...overrides,
+  }
+}
+
+// Phase 6: the conversion surfaces' inputs. The stage rows carry forge's whole
+// StageStatus, exactly as the backend answers them.
+export function makeStageRows(
+  states: Partial<Record<Stage, StageStatus['status']>> = {},
+): ConversionStageRow[] {
+  const order: Stage[] = ['preprocess', 'survey', 'content', 'monsters', 'geometry', 'assemble']
+  return order.map((stage) => ({
+    stage,
+    status: {
+      status: states[stage] ?? (stage === 'preprocess' ? 'completed' : 'pending'),
+      error: null,
+      started_at: null,
+      finished_at: null,
+      usage: null,
+    },
+  }))
+}
+
+export function makeCostEstimate(overrides: Partial<CostEstimate> = {}): CostEstimate {
+  return {
+    page_count: 5,
+    text_tokens: 2400,
+    image_tokens: 4525,
+    survey_window_count: 1,
+    survey_input_tokens: 8925,
+    survey_output_tokens: 350,
+    content_input_tokens: 8657,
+    content_output_tokens: 2750,
+    monsters_input_tokens: 5000,
+    monsters_output_tokens: 500,
+    input_tokens: 22582,
+    output_tokens: 3600,
+    usd: 0.11,
+    ...overrides,
+  }
+}
+
+export function makeConversionState(overrides: Partial<ConversionState> = {}): ConversionState {
+  return {
+    id: 'conv1',
+    kind: 'workdir',
+    state: 'ready',
+    workdir_path: '/projects/demo.osr',
+    pdf_path: null,
+    estimate: null,
+    stages: makeStageRows(),
+    error: null,
+    project_id: null,
+    ...overrides,
+  }
+}
+
+export function makeProviderStatus(overrides: Partial<ProviderStatus> = {}): ProviderStatus {
+  return {
+    kind: 'foundry',
+    endpoint: { value: 'https://example.invalid/', source: 'env' },
+    deployment: { value: 'gpt-test', source: 'env' },
+    api_key_present: true,
+    api_key_source: 'env',
+    entra_available: false,
+    configured: true,
+    fixtures_dir: { value: null, source: null },
     ...overrides,
   }
 }

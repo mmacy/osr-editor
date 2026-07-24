@@ -1,8 +1,9 @@
+import { toast } from 'sonner'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 import { ApiRequestError, type ApiClient } from '@/lib/api'
 import { createProjectStore } from '@/store/project-store'
-import { makeProjectState } from '@/test/fixtures'
+import { makeConversionState, makeProjectState } from '@/test/fixtures'
 import type { AnyEditOp, OpBatchResult } from '@/types'
 
 vi.mock('sonner', () => ({
@@ -217,4 +218,29 @@ test('undo applies its result through the same path', async () => {
   const project = store.getState().project
   expect(project?.revision).toBe('r3')
   expect(project?.can_redo).toBe(true)
+})
+
+test('a bound rerun pauses every workdir-touching act until it lands', async () => {
+  const postOps = vi.fn()
+  const store = createProjectStore(makeClient({ postOps }))
+  store.getState().setProject(makeProjectState({ type: 'forge' }))
+  store.getState().setConversion(makeConversionState({ state: 'running', project_id: 'abc123' }))
+
+  expect(await store.getState().commit([RENAME])).toBe(false)
+  await store.getState().undo()
+  await store.getState().redo()
+  expect(await store.getState().runForgeRerun({})).toBe(false)
+  expect(await store.getState().commitForgeEdits([])).toBe(false)
+  expect(postOps).not.toHaveBeenCalled()
+  // Said once per gesture, not once per 409.
+  expect(vi.mocked(toast)).toHaveBeenCalled()
+})
+
+test('a landed rerun releases the pause', async () => {
+  const postOps = vi.fn().mockResolvedValue(result('r2'))
+  const store = createProjectStore(makeClient({ postOps }))
+  store.getState().setProject(makeProjectState({ type: 'forge' }))
+  store.getState().setConversion(makeConversionState({ state: 'completed' }))
+  expect(await store.getState().commit([RENAME])).toBe(true)
+  expect(postOps).toHaveBeenCalled()
 })

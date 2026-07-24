@@ -33,6 +33,10 @@ import type {
   FeatureSpec,
   Finding,
   ForgeState,
+  ConversionStageRow,
+  ConversionState,
+  CostEstimate,
+  CreateConversionRequest,
   ImportedArea,
   ImportedGeometry,
   ImportedLevel,
@@ -45,8 +49,12 @@ import type {
   OpBatchResult,
   ProjectState,
   PublishResult,
+  ProviderFieldStatus,
+  ProviderSettingsRequest,
+  ProviderStatus,
   ReactionResult,
   ReviewMark,
+  RunConversionRequest,
   SaveCategory,
   SetEdges,
   SetEncounter,
@@ -54,6 +62,8 @@ import type {
   SetTrap,
   SetTreasure,
   SetWandering,
+  Stage,
+  StageStatus,
   StatBlockOverride,
   StatBlockPatch,
   SubtreeChange,
@@ -243,6 +253,48 @@ test('the override-edit and sidecar unions discriminate', () => {
   expectTypeOf<Extract<AnySidecarPatch, { action: 'dismiss_flag' }>>().toHaveProperty('flag')
   expectTypeOf<EditorSidecar['review']>().toEqualTypeOf<ReviewMark[]>()
   expectTypeOf<EditorSidecar['notes']>().toEqualTypeOf<Record<string, string>>()
+})
+
+test('the conversion translations hold', () => {
+  // The lifecycle is a closed union the conversion screen discriminates on.
+  expectTypeOf<ConversionState['state']>().toEqualTypeOf<
+    'estimating' | 'estimated' | 'ready' | 'running' | 'completed' | 'failed' | 'cancelled'
+  >()
+  expectTypeOf<ConversionState['kind']>().toEqualTypeOf<'pdf' | 'workdir'>()
+
+  // The estimate is absent until it lands, and the error until something fails.
+  expectTypeOf<ConversionState['estimate']>().toEqualTypeOf<CostEstimate | null>()
+  expectTypeOf<ConversionState['error']>().toEqualTypeOf<string | null>()
+  expectTypeOf<ConversionState['project_id']>().toEqualTypeOf<string | null>()
+
+  // Forge's own contracts ride the rows: `Stage`, and the whole `StageStatus`
+  // the pipeline panel already renders from run.json.
+  expectTypeOf<ConversionStageRow['stage']>().toEqualTypeOf<Stage>()
+  expectTypeOf<ConversionStageRow['status']>().toEqualTypeOf<StageStatus>()
+  expectTypeOf<Stage>().toEqualTypeOf<
+    'preprocess' | 'survey' | 'content' | 'monsters' | 'geometry' | 'assemble'
+  >()
+
+  // Every knob the run request can carry is one forge owns.
+  expectTypeOf<RunConversionRequest['stage']>().toEqualTypeOf<Stage | null | undefined>()
+  expectTypeOf<CreateConversionRequest['kind']>().toEqualTypeOf<'pdf' | 'workdir'>()
+})
+
+test('no provider response ever carries the key', () => {
+  // Presence and provenance only: the bytes never leave the process, so there
+  // is no `api_key` on the status at all.
+  expectTypeOf<'api_key' extends keyof ProviderStatus ? true : false>().toEqualTypeOf<false>()
+  expectTypeOf<ProviderStatus['api_key_present']>().toEqualTypeOf<boolean>()
+  expectTypeOf<ProviderStatus['api_key_source']>().toEqualTypeOf<'env' | 'session' | null>()
+  expectTypeOf<ProviderStatus['endpoint']>().toEqualTypeOf<ProviderFieldStatus>()
+  expectTypeOf<ProviderFieldStatus['source']>().toEqualTypeOf<
+    'env' | 'session' | null | undefined
+  >()
+
+  // The write-only direction is the one place a key appears, and it is a request.
+  expectTypeOf<
+    'api_key' extends keyof ProviderSettingsRequest ? true : false
+  >().toEqualTypeOf<true>()
 })
 
 test('the importer payload translations hold', () => {

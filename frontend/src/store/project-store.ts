@@ -12,11 +12,13 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import type { NavTarget } from '@/lib/address'
 import { api, ApiRequestError, type ApiClient } from '@/lib/api'
 import { applyDelta } from '@/lib/apply-delta'
+import { isActive } from '@/lib/conversion'
 import type {
   Adventure,
   AnyEditOp,
   AnyOverrideEdit,
   AnySidecarPatch,
+  ConversionState,
   OpBatchResult,
   ProjectState,
 } from '@/types'
@@ -58,6 +60,10 @@ export interface ProjectStoreState {
   // A cross-surface navigation request (the monster picker's create shortcut
   // lives layers below the section state); the project screen consumes it.
   navigationIntent: NavTarget | null
+  // The conversion session bound to this project's workdir, when one exists.
+  // While it is active every workdir-touching act is refused server-side, so
+  // the chrome pauses commits rather than letting them 409 one by one.
+  conversion: ConversionState | null
   setProject: (state: ProjectState) => void
   clear: () => void
   acknowledgeFidelity: () => void
@@ -72,6 +78,7 @@ export interface ProjectStoreState {
   clearBlockedOp: () => void
   requestNavigation: (target: NavTarget) => void
   clearNavigationIntent: () => void
+  setConversion: (state: ConversionState | null) => void
   commit: (ops: OpsInput, options?: CommitOptions) => Promise<boolean>
   undo: () => Promise<void>
   redo: () => Promise<void>
@@ -125,6 +132,18 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       }
     }
 
+    // The bound-session guard, client side: the server refuses every
+    // workdir-touching act with `conversion_in_progress` anyway, and saying so
+    // once per gesture beats a 409 per keystroke.
+    const busy = (): boolean => {
+      const state = get().conversion
+      if (!state || !isActive(state.state)) return false
+      toast('A rerun is running', {
+        description: 'Edits resume when it lands. The pipeline panel shows its progress.',
+      })
+      return true
+    }
+
     const handleError = (error: unknown): void => {
       if (!(error instanceof ApiRequestError)) throw error
       if (error.detail.code === 'stale_revision') {
@@ -166,9 +185,11 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       lastCheckoutPath: null,
       blockedOp: null,
       navigationIntent: null,
+      conversion: null,
 
       setProject: (state) => set({ project: state, fidelityAcknowledged: false, gone: false }),
-      clear: () => set({ project: null, fidelityAcknowledged: false, gone: false }),
+      clear: () =>
+        set({ project: null, fidelityAcknowledged: false, gone: false, conversion: null }),
       acknowledgeFidelity: () => set({ fidelityAcknowledged: true }),
       setLastExportPath: (path) => set({ lastExportPath: path }),
       setLastCheckoutPath: (path) => set({ lastCheckoutPath: path }),
@@ -176,11 +197,12 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       clearBlockedOp: () => set({ blockedOp: null }),
       requestNavigation: (target) => set({ navigationIntent: target }),
       clearNavigationIntent: () => set({ navigationIntent: null }),
+      setConversion: (state) => set({ conversion: state }),
 
       commit: (ops, options) =>
         enqueue(async () => {
           const { project } = get()
-          if (!project) return false
+          if (!project || busy()) return false
           const built = typeof ops === 'function' ? ops(project.document) : ops
           if (built.length === 0) return false
           try {
@@ -196,7 +218,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       undo: () =>
         enqueue(async () => {
           const { project } = get()
-          if (!project) return
+          if (!project || busy()) return
           try {
             applyResult(await client.undo(project.id))
           } catch (error) {
@@ -207,7 +229,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       redo: () =>
         enqueue(async () => {
           const { project } = get()
-          if (!project) return
+          if (!project || busy()) return
           try {
             applyResult(await client.redo(project.id))
           } catch (error) {
@@ -220,7 +242,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       commitForgeEdits: (edits) =>
         enqueue(async () => {
           const { project } = get()
-          if (!project || edits.length === 0) return false
+          if (!project || edits.length === 0 || busy()) return false
           try {
             applyResult(await client.postForgeOverrides(project.id, project.revision, edits))
             return true
@@ -233,7 +255,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       runForgeCheck: () =>
         enqueue(async () => {
           const { project } = get()
-          if (!project) return
+          if (!project || busy()) return
           try {
             applyResult(await client.postForgeCheck(project.id))
           } catch (error) {
@@ -244,7 +266,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       runForgeRerun: (settings) =>
         enqueue(async () => {
           const { project } = get()
-          if (!project) return false
+          if (!project || busy()) return false
           try {
             applyResult(await client.postForgeRerun(project.id, settings))
             return true
@@ -257,7 +279,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       detach: (path) =>
         enqueue(async () => {
           const { project } = get()
-          if (!project) return null
+          if (!project || busy()) return null
           try {
             const detached = await client.postForgeDetach(project.id, path)
             set({ project: detached, fidelityAcknowledged: false, gone: false, blockedOp: null })
