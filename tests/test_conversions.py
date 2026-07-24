@@ -568,6 +568,25 @@ def test_an_interrupted_preprocess_residue_rides_the_same_handshake(tmp_path: Pa
     check_destination(store, residue, allow_existing=True)
 
 
+def test_the_operating_systems_own_junk_never_refuses_a_destination(tmp_path: Path) -> None:
+    # Browsing a folder in Finder drops .DS_Store into it. A guard that turned
+    # that into "somebody's content" would protect nothing at the user's
+    # expense — at the front door and over the editor's own residue alike.
+    store = LocalProjectStore()
+    browsed = tmp_path / "fresh.forge"
+    browsed.mkdir()
+    (browsed / ".DS_Store").write_bytes(b"junk")
+    check_destination(store, browsed, allow_existing=False)
+
+    residue = tmp_path / "oops.forge"
+    (residue / "pages").mkdir(parents=True)
+    (residue / "source.pdf").write_bytes(b"%PDF-1.4\n")
+    (residue / "pages" / ".DS_Store").write_bytes(b"junk")
+    with pytest.raises(ConversionDestinationExistsError):
+        check_destination(store, residue, allow_existing=False)
+    check_destination(store, residue, allow_existing=True)
+
+
 def test_a_residue_with_anything_else_in_it_is_still_somebodys_content(tmp_path: Path) -> None:
     residue = tmp_path / "mixed"
     residue.mkdir()

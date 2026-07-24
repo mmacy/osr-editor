@@ -546,9 +546,11 @@ def test_a_conversion_state_carries_every_field_the_progress_view_renders(
 def test_a_session_binds_to_the_project_at_its_path_on_every_run(
     client: TestClient, spawn: SpawnRecorder, warm_workdir: Path, fixtures_provider: None
 ) -> None:
-    # The mainline flow after a conversion: the *pdf* session that just ran is
-    # still this workdir's session when the finished conversion is opened, and
-    # the pipeline panel reuses it. A session that ran unbound would complete
+    # The mainline flow after a conversion: the terminal session that just ran
+    # is still this workdir's session when the finished conversion is opened,
+    # and the pipeline panel reuses it. (The mechanism is kind-agnostic; the
+    # fixtures can only replay against the committed renders, so the vehicle
+    # here is a workdir-kind session rather than the pdf kind.) A session that ran unbound would complete
     # on disk and adopt nothing, leaving the open project showing a document
     # the workdir no longer holds.
     session = convert(client, spawn, warm_workdir)

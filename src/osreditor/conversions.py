@@ -30,7 +30,7 @@ server.
 import secrets
 import threading
 from collections.abc import Callable, Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from osrforge.contracts.run import RunMeta, Stage, StageStatus
@@ -58,6 +58,7 @@ from osreditor.projects import utc_now_iso
 from osreditor.store import ProjectStore
 
 __all__ = [
+    "IGNORED_ARTIFACTS",
     "MODEL_STAGES",
     "PAGES_PREFIX",
     "SOURCE_ARTIFACT",
@@ -103,6 +104,15 @@ carries a `run.json` status, so it carries a row.
 
 SOURCE_ARTIFACT = "source.pdf"
 PAGES_PREFIX = "pages"
+
+IGNORED_ARTIFACTS = frozenset({".DS_Store", "Thumbs.db", "desktop.ini"})
+"""Files an operating system drops into any directory a human looks at.
+
+The destination guard tolerates these and only these: they are the OS's, not
+the user's, they regenerate on their own, and letting one turn "browse the
+folder before converting into it" into a refusal would be the guard protecting
+nothing at anybody's expense.
+"""
 
 MODEL_STAGES = frozenset({Stage.SURVEY, Stage.CONTENT, Stage.MONSTERS})
 """The stages that call a provider; forge requires one exactly when the resumed chain contains any."""
@@ -445,7 +455,7 @@ def check_destination(store: ProjectStore, path: Path, allow_existing: bool) -> 
     key = str(path)
     if not store.project_exists(key):
         return
-    artifacts = store.list_artifacts(key)
+    artifacts = [name for name in store.list_artifacts(key) if not _is_os_junk(name)]
     if not artifacts:
         return
     run = _read_run(path) if RUN_ARTIFACT in artifacts else None
@@ -464,6 +474,11 @@ def check_destination(store: ProjectStore, path: Path, allow_existing: bool) -> 
         f"{path} is already a forge workdir",
         completed=monsters is not None and monsters.status == "completed",
     )
+
+
+def _is_os_junk(name: str) -> bool:
+    """Whether an artifact name is a file the operating system dropped, not the user."""
+    return PurePosixPath(name).name in IGNORED_ARTIFACTS
 
 
 def _is_preprocess_residue(artifacts: list[str]) -> bool:
