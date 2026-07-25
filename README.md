@@ -2,80 +2,44 @@
 
 A local GUI application for creating and modifying adventure modules playable by [osrlib](https://github.com/mmacy/osrlib-python)-powered games. osr-editor authors the same stamped `adventure.json` documents that [osr-forge](https://github.com/mmacy/osr-forge) produces and [osr-web](https://github.com/mmacy/osr-web) plays: a FastAPI backend that holds the working document as real osrlib model objects, serving a React frontend to the browser.
 
-**Development status: pre-alpha.** Phases 0–8 of [the spec](docs/spec.md) are in place — the two-toolchain skeleton, canonical document serialization, the locked API contracts, the project/prose surface (create and open native projects, edit adventure and town prose with undo/redo, live content validation, export), the map editor (the full geometry tool set, multi-level and multi-dungeon management, live structural lint, geometry import through the `GeometryImporter` plugin seam), keyed content (the map-first stocking flow over encounters, treasure, traps, features, and wandering tables, plus publish to osr-web), the monster editor (full stat-block authoring over bundled templates — create from scratch or clone any catalog monster), forge-backed review (open an [osr-forge](https://github.com/mmacy/osr-forge) workdir and correct it through `overrides.yaml` on forge's own pure assemble/check loop), conversion (point the editor at a module PDF and it prices the run, converts it with live progress, and lands in the review queue — no CLI required), the authoring aids (SRD stocking with seeded, reproducible re-rolls, treasure and encounter previews, and the prose assistant behind provider detection), and external map import — Watabou's One Page Dungeon JSON over the same `GeometryImporter` seam, with the source's title and story offered for adoption.
+**[Documentation](https://mmacy.github.io/osr-editor/)** · **[PyPI](https://pypi.org/project/osr-editor/)** · **[Changelog](https://github.com/mmacy/osr-editor/blob/main/CHANGELOG.md)**
 
-### The map tools
+## Install
 
-On a level's map: **select** (V) inspects anything — areas, door edges, transitions; **room** (R) drags a rectangle into a keyed area with opened interior edges; **corridor** (C) opens passages along a dragged path; **wall/door** (W) click-cycles an edge wall → open → door and drags to paint (the door inspector sets normal/secret, stuck, locked, starts open); **area** (A) paints cells into the selected area or a new one; **entrance** (E) places the level entrance; **transition** (T) places stairs, trapdoors, and chutes with a target-level picker — stairs offer reciprocal creation in the same undo step. Pan with space-drag or middle-drag, zoom with the wheel, reset to 100% with `0`. Delete removes the selection; Esc cancels a gesture.
+```console
+uv tool install osr-editor
+```
 
-**Import geometry** (in the map chrome) brings a level in from another project, from a [Watabou One Page Dungeon](https://watabou.itch.io/one-page-dungeon) JSON export — or any format with an installed importer plugin: importers register through the `osreditor.importers` entry-point group and land their geometry as one ordinary, undoable op batch. Point the source path at a directory or a file; sniff picks the converter. The One Page Dungeon reader resolves the export's door *cells* onto the editor's door *edges*, keys its positioned notes as areas, normalizes its entrance-relative (and routinely negative) coordinates, and flags every judgment call it made — the mapping of a portcullis onto a locked door, a rotunda onto its bounding square, the dropped columns and water, the fabricated destination on a level transition the source does not describe. The export's title and story are offered for adoption on the same batch, off by default. The format and the generator are Watabou's, read under their stated permissive terms; no generator code ships here.
-
-### Stocking from the map
-
-Right-click an area cell for the stocking menu: description, encounter, treasure, trap, and features, each offered as add or edit-plus-remove to match what the area holds. The area panel's cards commit through type-ahead pickers over osrlib's shipped catalogs — monsters (bundled templates first, then this session's recent picks), equipment, and treasure-type letters — so the editor never authors a dangling reference, while foreign documents' danglers stay legal, diagnosed, and navigable. Key numbers render hollow until an area is stocked (a description or any content) and carry glyphs for encounters, traps, and treasure; hovering shows the area's one-line contents in module notation. `F` dims stocked areas, and `[`/`]` walk areas in key order — with the filter on, the walk visits unstocked areas only. Level properties grow the inline d20 wandering-table editor (seeded from the compiled level-band table) and level-scope features.
-
-### Authoring aids
-
-Three aids fill a blank module faster, each applying its results as ordinary, undoable op batches — no special state to reconcile.
-
-**SRD stocking** rolls a room's contents from osrlib's stocking procedure (the same one the engine plays): right-click a blank room for "Roll SRD stocking", or sweep a level's unstocked rooms in one undo step from the map toolbar. Every roll is reproducible from a seed recorded in the sidecar — re-roll a room and only that room changes, and undo restores the rooms while the dice stay advanced, so a re-roll always yields fresh content. The report says what landed and what the dice left you (a special to describe, an NPC party to place, a trap to design, a monster whose type carries no lair treasure). A monster room's treasure is the encounter's own lair hoard; the encounter card's lair-hoard toggle lets you turn it off for the treasure-absent rooms the SRD rolls.
-
-**Previews** show what a declaration will produce without committing anything: sample treasure hoards for a treasure card (letters or the unguarded band, basic or expert tier), an encounter's sampled counts and per-sample XP with a resolved stat table, and derive-from-HD buttons in the monster editor that fill XP, THAC0/attack bonus, and saves from the hit dice.
-
-**The prose assistant** drafts read-aloud area descriptions and adventure hooks. The "Draft with assistant" affordance appears only when a model provider is configured (the same `OSRFORGE_FOUNDRY_*` environment forge reads); the draft renders beside your current text with its token usage, and nothing changes until you accept it. In tests and CI the drafts replay recorded fixtures, so the suites run with zero network.
-
-### The monster editor
-
-The **Monsters** section (beside Adventure and Town) stocks the adventure's bundled monster templates — bespoke stat blocks that join osrlib's shipped catalog for this adventure's sessions everywhere template ids resolve. Create from scratch (a stock 1-HD block the always-saved detail editor then reshapes) or clone-and-modify any catalog monster ("like an orc, but…" — the picker's create shortcut starts the same flow from the encounter card). The detail editor covers the whole stat block: the AC pair gated by the attack-roll toggle, the hit-dice builder, attack routines, movement modes, saves, morale, alignment, XP notes, number appearing, the treasure reference, abilities with typed params, defenses, and categories — dice inputs check locally, the server's parse is the authority. An id colliding with the shipped catalog or another bundled template is refused at commit with an inline rename prompt; renaming a template rewrites every encounter line and wandering row that names it in the same undo step, and its author note follows. Removing a referenced template warns with the reference count first — the references become ordinary diagnostics, never silent loss. Bundled templates rank first in every picker and ride publish into osr-web unchanged.
-
-### Publish to osr-web
-
-**Publish** (beside export) places the adventure in an [osr-web](https://github.com/mmacy/osr-web) checkout's `adventures/` directory — as a live symlink that republishes on every save, or a point-in-time snapshot copy. Publish requires clean validation; lint warnings prompt but never block (secret-only access is sometimes the point). The checkout path is collected on first use and saved to the app config once its shape checks out.
-
-### Convert a PDF
-
-**Convert a PDF** (on the home screen) is the front door to forge's pipeline. Point it at a module PDF; the destination workdir prefills as `<pdf-dir>/<pdf-stem>.forge` and stays editable. The editor then runs forge's `estimate()` — which really renders every page into that workdir, because module text may never be persisted outside your own project — and shows the page count, per-stage token predictions, and the cost: *"converting this 48-page module will cost roughly $X"*. It is a band, not a quote, and the card says so. Nothing is spent until you confirm; **Not now** keeps the rendered workdir, which the home screen lists and the pipeline view resumes.
-
-Confirming runs the chain on a worker thread with live per-stage progress. **Cancel** is cooperative and takes effect at the next stage boundary — the stage in flight always finishes, so `run.json` never records a stage the chain abandoned mid-write, and running again picks up exactly where it stopped. A failure shows forge's own message and keeps every completed stage. On success the workdir opens straight into the review queue.
-
-A workdir whose conversion never completed — one you declined at the gate, cancelled, or that failed — opens into the **pipeline view** rather than a dead end: the per-stage table, a stage picker defaulting to the first incomplete stage, optional `knob=value` settings, and, once the survey and content caches exist, **regenerate previews** so you can eyeball the synthesized geometry before paying for the remaining model stages. Open projects get the same reach from their **Pipeline** panel: assembly stays the fast synchronous path, and any other stage runs with progress and cancellation, adopting the re-assembled document when it lands. Commits pause while it runs — the workdir is being rewritten under you — and your undo history survives, replaying corrections against the new caches.
-
-### Provider configuration
-
-Conversion reads the same environment the forge CLI reads:
-
-| Variable | Meaning |
-| --- | --- |
-| `OSRFORGE_FOUNDRY_ENDPOINT` | The Azure AI Foundry endpoint |
-| `OSRFORGE_FOUNDRY_DEPLOYMENT` | The deployment name |
-| `OSRFORGE_FOUNDRY_API_KEY` | Optional. Absent means Entra ID auth through `DefaultAzureCredential`, which needs the `osr-forge[entra]` extra |
-
-**Provider settings** (from the convert dialog or the pipeline view) shows what was detected, where each value came from, and whether a provider can be built at all. You can override any field for the session — those values live in memory until the editor closes. **No credential is ever written to editor config**, and no API response ever carries one: the key surfaces only as "set" or "not set", with its source.
-
-### Forge-backed review
-
-Open an osr-forge workdir (a directory with `run.json`) and the editor becomes the graphical correction loop the forge spec anticipated: the draft on the map, the report beside it, the source pages behind it. **Review** lists `report.json`'s flags as a work list — selecting a row jumps to the area with its printed pages rendered alongside, and each flag carries its own dismissal mark. Every edit you commit becomes an `overrides.yaml` entry with an auto-drafted, page-anchored reason (redrawing geometry writes explicit wall seals over stale synthesized openings; importing a level lands as `geometry:` overrides), then re-assembles through forge's own pure `assemble()` — so the draft, report, and previews always reflect the current corrections, and re-running forge yourself reproduces the session's artifacts byte for byte. **Corrections** is the reviewable record: every entry with its reason inline-editable, machine drafts badged until you compose your own. **Monster resolution** offers each unresolved or custom name the two corrections as an either/or — remap to a catalog monster, or correct the printed stat block in the page's own notation (pre-mapping, per forge's contract); the Monsters section stays present as a review view of the derived bundle, its authoring gestures offering detach in place. **Pipeline** renders `run.json`'s per-stage status and token usage, runs the on-demand playability check (findings clear on the next change — stale lint about a changed draft is worse than none), re-runs assembly with its knob, and offers **detach**: the recorded, one-way crossing to a native project for edits overrides cannot express (new dungeons or levels, wandering tables, resizing) — the editor also offers it in place whenever such an edit is attempted. Author notes (in the area panel and level properties, both project types) live in the `editor.json` sidecar, never the deliverable, and follow renames and re-keys.
-
-## Requirements
-
-- Python ≥ 3.14 and [uv](https://docs.astral.sh/uv/)
-- Node.js (LTS, see `frontend/.nvmrc`) — development only; users of the published package will never need node
+Or `pipx install osr-editor`, or `pip install osr-editor`. Python ≥ 3.14; no node toolchain — the published wheel ships the built frontend.
 
 ## Quickstart
 
-Build the frontend once, then run the editor:
+```console
+osr-editor
+```
+
+The editor serves on `http://127.0.0.1:8630` and opens your browser to the home screen. Pass a project directory to open it straight away — `osr-editor ~/adventures/mill.osr`. The [quickstart](https://mmacy.github.io/osr-editor/getting-started/quickstart/) takes you from launch to a first exported adventure.
+
+## What it does
+
+- **[Projects](https://mmacy.github.io/osr-editor/guides/projects/)** — always-saved, canonically serialized, git-friendly project directories; every commit is one undo step, and the document on disk is always the artifact the game engine loads.
+- **[The map editor](https://mmacy.github.io/osr-editor/guides/map-editor/)** — the full geometry tool set on graph paper: rooms, corridors, walls and doors in every state, areas, entrances, transitions, multi-level and multi-dungeon management, and live structural lint with click-to-navigate findings.
+- **[Stocking and keyed content](https://mmacy.github.io/osr-editor/guides/stocking-and-keyed-content/)** — the map-first stocking flow over encounters, treasure, traps, features, and wandering tables, through type-ahead pickers that never author a dangling reference.
+- **[The monster editor](https://mmacy.github.io/osr-editor/guides/monster-editor/)** — full stat-block authoring over the adventure's bundled templates: create from scratch or clone any catalog monster, with renames cascading through every reference.
+- **[Forge-backed review](https://mmacy.github.io/osr-editor/guides/forge-backed-review/)** — open an osr-forge workdir and correct it graphically: the report as a work list beside the source pages, every edit a reasoned `overrides.yaml` entry on forge's own pure assemble loop.
+- **[Converting a PDF](https://mmacy.github.io/osr-editor/guides/converting-a-pdf/)** — the front door to forge's pipeline: price the run first, convert with live progress and cooperative cancel, land in the review queue. No credential is ever written to disk.
+- **[Authoring aids](https://mmacy.github.io/osr-editor/guides/authoring-aids/)** — SRD stocking with seeded, reproducible re-rolls; treasure and encounter previews; and the prose assistant, present only when a provider is configured.
+- **[Import, export, and publish](https://mmacy.github.io/osr-editor/guides/import-export-publish/)** — geometry in from another project or a Watabou One Page Dungeon export (or any installed [importer plugin](https://mmacy.github.io/osr-editor/reference/writing-a-geometry-importer/)); the stamped document out to any path; publish into an osr-web checkout as a live symlink or a snapshot.
+
+## Development
+
+Working on the editor itself takes both toolchains: Python ≥ 3.14 with [uv](https://docs.astral.sh/uv/), and Node.js (LTS, see `frontend/.nvmrc`). Build the frontend once, then run the editor from the checkout:
 
 ```console
 cd frontend && npm ci && npm run build && cd ..
 uv sync
 uv run osr-editor
 ```
-
-`osr-editor` serves on `http://127.0.0.1:8630` and opens your browser to the home screen. Pass a project directory to open it straight away — `osr-editor ~/adventures/mill.osr` — or use the home screen's recents, new-adventure, and open-by-path entries. Flags: `--port` to change the port, `--no-browser` to suppress the browser launch.
-
-App config (the recents list) lives at `platformdirs.user_config_path("osr-editor")/config.json` — for example `~/Library/Application Support/osr-editor/config.json` on macOS or `~/.config/osr-editor/config.json` on Linux. It is a convenience cache; deleting it only clears the recents.
-
-## Development
 
 The dev loop runs the two halves side by side:
 
@@ -100,6 +64,9 @@ uv run ruff format --check
 uv run ruff check
 uv run pyright
 uv run pytest
+
+# docs
+uv run mkdocs build --strict
 
 # frontend (from frontend/)
 npm ci
@@ -131,6 +98,10 @@ osrlib = { path = "../osrlib-python", editable = true }
 ```
 
 Revert before merging — CI resolves `uv sync --locked` from PyPI.
+
+### Releasing
+
+Releases are tag-driven; the runbook lives in [`AGENTS.md`](https://github.com/mmacy/osr-editor/blob/main/AGENTS.md).
 
 ## License
 
