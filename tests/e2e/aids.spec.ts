@@ -12,9 +12,9 @@ import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { expect, test, type Page, type TestInfo } from '@playwright/test'
+import { expect, test, type TestInfo } from '@playwright/test'
 
-import { CELL_SIZE, RESET_MARGIN } from '../../frontend/src/map/view'
+import { cellCenter, createProject, drag, drawRoom } from './helpers'
 
 // The committed prose fixtures, resolved through Playwright's own testDir so the
 // path holds however the suite is invoked (spec files load as CJS here, so
@@ -40,45 +40,15 @@ interface StampedDocument {
   }
 }
 
-async function cellCenter(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
-  const box = await page.getByTestId('map-canvas').boundingBox()
-  if (!box) throw new Error('the map canvas has no bounding box')
-  return {
-    x: box.x + RESET_MARGIN + (x + 0.5) * CELL_SIZE,
-    y: box.y + RESET_MARGIN + (y + 0.5) * CELL_SIZE,
-  }
-}
-
-async function drag(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {
-  await page.mouse.move(from.x, from.y)
-  await page.mouse.down()
-  await page.mouse.move(to.x, to.y, { steps: 8 })
-  await page.mouse.up()
-}
-
-async function drawRoom(page: Page, a: [number, number], b: [number, number]) {
-  await page.getByRole('button', { name: 'Room tool' }).click()
-  await drag(page, await cellCenter(page, ...a), await cellCenter(page, ...b))
-  await page.getByRole('button', { name: 'Select tool' }).click()
-}
-
 test('draft prose on a blank room, sweep the level, and publish', async ({ page }, testInfo) => {
   const workspace = mkdtempSync(join(tmpdir(), 'osr-editor-e2e-aids-'))
   const projectDir = join(workspace, 'stocking-demo.osr')
   const checkout = join(workspace, 'osr-web')
   mkdirSync(join(checkout, 'adventures'), { recursive: true })
 
-  // Create the project, capturing its server-minted id from the response.
-  await page.goto('/')
-  await page.getByRole('button', { name: 'New adventure' }).click()
-  await page.getByLabel('Adventure name').fill('Stocking demo')
-  await page.getByLabel('Destination directory').fill(projectDir)
-  const created = page.waitForResponse(
-    (response) => response.url().endsWith('/api/projects') && response.request().method() === 'POST',
-  )
-  await page.getByRole('button', { name: 'Create' }).click()
-  const projectId = ((await (await created).json()) as { id: string }).id
-  await expect(page.getByTestId('revision')).toHaveText('r1')
+  // The shared helper returns the server-minted id, which the sidecar seeding below
+  // needs — that requirement is why it returns one at all.
+  const projectId = await createProject(page, projectDir, 'Stocking demo')
 
   // Configure the fixtures provider through the typed route — the prose assistant
   // renders only when a provider is configured.

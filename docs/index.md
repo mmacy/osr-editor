@@ -4,6 +4,9 @@ A local GUI application for creating and modifying adventure modules playable by
 
 There is no separate save step and no separate validate step. Every edit you commit persists immediately, every commit is one undo step, and the document on disk is always the canonically serialized, schema-stamped artifact the game engine loads — so a project directory is safe to keep in git, and a no-op session never touches a byte.
 
+![The osr-editor map editor showing a stocked dungeon level with the area inspector open](assets/screenshots/map-editor-hero-light.png#only-light)
+![The osr-editor map editor showing a stocked dungeon level with the area inspector open](assets/screenshots/map-editor-hero-dark.png#only-dark)
+
 ## The family
 
 osr-editor is one of four siblings that share the adventure document as their contract:

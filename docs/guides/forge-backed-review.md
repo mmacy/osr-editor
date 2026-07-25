@@ -12,15 +12,29 @@ Undo and redo work on the same terms: each step is a snapshot pair of the overri
 
 **Review** lists `report.json`'s flags as a work list. Selecting a row jumps to the flagged area with its printed pages rendered alongside, and each flag carries its own dismissal mark — reviewed-and-fine is recorded, not remembered.
 
+![The review queue listing twelve flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-light.png#only-light)
+![The review queue listing twelve flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-dark.png#only-dark)
+
+Correction happens against the page. Here a different conversion — *The Root Cellar of Old Wenna* — has a flagged area open with the printed page it came from rendered beside it:
+
+![A flagged area open beside its printed source page, in a second converted module](../assets/screenshots/source-pages-light.png#only-light)
+![A flagged area open beside its printed source page, in a second converted module](../assets/screenshots/source-pages-dark.png#only-dark)
+
 Every edit you commit gets an auto-drafted, page-anchored reason: redrawing geometry writes explicit wall seals over stale synthesized openings, importing a level lands as `geometry:` overrides, drawing past the derived extent grows it by rule. Machine drafts are badged until a human composes the reason — the record stays reviewable either way.
 
 ## Corrections
 
 **Corrections** is that reviewable record: every `overrides.yaml` entry with its reason inline-editable and per-entry removal. It is the answer to "what did we change about this conversion, and why" — the same answer a colleague re-running forge from the workdir would reconstruct.
 
+![The corrections panel listing an overrides entry with its inline, editable reason](../assets/screenshots/corrections-panel-light.png#only-light)
+![The corrections panel listing an overrides entry with its inline, editable reason](../assets/screenshots/corrections-panel-dark.png#only-dark)
+
 ## Monster resolution
 
 **Monster resolution** offers each unresolved or custom monster name the two corrections forge defines, as an either/or per name: remap to a catalog monster, or correct the printed stat block in the page's own notation (pre-mapping, per forge's contract). The Monsters section stays present as a review view of the derived bundle.
+
+![The monster resolution panel offering remap or stat-block correction for an unresolved name](../assets/screenshots/monster-resolution-light.png#only-light)
+![The monster resolution panel offering remap or stat-block correction for an unresolved name](../assets/screenshots/monster-resolution-dark.png#only-dark)
 
 ## Pipeline
 

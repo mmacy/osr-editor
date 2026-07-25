@@ -14,9 +14,15 @@ Every level renders as graph paper, and the tool set works directly on it.
 
 Pan with space-drag or middle-drag, zoom with the wheel, reset to 100% with `0`. `Delete` removes the selection; `Esc` cancels a gesture.
 
+![The map editor tool palette: select, room, corridor, wall and door, area, entrance, and transition](../assets/screenshots/map-toolbar-light.png#only-light)
+![The map editor tool palette: select, room, corridor, wall and door, area, entrance, and transition](../assets/screenshots/map-toolbar-dark.png#only-dark)
+
 ## Levels and dungeons
 
 An adventure holds any number of dungeons, each with any number of levels. The map chrome manages both: create, rename, and renumber (renames cascade through every reference in one undo step), and resize a level — with the offenders listed first when a shrink would strand geometry.
+
+![The level row: the level picker, add level, and level properties](../assets/screenshots/level-chrome-light.png#only-light)
+![The level row: the level picker, add level, and level properties](../assets/screenshots/level-chrome-dark.png#only-dark)
 
 ## The live lint
 
@@ -28,6 +34,9 @@ Structural problems render on the map as you work, click-to-navigate down to the
 - an area reachable only through secret doors (`secret_only_access`),
 - a transition without its reciprocal (`transition_unpaired`),
 - and two areas claiming the same cell (`area_overlap`).
+
+![An unreachable area marked on the map with the matching finding listed in the diagnostics panel](../assets/screenshots/map-lint-markers-light.png#only-light)
+![An unreachable area marked on the map with the matching finding listed in the diagnostics panel](../assets/screenshots/map-lint-markers-dark.png#only-dark)
 
 The first five mirror osr-forge's own playability check exactly — the same fixture suites prove the two implementations agree — so a clean editor lint means a clean forge check. Lint warns and navigates; it never blocks an edit. Secret-only access, in particular, is sometimes the point.
 

@@ -81,7 +81,11 @@ uv run scripts/generate_types.py
 
 # end to end (from frontend/, after npm run build)
 npx tsc -p ../tests/e2e
-npx playwright test
+npx playwright test --project=e2e
+
+# documentation screenshots (from frontend/, after npm run build)
+npx tsc -p ../tests/screenshots
+npm run shots
 ```
 
 ### Type generation

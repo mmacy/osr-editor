@@ -10,57 +10,19 @@
 // publish. The real-module half (a genuine PDF converted with a live provider)
 // runs by hand and is recorded in the PR.
 import {
-  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
-  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-const MINIMOD = join(__dirname, "..", "assets", "minimod");
-const PAGE_COUNT = 5;
-
-// The editor-side twin of forge's own `minimod_workdir`: the estimate's
-// product, built from the committed renders the fixtures were recorded
-// against.
-function fabricateWarmWorkdir(root: string): void {
-  mkdirSync(root, { recursive: true });
-  cpSync(join(MINIMOD, "minimod.pdf"), join(root, "source.pdf"));
-  cpSync(join(MINIMOD, "pages"), join(root, "pages"), { recursive: true });
-  const pending = { status: "pending" };
-  writeFileSync(
-    join(root, "run.json"),
-    JSON.stringify(
-      {
-        source_sha256: "0".repeat(64),
-        source_bytes: 1,
-        page_count: PAGE_COUNT,
-        settings: {},
-        stages: {
-          preprocess: {
-            status: "completed",
-            started_at: "2026-07-09T12:00:00+00:00",
-            finished_at: "2026-07-09T12:00:05+00:00",
-          },
-          survey: pending,
-          content: pending,
-          monsters: pending,
-          geometry: pending,
-          assemble: pending,
-        },
-      },
-      null,
-      2,
-    ),
-  );
-}
+import { fabricateWarmWorkdir, MINIMOD, PAGE_COUNT } from "./warm-workdir";
 
 test("the estimate gate: a real PDF priced before anything is spent", async ({
   page,

@@ -11,6 +11,9 @@ The three ways an adventure crosses the project boundary — in from another sou
 
 The import dialog renders every converter note before anything commits, and the whole import — geometry, keyed areas, adopted metadata — lands as one undo step.
 
+![The import dialog: the converter's notes, the metadata offered for adoption, and the destination controls](../assets/screenshots/import-dialog-light.png#only-light)
+![The import dialog: the converter's notes, the metadata offered for adoption, and the destination controls](../assets/screenshots/import-dialog-dark.png#only-dark)
+
 ## Export
 
 **Export** writes the stamped `adventure.json` to any path you choose: the canonical, schema-stamped document any osrlib-powered game loads. Export is a copy of the working document, not a different artifact — a native project's `adventure.json` is already this exact file.
@@ -21,5 +24,8 @@ The import dialog renders every converter note before anything commits, and the 
 
 - **Symlink** — live: every committed edit republishes instantly. In a forge-backed project, every correction re-assembles and republishes the same way.
 - **Snapshot** — a point-in-time copy that stays put while you keep editing.
+
+![The publish dialog offering a symlink or a snapshot into an osr-web checkout](../assets/screenshots/publish-dialog-light.png#only-light)
+![The publish dialog offering a symlink or a snapshot into an osr-web checkout](../assets/screenshots/publish-dialog-dark.png#only-dark)
 
 Publish requires clean validation; lint warnings prompt but never block (secret-only access is sometimes the point). The checkout path is collected on first use and saved to the app config once its shape checks out — see [the CLI and configuration](../reference/cli-and-configuration.md).

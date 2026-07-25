@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Phase 10 — screenshots in the guides: every published page that describes a UI surface now shows it, in both light and dark, from an automated Playwright capture harness that drives the real CLI and built frontend over the existing zero-network fixtures. Twenty-six shots across the landing page, the quickstart, and all eight guides, each one an asserted UI state rather than a bare capture — the test proves what is on screen before it fires the shutter. Phase 9 deferred screenshots because "a stale screenshot of a living UI is a lie with a caption", so the gate is the point: a new `screenshots` CI job fails when a documented state can no longer be reached, when a control a shot asserts on is renamed, or when a shot's test is deleted or skipped, and `scripts/check_screenshots.py` holds the docs, the committed images, and the harness's own report to each other in all three directions. It does not compare pixels, and the runbook says so plainly — the app ships system font stacks, so a macOS capture and CI's Linux rendering differ in every text-bearing shot. No committed image carries a real, personal, or machine-specific path: the capture servers run under redirected `HOME`s, the home screen is shot in its genuine first-run empty state, and dialogs whose path fields are not the subject are captured empty. The e2e specs' five duplicated gesture helpers collapse into one shared module along the way, resolving an `edgePoint` that had two incompatible definitions.
+
 ## [0.1.0] - 2026-07-24
 
 ### Added

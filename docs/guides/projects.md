@@ -24,6 +24,9 @@ A forge-backed project is an [osr-forge](https://mmacy.github.io/osr-forge/) wor
 
 There is no save button. A committed edit persists immediately and atomically; the revision token in every commit means a stale client gets a conflict answer, never a silent overwrite. Every commit — whether it changed one word of prose or landed an entire imported level — is exactly one undo step, and undo history survives the session.
 
+![The project chrome: the sections rail beside the adventure form, with the revision token and the undo and redo controls](../assets/screenshots/project-chrome-light.png#only-light)
+![The project chrome: the sections rail beside the adventure form, with the revision token and the undo and redo controls](../assets/screenshots/project-chrome-dark.png#only-dark)
+
 ## Git-friendly documents
 
 The editor serializes canonically: the same document always produces the same bytes, and a no-op session over a document the editor wrote produces a byte-identical file. A foreign document — one authored by hand or by another tool — normalizes once, on the first write, and is stable from then on. The practical consequence: `git diff` on a project directory shows you what actually changed, and nothing else.
@@ -31,3 +34,6 @@ The editor serializes canonically: the same document always produces the same by
 ## Validity while you work
 
 The editor enforces model validity by construction — you cannot commit an edit that produces an unloadable document. Everything softer is a diagnostic: a dangling monster reference or an unreachable area renders as a navigable finding and stays legal while editing. Only [publish](import-export-publish.md) demands a clean validation pass.
+
+![The diagnostics panel listing a navigable finding while the document stays editable](../assets/screenshots/diagnostics-panel-light.png#only-light)
+![The diagnostics panel listing a navigable finding while the document stays editable](../assets/screenshots/diagnostics-panel-dark.png#only-dark)

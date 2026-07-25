@@ -8,6 +8,9 @@ Point the dialog at a PDF; the destination workdir prefills as `<pdf-dir>/<pdf-s
 
 Nothing is spent until you confirm. **Not now** keeps the rendered workdir; the home screen lists it and the pipeline view resumes it later.
 
+![The cost gate showing the page count, per-stage token predictions, and the estimated cost](../assets/screenshots/estimate-card-light.png#only-light)
+![The cost gate showing the page count, per-stage token predictions, and the estimated cost](../assets/screenshots/estimate-card-dark.png#only-dark)
+
 ## The run
 
 Confirming runs the chain on a worker thread with live per-stage progress. **Cancel** is cooperative and takes effect at the next stage boundary — the stage in flight always finishes, so the run record never holds a stage the chain abandoned mid-write, and running again picks up exactly where it stopped. A failure shows forge's own message and keeps every completed stage. On success the workdir opens straight into [forge-backed review](forge-backed-review.md).
@@ -15,6 +18,9 @@ Confirming runs the chain on a worker thread with live per-stage progress. **Can
 ## The pipeline view
 
 A workdir whose conversion never completed — declined at the gate, cancelled, or failed — opens into the pipeline view rather than a dead end: the per-stage table, a stage picker defaulting to the first incomplete stage, optional `knob=value` settings, and **regenerate previews** once the survey and content caches exist, so you can eyeball the synthesized geometry before paying for the remaining model stages.
+
+![The pipeline view's stage table for a workdir whose conversion stopped after preprocessing](../assets/screenshots/pipeline-stages-light.png#only-light)
+![The pipeline view's stage table for a workdir whose conversion stopped after preprocessing](../assets/screenshots/pipeline-stages-dark.png#only-dark)
 
 Open projects get the same reach from their **Pipeline** panel: assembly stays the fast synchronous path, and any other stage runs with progress and cancellation, adopting the re-assembled document when it lands. Commits pause while it runs, and your undo history survives, replaying corrections against the new caches.
 
