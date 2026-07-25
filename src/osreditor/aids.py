@@ -815,6 +815,12 @@ def build_area_facts(adventure: Adventure, dungeon_id: str, level_number: int, a
     Deterministic serialization: the same document state yields the same facts,
     so a recorded fixture keys off a stable fingerprint.
 
+    An unnamed entity reads as `(unnamed)`, never as its internal id: the model
+    is instructed to mention only stated facts, so anything stated here can land
+    verbatim in player-facing prose, and a slug like `dungeon-1` in read-aloud
+    text is a defect. The area *key* is the one identifier that belongs — it is
+    printed-module notation, not an internal handle.
+
     Args:
         adventure: The open document.
         dungeon_id: The target dungeon id.
@@ -840,7 +846,7 @@ def build_area_facts(adventure: Adventure, dungeon_id: str, level_number: int, a
                 lines = [
                     f"Adventure: {adventure.name}",
                     f"Adventure description: {adventure.description or '(none)'}",
-                    f"Dungeon: {dungeon.name or dungeon.id}",
+                    f"Dungeon: {dungeon.name or '(unnamed)'}",
                     f"Level: {level_number}",
                     f"Area key: {area_id}",
                     f"Area name: {area.name or '(unnamed)'}",
@@ -859,7 +865,7 @@ def build_area_facts(adventure: Adventure, dungeon_id: str, level_number: int, a
 def build_hooks_facts(adventure: Adventure) -> str:
     """Assemble the adventure's hook facts as canonically ordered text."""
     town = adventure.town
-    dungeon_names = ", ".join(dungeon.name or dungeon.id for dungeon in adventure.dungeons) or "(none)"
+    dungeon_names = ", ".join(dungeon.name or "(unnamed)" for dungeon in adventure.dungeons) or "(none)"
     services = ", ".join(town.services) or "(none)"
     existing = "\n".join(f"- {hook}" for hook in adventure.hooks) if adventure.hooks else "(none)"
     return "\n".join(
