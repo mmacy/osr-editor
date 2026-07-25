@@ -18,6 +18,10 @@ export interface ImportChoices {
   // sealing of every stale synthesized opening falls out of the translator's
   // edge diffing; the batch otherwise rides the existing mapping.
   forge?: boolean
+  // Source metadata the author chose to adopt. Present keys ride this very
+  // batch, so adoption is one undo step with the map rather than a second
+  // commit that can half-fail.
+  adopt?: { name?: string; description?: string }
 }
 
 // A transition target resolves when the destination document will contain the
@@ -56,7 +60,8 @@ export function unresolvedTransitionIndices(
 }
 
 // The batch, one atomic undo step, in the pinned order that keeps every op
-// valid against the document state it sees. For a new level: AddLevel,
+// valid against the document state it sees. Adopted source metadata leads —
+// adventure scope before level scope. For a new level: AddLevel,
 // SetEdges, CreateArea per area, AddTransition per kept transition,
 // SetEntrance. For replace: clear the existing level first — SetEntrance(null),
 // RemoveTransition per existing entry, RemoveArea per existing area, SetEdges
@@ -71,6 +76,16 @@ export function importOps(
 ): AnyEditOp[] {
   const { dungeonId, levelNumber, mode } = choices
   const ops: AnyEditOp[] = []
+  if (choices.adopt?.name !== undefined) {
+    ops.push({ op: 'set_adventure_field', field: 'name', value: choices.adopt.name })
+  }
+  if (choices.adopt?.description !== undefined) {
+    ops.push({
+      op: 'set_adventure_field',
+      field: 'description',
+      value: choices.adopt.description,
+    })
+  }
   if (mode === 'new') {
     ops.push({
       op: 'add_level',

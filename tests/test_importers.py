@@ -25,9 +25,10 @@ from osreditor.importers import (
     GeometryImporter,
     ImportedGeometry,
     ImportedLevel,
-    ProjectImporter,
     discover_importers,
 )
+from osreditor.importers.project import ProjectImporter
+from osreditor.importers.watabou import OPDImporter
 
 OPEN = Edge(kind=EdgeKind.OPEN)
 
@@ -49,14 +50,15 @@ def simple_adventure(**level_overrides: object) -> Adventure:
     )
 
 
-def test_the_built_in_importer_conforms_to_the_protocol() -> None:
+def test_the_built_in_importers_conform_to_the_protocol() -> None:
     assert isinstance(ProjectImporter(), GeometryImporter)
+    assert isinstance(OPDImporter(), GeometryImporter)
 
 
-def test_discovery_finds_the_built_in_through_the_public_group() -> None:
+def test_discovery_finds_both_built_ins_through_the_public_group() -> None:
     importers = discover_importers()
-    assert "project" in importers
     assert isinstance(importers["project"], ProjectImporter)
+    assert isinstance(importers["watabou-opd"], OPDImporter)
 
 
 class _SyntheticImporter:
@@ -89,14 +91,19 @@ def _patch_entry_points(monkeypatch: pytest.MonkeyPatch, *entries: _FakeEntryPoi
     )
 
 
-def test_a_synthetic_third_party_importer_registers_without_editor_changes(
+def test_a_synthetic_third_party_importer_coexists_with_both_built_ins(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Bundling a second converter costs the seam nothing: a third-party package
+    # registers alongside both built-ins through the same public group.
     _patch_entry_points(
-        monkeypatch, _FakeEntryPoint("project", ProjectImporter), _FakeEntryPoint("synthetic", _SyntheticImporter)
+        monkeypatch,
+        _FakeEntryPoint("project", ProjectImporter),
+        _FakeEntryPoint("watabou-opd", OPDImporter),
+        _FakeEntryPoint("synthetic", _SyntheticImporter),
     )
     importers = discover_importers()
-    assert list(importers) == ["project", "synthetic"]
+    assert list(importers) == ["project", "watabou-opd", "synthetic"]
     assert importers["synthetic"].label == "Synthetic format"
 
 
@@ -276,6 +283,7 @@ def test_importer_routes_list_sniff_and_load(client: TestClient, tmp_path: Path)
     listed = client.get("/api/importers")
     assert listed.status_code == 200
     assert {"format_id": "project", "label": "osr-editor project"} in listed.json()["importers"]
+    assert {"format_id": "watabou-opd", "label": "Watabou One Page Dungeon (JSON)"} in listed.json()["importers"]
 
     source = write_project(tmp_path / "src.osr", simple_adventure())
     sniffed = client.post("/api/importers/sniff", json={"path": str(source)})
@@ -293,7 +301,7 @@ def test_sniff_route_answers_empty_for_a_nonexistent_path(client: TestClient, tm
 
 
 def test_unknown_importer_answers_404(client: TestClient, tmp_path: Path) -> None:
-    response = client.post("/api/importers/watabou/load", json={"path": str(tmp_path)})
+    response = client.post("/api/importers/dungeon-scrawl/load", json={"path": str(tmp_path)})
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "importer_not_found"
 

@@ -1,8 +1,10 @@
 // The import dialog: source path → sniff (preselects the importer) → load →
 // pick a source level → choose the destination → one atomic op batch through
-// the ordinary ops route. The payload's multi-level shape is the protocol's;
-// the dialog imports one level per invocation. The body mounts only while
-// open, so per-invocation state initializes on mount.
+// the ordinary ops route. The path is free text and takes a directory or a
+// file — sniff is what disambiguates, so no importer needs a picker of its
+// own. The payload's multi-level shape is the protocol's; the dialog imports
+// one level per invocation. The body mounts only while open, so
+// per-invocation state initializes on mount.
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -77,6 +79,10 @@ function ImportDialogBody({
       document.dungeons.find((candidate) => candidate.id === dungeonId)?.levels[0]?.number ?? null,
   )
   const [keepUnresolved, setKeepUnresolved] = useState<number[]>([])
+  // Adoption defaults off: an import is a geometry gesture, and silently
+  // rewriting the adventure's name is not what the author asked for.
+  const [adoptTitle, setAdoptTitle] = useState(false)
+  const [adoptDescription, setAdoptDescription] = useState(false)
 
   useEffect(() => {
     api
@@ -116,9 +122,18 @@ function ImportDialogBody({
         setGeometry(loaded)
         setSourceIndex(0)
         setKeepUnresolved([])
+        setAdoptTitle(false)
+        setAdoptDescription(false)
       })
       .catch(toastApiError)
   }
+
+  // Each control appears only when the source actually carries the field and
+  // its value differs from the project's own — there is nothing to adopt
+  // otherwise, and an inert checkbox is noise.
+  const titleAdoptable = geometry?.title != null && geometry.title !== document.name
+  const descriptionAdoptable =
+    geometry?.description != null && geometry.description !== document.description
 
   const source = geometry?.levels[sourceIndex] ?? null
   const destinationNumber = mode === 'new' ? Number(newNumber) : replaceNumber
@@ -152,6 +167,9 @@ function ImportDialogBody({
         return
       }
     }
+    const adopt: { name?: string; description?: string } = {}
+    if (adoptTitle && titleAdoptable) adopt.name = geometry?.title ?? ''
+    if (adoptDescription && descriptionAdoptable) adopt.description = geometry?.description ?? ''
     void projectStore
       .getState()
       .commit((current) =>
@@ -161,6 +179,7 @@ function ImportDialogBody({
           mode,
           keepUnresolved,
           forge,
+          adopt,
         }),
       )
       .then((committed) => {
@@ -189,7 +208,7 @@ function ImportDialogBody({
               id="import-path"
               className="font-mono"
               value={path}
-              placeholder="/absolute/path/to/project"
+              placeholder="/absolute/path/to/source"
               onChange={(event) => setPath(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') sniff()
@@ -247,6 +266,40 @@ function ImportDialogBody({
                 ))}
               </select>
             </div>
+            {(titleAdoptable || descriptionAdoptable) && (
+              <div className="flex flex-col gap-1" aria-label="Adopt source metadata">
+                <p className="text-sm font-medium">
+                  The source carries metadata of its own. Adopting rides the same undo step as the
+                  map.
+                </p>
+                {titleAdoptable && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={adoptTitle}
+                      onChange={(event) => setAdoptTitle(event.target.checked)}
+                    />
+                    Adopt the title
+                    <span className="min-w-0 truncate text-xs text-muted-foreground">
+                      {geometry.title}
+                    </span>
+                  </label>
+                )}
+                {descriptionAdoptable && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={adoptDescription}
+                      onChange={(event) => setAdoptDescription(event.target.checked)}
+                    />
+                    Adopt the description
+                    <span className="min-w-0 truncate text-xs text-muted-foreground">
+                      {geometry.description}
+                    </span>
+                  </label>
+                )}
+              </div>
+            )}
             {source && source.notes.length > 0 && (
               <div className="flex flex-col gap-0.5" aria-label="Importer notes">
                 <p className="text-sm font-medium">The importer flagged:</p>

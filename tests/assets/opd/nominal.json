@@ -1,0 +1,35 @@
+{
+  "version": "1.2.7",
+  "title": "The Hollow Beneath Redcap Hill",
+  "story": "A shepherd's boy followed his dog into a crack in the hillside and came back out three days later, grey-haired and mute. The crack is still there.",
+  "rects": [
+    { "x": 0, "y": 0, "w": 1, "h": 1 },
+    { "x": 0, "y": -4, "w": 1, "h": 4 },
+    { "x": 0, "y": -5, "w": 1, "h": 1 },
+    { "x": -2, "y": -9, "w": 5, "h": 4 },
+    { "x": 3, "y": -7, "w": 1, "h": 1 },
+    { "x": 4, "y": -7, "w": 3, "h": 1 },
+    { "x": 7, "y": -7, "w": 1, "h": 1 },
+    { "x": 8, "y": -9, "w": 4, "h": 4 }
+  ],
+  "doors": [
+    { "x": 0, "y": 0, "dir": { "x": 0, "y": -1 }, "type": 3 },
+    { "x": 0, "y": -5, "dir": { "x": 0, "y": -1 }, "type": 1 },
+    { "x": 3, "y": -7, "dir": { "x": 1, "y": 0 }, "type": 6 },
+    { "x": 7, "y": -7, "dir": { "x": 1, "y": 0 }, "type": 1 }
+  ],
+  "notes": [
+    {
+      "pos": { "x": 0.5, "y": -7 },
+      "ref": "1",
+      "text": "A low hall of packed earth. Roots hang from the ceiling in curtains, and the floor is churned as though something large turned around here."
+    },
+    {
+      "pos": { "x": 10, "y": -7 },
+      "ref": "2",
+      "text": "The shepherd boy's dog, or what is left of it, lies curled on a heap of coins. The coins are warm."
+    }
+  ],
+  "columns": [],
+  "water": []
+}
