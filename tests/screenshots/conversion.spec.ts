@@ -70,7 +70,9 @@ test('the pipeline and the printed page', async ({ page, request }, testInfo) =>
   // strip reads "FixtureProvider", a harness no reader can configure.
   await expect(page.getByTestId('stage-row-survey')).toContainText('pending')
   await shoot(
-    page.getByTestId('stage-row-preprocess').locator('xpath=..'),
+    // The table, not its tbody: the header row names the columns, and the
+    // FixtureProvider strip sits outside the table wrapper either way.
+    page.getByTestId('stage-row-preprocess').locator('xpath=../..'),
     'pipeline-stages',
     testInfo,
   )

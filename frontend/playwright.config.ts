@@ -56,8 +56,11 @@ const captureUse = {
 
 export default defineConfig({
   forbidOnly: !!process.env.CI,
-  // Resets the produced-shots manifest so it always describes this run alone.
-  globalSetup: '../tests/screenshots/global-setup.ts',
+  // Resets the capture scratch state so a run always describes itself. Declared
+  // only when capturing: an unconditional globalSetup would put the capture
+  // modules on the release gate's load path, where a syntax error in one of them
+  // could fail a tag build that never takes a screenshot.
+  globalSetup: capturing ? '../tests/screenshots/global-setup.ts' : undefined,
   // The capture suite shares one server per port and the backend holds provider
   // configuration and recents process-globally, so the two theme projects must
   // not race each other. The runs also pass --workers=1.

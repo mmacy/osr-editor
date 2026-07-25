@@ -119,11 +119,24 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   await expect(
     inspector.getByTestId('card-treasure').getByRole('button', { name: 'C', exact: true }),
   ).toBeVisible()
-  // Scroll back to the top: committing the cards leaves the inspector at its
-  // bottom, which would put the encounter's monster line — the thing the caption
-  // is about — above the frame.
-  await inspector.getByLabel('Monster lines').scrollIntoViewIfNeeded()
-  await expect(inspector.getByLabel('Monster lines')).toContainText('Skeleton')
+  // Collapse the encounter card to its module-notation summary so both cards fit
+  // the inspector's height. Expanded, it alone fills the frame and the treasure
+  // card sits below the fold — which `toBeVisible()` does not catch, since it only
+  // requires a non-empty box, not presence in the scroll viewport.
+  const encounterCard = inspector.getByTestId('card-encounter')
+  await encounterCard.getByRole('button', { expanded: true }).first().click()
+  await encounterCard.scrollIntoViewIfNeeded()
+  await expect(encounterCard).toContainText('Skeleton')
+
+  // Assert both cards are genuinely in frame, which is the check that would have
+  // caught the first version of this shot.
+  const frame = await inspector.boundingBox()
+  for (const card of [encounterCard, inspector.getByTestId('card-treasure')]) {
+    const box = await card.boundingBox()
+    if (!frame || !box || box.y < frame.y || box.y + box.height > frame.y + frame.height) {
+      throw new Error('a content card the caption names is outside the captured frame')
+    }
+  }
   await shoot(inspector, 'area-content-cards', testInfo)
 
   // The map's own reading: a stocked key number beside a hollow one, with the
@@ -169,6 +182,11 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   // sees could be of a half-dismissed dialog.
   await expect(page.getByRole('dialog')).toBeHidden()
   await expect(page.getByTestId('map-canvas')).toBeVisible()
+  // Deliberately left at reset zoom. Zooming in was tried and is worse: `zoomAt`
+  // scales about the viewport centre, not the geometry, so two steps pushed the
+  // module off the top-left corner and left one room in frame. There is no
+  // fit-to-content control, so the honest framing of a small module on a 30x30
+  // level is the whole level, empty paper included.
   await shoot(page, 'map-editor-hero', testInfo)
 })
 

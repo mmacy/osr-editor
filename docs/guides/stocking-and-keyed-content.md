@@ -20,8 +20,8 @@ Key numbers render hollow until an area is stocked (a description or any content
 
 The area panel's cards commit through type-ahead pickers over osrlib's shipped catalogs — monsters (bundled templates first, then this session's recent picks), equipment, and treasure-type letters — so the editor never authors a dangling reference. Foreign documents' danglers stay legal, diagnosed, and navigable.
 
-![The area panel's encounter and treasure cards, committed through type-ahead pickers](../assets/screenshots/area-content-cards-light.png#only-light)
-![The area panel's encounter and treasure cards, committed through type-ahead pickers](../assets/screenshots/area-content-cards-dark.png#only-dark)
+![The area panel's encounter card, collapsed to its module notation, above an expanded treasure card](../assets/screenshots/area-content-cards-light.png#only-light)
+![The area panel's encounter card, collapsed to its module notation, above an expanded treasure card](../assets/screenshots/area-content-cards-dark.png#only-dark)
 
 - **Encounters** name a monster, a count, and the lair-hoard toggle — a monster room's treasure is the encounter's own lair hoard, and the toggle expresses the treasure-absent monster room the SRD rolls.
 - **Treasure** references a treasure type letter or the unguarded band.
