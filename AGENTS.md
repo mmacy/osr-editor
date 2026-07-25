@@ -5,6 +5,7 @@ osr-editor is a local GUI application for creating and modifying adventure modul
 ## Start here
 
 - `docs/spec.md` is the single source of truth. Read it before any implementation work. It is decision-complete: architecture, contracts, interaction models, and a phased roadmap. Implement in phase order.
+- `docs/backlog.md` records features cut from the spec and deferred indefinitely. It is not scope and never drives implementation; an item leaves it only when the owner puts it back on the roadmap. Read it when you need to know why a capability the spec once described is absent.
 - osrlib (checked out at `~/repos/osrlib-python`, published as `osrlib`) is the schema and rules authority. The adventure document *is* osrlib's pydantic models; loading, validation, and play go through `check_document`, `Adventure.model_validate`, and `validate_adventure`. Never re-implement or fork osrlib's rules or validation — the one sanctioned exception (the live structural lint) is pinned in the spec with rationale.
 - osr-forge (checked out at `~/repos/osr-forge`, published as `osr-forge`) is the conversion authority: workdir layout, `overrides.yaml` schema, report flag and finding vocabularies. When a forge-contract question comes up, its spec and code are the authority; verify against them rather than working from memory.
 - osr-web (checked out at `~/repos/osr-web`) is the reference consumer; "publish" means satisfying its `adventures/` discovery rules.
@@ -68,7 +69,7 @@ These are contracts, not suggestions — see the corresponding spec sections bef
 
 ## Releasing
 
-Release engineering lands in phase 10 and mirrors the siblings: version in `pyproject.toml` alone, tag-driven `release.yml` with trusted publishing, dist audit, fresh-venv smoke tests. Changelog discipline applies from the first phase: a PR that changes user-visible behavior adds its bullet to the `[Unreleased]` section of `CHANGELOG.md` in the same PR.
+Release engineering lands in phase 9 and mirrors the siblings: version in `pyproject.toml` alone, tag-driven `release.yml` with trusted publishing, dist audit, fresh-venv smoke tests. Changelog discipline applies from the first phase: a PR that changes user-visible behavior adds its bullet to the `[Unreleased]` section of `CHANGELOG.md` in the same PR.
 
 ## Licensing
 
