@@ -6,9 +6,15 @@ The **Monsters** section (beside Adventure and Town, in both project types) stoc
 
 Create from scratch — a model-valid stock 1-HD block the detail editor then reshapes — or clone-and-modify any catalog monster: "like an orc, but…". The monster picker's create shortcut starts the same flow from an encounter card, so a missing monster never breaks your stocking stride.
 
+![The monsters section: the bundled template list beside the stat-block editor](../assets/screenshots/monsters-section-light.png#only-light)
+![The monsters section: the bundled template list beside the stat-block editor](../assets/screenshots/monsters-section-dark.png#only-dark)
+
 ## The detail editor
 
 The always-saved detail editor covers the whole stat block: the AC pair gated by the attack-roll toggle, the hit-dice builder, ordered attack routines, movement modes, saves, morale and alternates, alignment, XP notes, dice/fixed/see-below number appearing, the treasure reference, abilities with typed params, defenses, and categories. Dice inputs check locally as you type; the server's parse is the authority. The derive-from-HD buttons fill XP, the THAC0/attack-bonus pair, and the save band from the hit dice — see [authoring aids](authoring-aids.md).
+
+![The monster detail editor showing armour class, hit dice, and attack routines](../assets/screenshots/monster-detail-light.png#only-light)
+![The monster detail editor showing armour class, hit dice, and attack routines](../assets/screenshots/monster-detail-dark.png#only-dark)
 
 ## Identity and references
 

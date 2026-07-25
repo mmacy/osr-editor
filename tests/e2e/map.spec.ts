@@ -13,7 +13,7 @@ import { join } from 'node:path'
 
 import { expect, test, type Page } from '@playwright/test'
 
-import { CELL_SIZE, RESET_MARGIN } from '../../frontend/src/map/view'
+import { cellCenter, createProject, drag, edgePoint, openMap } from './helpers'
 
 // Playwright transpiles specs to CJS, so __dirname is the reliable anchor.
 const FIXTURES = join(__dirname, '..', 'fixtures')
@@ -30,49 +30,6 @@ interface StampedLevel {
 interface StampedDocument {
   kind: string
   payload: { dungeons: { levels: StampedLevel[] }[] }
-}
-
-async function createProject(page: Page, projectDir: string, name: string): Promise<void> {
-  await page.goto('/')
-  await page.getByRole('button', { name: 'New adventure' }).click()
-  await page.getByLabel('Adventure name').fill(name)
-  await page.getByLabel('Destination directory').fill(projectDir)
-  await page.getByRole('button', { name: 'Create' }).click()
-  await expect(page.getByTestId('revision')).toHaveText('r1')
-}
-
-async function openMap(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Level 1' }).click()
-  await expect(page.getByTestId('map-canvas')).toBeVisible()
-  await page.getByRole('button', { name: 'Reset zoom' }).click()
-}
-
-// The center of a cell in page coordinates, valid after Reset zoom.
-async function cellCenter(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
-  const box = await page.getByTestId('map-canvas').boundingBox()
-  if (!box) throw new Error('the map canvas has no bounding box')
-  return {
-    x: box.x + RESET_MARGIN + (x + 0.5) * CELL_SIZE,
-    y: box.y + RESET_MARGIN + (y + 0.5) * CELL_SIZE,
-  }
-}
-
-// A point on the edge between two orthogonally adjacent cells.
-async function edgePoint(
-  page: Page,
-  a: [number, number],
-  b: [number, number],
-): Promise<{ x: number; y: number }> {
-  const first = await cellCenter(page, a[0], a[1])
-  const second = await cellCenter(page, b[0], b[1])
-  return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 }
-}
-
-async function drag(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {
-  await page.mouse.move(from.x, from.y)
-  await page.mouse.down()
-  await page.mouse.move(to.x, to.y, { steps: 8 })
-  await page.mouse.up()
 }
 
 test('author a two-level dungeon from the blank grid, lint clean, export', async ({ page }) => {

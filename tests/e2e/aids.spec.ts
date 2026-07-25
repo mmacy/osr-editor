@@ -14,7 +14,7 @@ import { join } from 'node:path'
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
-import { CELL_SIZE, RESET_MARGIN } from '../../frontend/src/map/view'
+import { cellCenter, drag, drawRoom } from './helpers'
 
 // The committed prose fixtures, resolved through Playwright's own testDir so the
 // path holds however the suite is invoked (spec files load as CJS here, so
@@ -38,28 +38,6 @@ interface StampedDocument {
       }[]
     }[]
   }
-}
-
-async function cellCenter(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
-  const box = await page.getByTestId('map-canvas').boundingBox()
-  if (!box) throw new Error('the map canvas has no bounding box')
-  return {
-    x: box.x + RESET_MARGIN + (x + 0.5) * CELL_SIZE,
-    y: box.y + RESET_MARGIN + (y + 0.5) * CELL_SIZE,
-  }
-}
-
-async function drag(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {
-  await page.mouse.move(from.x, from.y)
-  await page.mouse.down()
-  await page.mouse.move(to.x, to.y, { steps: 8 })
-  await page.mouse.up()
-}
-
-async function drawRoom(page: Page, a: [number, number], b: [number, number]) {
-  await page.getByRole('button', { name: 'Room tool' }).click()
-  await drag(page, await cellCenter(page, ...a), await cellCenter(page, ...b))
-  await page.getByRole('button', { name: 'Select tool' }).click()
 }
 
 test('draft prose on a blank room, sweep the level, and publish', async ({ page }, testInfo) => {

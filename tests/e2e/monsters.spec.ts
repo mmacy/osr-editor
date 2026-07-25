@@ -12,7 +12,7 @@ import { join } from 'node:path'
 
 import { expect, test, type Page } from '@playwright/test'
 
-import { CELL_SIZE, RESET_MARGIN } from '../../frontend/src/map/view'
+import { cellCenter } from './helpers'
 
 interface StampedDocument {
   kind: string
@@ -31,15 +31,6 @@ interface StampedDocument {
         areas: { id: string; encounter: { monsters: { template_id: string }[] } | null }[]
       }[]
     }[]
-  }
-}
-
-async function cellCenter(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
-  const box = await page.getByTestId('map-canvas').boundingBox()
-  if (!box) throw new Error('the map canvas has no bounding box')
-  return {
-    x: box.x + RESET_MARGIN + (x + 0.5) * CELL_SIZE,
-    y: box.y + RESET_MARGIN + (y + 0.5) * CELL_SIZE,
   }
 }
 

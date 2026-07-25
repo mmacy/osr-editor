@@ -11,21 +11,11 @@ import { join } from 'node:path'
 
 import { expect, test, type Page } from '@playwright/test'
 
-import { CELL_SIZE, RESET_MARGIN } from '../../frontend/src/map/view'
+import { edgePoint } from './helpers'
 
 const FIXTURE = join(__dirname, '..', 'fixtures', 'forge_workdir')
 
 const CORRECTED = 'Sacks of flour line the walls; goblins have gnawed clean through the lot.'
-
-async function edgePoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
-  // The point on the edge between cells (x-1, y) and (x, y), after Reset zoom.
-  const box = await page.getByTestId('map-canvas').boundingBox()
-  if (!box) throw new Error('the map canvas has no bounding box')
-  return {
-    x: box.x + RESET_MARGIN + x * CELL_SIZE,
-    y: box.y + RESET_MARGIN + (y + 0.5) * CELL_SIZE,
-  }
-}
 
 test('the forge review loop: flags to corrected, resolved, checked, published', async ({
   page,
@@ -83,7 +73,7 @@ test('the forge review loop: flags to corrected, resolved, checked, published', 
   await expect(page.getByTestId('map-canvas')).toBeVisible()
   await page.getByRole('button', { name: 'Reset zoom' }).click()
   await page.getByRole('button', { name: 'Wall and door tool' }).click()
-  const seal = await edgePoint(page, 1, 0)
+  const seal = await edgePoint(page, [0, 0], [1, 0])
   await page.mouse.click(seal.x, seal.y)
   await expect(page.getByTestId('revision')).toHaveText('r3')
   await page.mouse.click(seal.x, seal.y)
