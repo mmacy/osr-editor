@@ -64,6 +64,17 @@ dev = [
     "pyright>=1.1",
     "httpx2>=2.7.0",
     "types-pyyaml>=6",
+    { include-group = "docs" },
+]
+# The documentation site's toolchain; included by dev so `uv sync` stays one
+# command. No mkdocs-gen-files or mkdocs-literate-nav: the editor's reference
+# surface is one seam, not a generated per-module tree, so the nav is
+# hand-written — which also sidesteps the properdocs hazard osrlib pins
+# against (both plugins' next releases depend on an unvetted mkdocs fork).
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.4",
 ]
 
 [build-system]

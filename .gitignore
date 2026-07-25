@@ -9,6 +9,12 @@ dist/
 .coverage
 .coverage.*
 
+# Docs site build output (mkdocs build)
+site/
+
+# The release dry run's fresh venv (AGENTS.md releasing runbook)
+smoke-venv/
+
 # Built frontend (produced by the Vite build; shipped in the wheel from phase 9)
 src/osreditor/static/
 
