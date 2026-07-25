@@ -296,7 +296,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.139" },
-    { name = "osr-forge", git = "https://github.com/mmacy/osr-forge" },
+    { name = "osr-forge", specifier = ">=0.1,<0.2" },
     { name = "osrlib", specifier = ">=1.3,<2" },
     { name = "platformdirs", specifier = ">=4" },
     { name = "pydantic", specifier = ">=2" },
@@ -316,7 +316,7 @@ dev = [
 [[package]]
 name = "osr-forge"
 version = "0.1.0"
-source = { git = "https://github.com/mmacy/osr-forge#4b43fa58c45db9fb66b168c37d9216aa937f8a88" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonschema" },
     { name = "openai" },
@@ -325,6 +325,10 @@ dependencies = [
     { name = "pydantic" },
     { name = "pypdfium2" },
     { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b0/d8/7c919b455c29d9b9663de29386317de84b8ae9dcd20047ec90fe60e2a4fc/osr_forge-0.1.0.tar.gz", hash = "sha256:0c0c77e1782d39169ea0622fa7b592503b72c79d3e98692bd6ee52765f82279c", size = 124874, upload-time = "2026-07-21T02:06:50.575Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/73/506eb31679d6dc2abfd30090155ea2322ff458112dc29cd6ed5c52daad6e/osr_forge-0.1.0-py3-none-any.whl", hash = "sha256:aba42e7c12a2ff8ecaab60d38878f6ae0c31bfcc174be62870c86f668e625137", size = 141099, upload-time = "2026-07-21T02:06:49.383Z" },
 ]
 
 [[package]]
