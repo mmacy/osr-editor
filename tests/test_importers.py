@@ -18,6 +18,7 @@ from osrlib.crawl.dungeon import (
 )
 
 import osreditor.importers
+from example_importer import FieldMapImporter
 from osreditor.app import create_app
 from osreditor.documents import dump_adventure
 from osreditor.errors import ImportSourceInvalidError
@@ -141,6 +142,85 @@ def test_a_duplicate_format_id_keeps_the_first_registration(
         importers = discover_importers()
     assert importers["project"].label == "osr-editor project"
     assert "keeping the first registration" in caplog.text
+
+
+# The teaching example behind the docs site's "writing a geometry importer"
+# guide: the guide excerpts example_importer.py via named snippet sections, and
+# these tests are what make the excerpted code "code that passes".
+
+
+def test_the_teaching_example_conforms_and_registers_through_the_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert isinstance(FieldMapImporter(), GeometryImporter)
+    _patch_entry_points(monkeypatch, _FakeEntryPoint("fieldmap", FieldMapImporter))
+    importers = discover_importers()
+    assert isinstance(importers["fieldmap"], FieldMapImporter)
+    assert importers["fieldmap"].label == "Field map (plain text)"
+
+
+def test_the_teaching_example_sniffs_at_presence_level(tmp_path: Path) -> None:
+    importer = FieldMapImporter()
+    source = tmp_path / "vault.fieldmap"
+    source.write_text("#.@\n", encoding="utf-8")
+    assert importer.sniff(source)
+    assert not importer.sniff(tmp_path / "missing.fieldmap")
+    wrong_suffix = tmp_path / "vault.txt"
+    wrong_suffix.write_text("#.@\n", encoding="utf-8")
+    assert not importer.sniff(wrong_suffix)
+    binary = tmp_path / "junk.fieldmap"
+    binary.write_bytes(b"\xff\xfe\x00\x01")
+    assert not importer.sniff(binary)
+    rockless = tmp_path / "prose.fieldmap"
+    rockless.write_text("chapter one\n", encoding="utf-8")
+    assert not importer.sniff(rockless)
+
+
+def test_the_teaching_example_loads_the_documented_map(tmp_path: Path) -> None:
+    source = tmp_path / "vault.fieldmap"
+    source.write_text("@.1\n#.1\n~.@\n", encoding="utf-8")
+    geometry = FieldMapImporter().load(source)
+    assert geometry.title is None and geometry.description is None
+    level = geometry.levels[0]
+    assert (level.label, level.width, level.height) == ("vault", 3, 3)
+    assert level.entrance == (0, 0)
+    assert set(level.edges) == {
+        "1,0:west",
+        "2,0:west",
+        "1,1:north",
+        "2,1:north",
+        "2,1:west",
+        "1,2:north",
+        "2,2:north",
+        "2,2:west",
+    }
+    assert all(edge.kind == EdgeKind.OPEN for edge in level.edges.values())
+    assert [(area.id, area.cells) for area in level.areas] == [("1", ((2, 0), (2, 1)))]
+    assert level.transitions == ()
+    assert level.notes == (
+        "kept the entrance at (0, 0) and imported the '@' at (2, 2) as ordinary floor: a level carries one entrance",
+        "treated 1 '~' cell(s) as rock: this reader predates the symbol",
+    )
+
+
+def test_the_teaching_example_notes_a_missing_entrance(tmp_path: Path) -> None:
+    source = tmp_path / "open.fieldmap"
+    source.write_text("..\n", encoding="utf-8")
+    level = FieldMapImporter().load(source).levels[0]
+    assert level.entrance is None
+    assert level.notes == ("no entrance: the map marks no '@', so the level imports without one — place it by hand",)
+
+
+def test_the_teaching_example_raises_on_unloadable_sources(tmp_path: Path) -> None:
+    importer = FieldMapImporter()
+    with pytest.raises(ImportSourceInvalidError, match="cannot read"):
+        importer.load(tmp_path / "missing.fieldmap")
+    binary = tmp_path / "junk.fieldmap"
+    binary.write_bytes(b"\xff\xfe\x00\x01")
+    with pytest.raises(ImportSourceInvalidError, match="not UTF-8 text"):
+        importer.load(binary)
+    rock = tmp_path / "rock.fieldmap"
+    rock.write_text("###\n###\n", encoding="utf-8")
+    with pytest.raises(ImportSourceInvalidError, match="describes no floor"):
+        importer.load(rock)
 
 
 def test_sniff_recognizes_native_projects_and_workdir_shapes(tmp_path: Path) -> None:

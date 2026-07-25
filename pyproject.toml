@@ -1,6 +1,6 @@
 [project]
 name = "osr-editor"
-version = "0.0.1"
+version = "0.1.0"
 description = "Local GUI editor for creating and modifying osrlib adventure modules."
 readme = "README.md"
 license = "MIT"
@@ -20,7 +20,7 @@ keywords = [
 # Python :: 3.14 only — the version CI tests (the family rule); no License ::
 # classifier beside the SPDX expression, per PEP 639.
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -53,6 +53,7 @@ watabou-opd = "osreditor.importers.watabou:OPDImporter"
 
 [project.urls]
 Repository = "https://github.com/mmacy/osr-editor"
+Documentation = "https://mmacy.github.io/osr-editor/"
 Issues = "https://github.com/mmacy/osr-editor/issues"
 Changelog = "https://github.com/mmacy/osr-editor/blob/main/CHANGELOG.md"
 
@@ -63,21 +64,33 @@ dev = [
     "pyright>=1.1",
     "httpx2>=2.7.0",
     "types-pyyaml>=6",
+    { include-group = "docs" },
 ]
-
-# osr-forge has no PyPI release yet; until it does, the lock resolves it from
-# the public repo at a pinned commit — the closest available posture to
-# "published builds pin PyPI ranges". A sibling checkout stays a local-dev
-# override (`uv pip install -e ../osr-forge`), never a manifest entry.
-[tool.uv.sources]
-osr-forge = { git = "https://github.com/mmacy/osr-forge" }
+# The documentation site's toolchain; included by dev so `uv sync` stays one
+# command. No mkdocs-gen-files or mkdocs-literate-nav: the editor's reference
+# surface is one seam, not a generated per-module tree, so the nav is
+# hand-written — which also sidesteps the properdocs hazard osrlib pins
+# against (both plugins' next releases depend on an unvetted mkdocs fork).
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.4",
+]
 
 [build-system]
 requires = ["uv_build>=0.8.22,<0.9.0"]
 build-backend = "uv_build"
 
+# uv_build packages the tree, not the git index: with the frontend built, the
+# gitignored src/osreditor/static/ ships in both artifacts by design — and so
+# would any junk sitting in the tree. These excludes fix the leak at the
+# source; uv_build silently ignores unknown keys here (a typo'd exclude builds
+# clean and excludes nothing), so the dist audit's forbidden-member sweep
+# (scripts/release/check_dist.py) is the guard that would ever notice.
 [tool.uv.build-backend]
 module-name = "osreditor"
+source-exclude = ["**/.DS_Store", "**/Thumbs.db", "**/.AppleDouble", "**/__pycache__"]
+wheel-exclude = ["**/.DS_Store", "**/Thumbs.db", "**/.AppleDouble", "**/__pycache__"]
 
 [tool.ruff]
 line-length = 120

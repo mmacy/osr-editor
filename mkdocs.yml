@@ -1,0 +1,128 @@
+site_name: osr-editor
+site_url: https://mmacy.github.io/osr-editor/
+site_description: >-
+  Local GUI editor for creating and modifying osrlib adventure modules:
+  author native projects on the map, review and correct osr-forge
+  conversions, and publish to osr-web.
+repo_url: https://github.com/mmacy/osr-editor
+repo_name: mmacy/osr-editor
+
+theme:
+  name: material
+  palette:
+    # Light/dark toggle: the button flips between the two schemes and the site
+    # remembers the reader's choice.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  # Explicit heading ids ({ #anchor }) so pages can carry stable
+  # cross-reference anchors via autorefs.
+  - attr_list
+  # Syntax highlighting for fenced and inline code, exactly the siblings' set.
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  # The importer guide excerpts the tested teaching example via named snippet
+  # sections (--8<-- markers), so the documented code cannot drift from code
+  # that passes; check_paths fails the build when a marker disappears.
+  - pymdownx.snippets:
+      base_path: [.]
+      check_paths: true
+      dedent_subsections: true
+
+# The design documents live in docs/ beside the site pages but are not part of
+# the published site.
+exclude_docs: |
+  spec.md
+  phase-*-plan.md
+  backlog.md
+
+strict: true
+
+# `mkdocs serve` watches docs/ and mkdocs.yml by default, not the package
+# source; the importer guide renders src/ docstrings via mkdocstrings.
+watch:
+  - src
+
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+    absolute_links: warn
+  links:
+    not_found: warn
+    absolute_links: warn
+    unrecognized_links: warn
+    anchors: warn
+
+# Hand-written: the reference surface is one seam, not a generated per-module
+# tree, so the site needs neither gen-files nor literate-nav (and avoids the
+# properdocs hazard osrlib pins against).
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: getting-started/install.md
+      - Quickstart: getting-started/quickstart.md
+  - Guides:
+      - Projects: guides/projects.md
+      - The map editor: guides/map-editor.md
+      - Stocking and keyed content: guides/stocking-and-keyed-content.md
+      - The monster editor: guides/monster-editor.md
+      - Forge-backed review: guides/forge-backed-review.md
+      - Converting a PDF: guides/converting-a-pdf.md
+      - Authoring aids: guides/authoring-aids.md
+      - Import, export, and publish: guides/import-export-publish.md
+  - Reference:
+      - The CLI and configuration: reference/cli-and-configuration.md
+      - Writing a geometry importer: reference/writing-a-geometry-importer.md
+  - Licensing: licensing.md
+
+plugins:
+  - search
+  # Explicit, so heading anchors register as cross-reference targets.
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          # Remote inventories: python covers stdlib types, pydantic the model
+          # surface, and the siblings' published references resolve the osrlib
+          # spatial types and forge contracts the seam docs cross-link.
+          inventories:
+            - https://docs.python.org/3/objects.inv
+            - https://docs.pydantic.dev/latest/objects.inv
+            - https://mmacy.github.io/osrlib-python/objects.inv
+            - https://mmacy.github.io/osr-forge/objects.inv
+          options:
+            docstring_style: google
+            # Render the model fields, not only methods: for the frozen
+            # payload models the typed fields are the API surface an importer
+            # author reads. Hide the pydantic machinery and every
+            # underscore-prefixed name.
+            show_if_no_docstring: true
+            filters:
+              - "!^_"
+              - "!^model_config$"
+              - "!^model_fields$"
+              - "!^model_computed_fields$"
+            show_root_heading: true
+            heading_level: 3
+            show_source: false
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+            line_length: 120
+            merge_init_into_class: true
