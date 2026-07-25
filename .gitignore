@@ -6,6 +6,8 @@ dist/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.coverage
+.coverage.*
 
 # Built frontend (produced by the Vite build; shipped in the wheel from phase 9)
 src/osreditor/static/

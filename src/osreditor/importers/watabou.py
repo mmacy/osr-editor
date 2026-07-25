@@ -34,6 +34,7 @@ renders.
 import json
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from math import floor
 from pathlib import Path
 from typing import NamedTuple, cast
 
@@ -520,13 +521,14 @@ def _read_areas(
     taken = {record[0] for record in parsed if record is not None}
     claimed: dict[int, str] = {}
     used: set[str] = set()
+    index_by_cell = _rects_by_cell(rects)
 
     for index, record in enumerate(parsed):
         if record is None:
             notes.append(f"dropped notes[{index}]: it carries no readable pos")
             continue
         ref, text, position = record
-        rect_index = _rect_containing(rects, position)
+        rect_index = index_by_cell.get((floor(position[0]), floor(position[1])))
         if rect_index is None:
             landing = (position[0] + origin[0], position[1] + origin[1])
             notes.append(f"dropped note {ref!r}: its position {landing} lands in no room rectangle")
@@ -546,13 +548,21 @@ def _read_areas(
     return tuple(areas), notes
 
 
-def _rect_containing(rects: Sequence[tuple[int, int, int, int]], position: tuple[float, float]) -> int | None:
-    """The index of the first rect whose half-open span contains `position`, or None."""
-    px, py = position
+def _rects_by_cell(rects: Sequence[tuple[int, int, int, int]]) -> dict[Position, int]:
+    """Each floor cell mapped to the first rect covering it — the note-to-room lookup.
+
+    A note's `pos` is a room centre, so it is fractional, but a rect's span is
+    integer and half-open: `x <= px < x + w` holds exactly when `floor(px)` is
+    one of the rect's own columns. That turns containment into a dict lookup
+    and keeps the notes pass linear — a scan per note would be quadratic in
+    the source's size, which the cell ceiling alone does not bound.
+    """
+    index_by_cell: dict[Position, int] = {}
     for index, (x, y, w, h) in enumerate(rects):
-        if x <= px < x + w and y <= py < y + h:
-            return index
-    return None
+        for j in range(h):
+            for i in range(w):
+                index_by_cell.setdefault((x + i, y + j), index)
+    return index_by_cell
 
 
 def _dropped_features(data: Mapping[str, object]) -> list[str]:
