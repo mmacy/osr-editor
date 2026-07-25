@@ -72,7 +72,7 @@ uv run mkdocs build --strict
 npm ci
 npx prettier --check .
 npx eslint .
-npx tsc -b
+npx tsc -b --force
 npx vitest run
 npm run build
 

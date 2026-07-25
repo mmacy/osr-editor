@@ -32,9 +32,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_PACKAGE = REPO_ROOT / "src" / "osreditor"
 
 FORBIDDEN_DIRS = {"tests", "docs", "scripts", "frontend", "site", "test-results", "node_modules", "__pycache__"}
-FORBIDDEN_SUFFIXES = (".pyc", ".DS_Store")
+FORBIDDEN_SUFFIXES = (".pyc",)
 # The build-backend excludes these from both artifacts, so the expected tree
-# must not demand them back.
+# must not demand them back — and the sweep must flag every one of them, or a
+# typo'd exclude key (which uv_build ignores silently) ships junk unnoticed.
 JUNK_NAMES = {".DS_Store", "Thumbs.db", ".AppleDouble"}
 
 ASSET_REFERENCE = re.compile(r'(?:src|href)="/(assets/[^"]+)"')
@@ -74,6 +75,7 @@ def forbidden_members(members: list[str], skip_leading: int) -> list[str]:
         if (
             any(part in FORBIDDEN_DIRS for part in parts)
             or member.endswith(FORBIDDEN_SUFFIXES)
+            or Path(member).name in JUNK_NAMES
             or fixture_json
             or scratch_project
         ):
