@@ -15,10 +15,12 @@ Undo and redo work on the same terms: each step is a snapshot pair of the overri
 ![The review queue listing twelve flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-light.png#only-light)
 ![The review queue listing twelve flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-dark.png#only-dark)
 
-Every edit you commit gets an auto-drafted, page-anchored reason: redrawing geometry writes explicit wall seals over stale synthesized openings, importing a level lands as `geometry:` overrides, drawing past the derived extent grows it by rule. Machine drafts are badged until a human composes the reason — the record stays reviewable either way.
+Correction happens against the page. Here a different conversion — *The Root Cellar of Old Wenna* — has a flagged area open with the printed page it came from rendered beside it:
 
 ![A flagged area open beside its printed source page, in a second converted module](../assets/screenshots/source-pages-light.png#only-light)
 ![A flagged area open beside its printed source page, in a second converted module](../assets/screenshots/source-pages-dark.png#only-dark)
+
+Every edit you commit gets an auto-drafted, page-anchored reason: redrawing geometry writes explicit wall seals over stale synthesized openings, importing a level lands as `geometry:` overrides, drawing past the derived extent grows it by rule. Machine drafts are badged until a human composes the reason — the record stays reviewable either way.
 
 ## Corrections
 
