@@ -37,6 +37,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ListEditor } from '@/components/list-editor'
 import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
 import { monsterAddress } from '@/lib/address'
+import { statblockPreviewFor } from '@/lib/aids'
 import { api, ApiRequestError } from '@/lib/api'
 import {
   effectiveMonsterCatalog,
@@ -635,6 +636,26 @@ function MonsterDetail({
     (draft) => patch({ xp: Number(draft) }),
     integerInRange(0),
   )
+  // Derive-from-HD closes phase 4's deferral: the backend computes XP, the
+  // THAC0/attack-bonus pair, and the save band from the hit dice, and the values
+  // fill the honest form (committed like any edit — the form stays the authority).
+  const deriveFromHd = async () => {
+    const projectId = projectStore.getState().project?.id
+    if (!projectId) return
+    try {
+      const preview = await api.postAidsPreview(projectId, statblockPreviewFor(template.hit_dice))
+      if (preview.kind !== 'statblock') return
+      update((committed) => ({
+        xp: preview.xp,
+        thac0: preview.thac0,
+        attack_bonus: preview.attack_bonus,
+        saves: { ...committed.saves, values: preview.saves },
+      }))
+      toast('Derived XP, THAC0, attack bonus, and saves from the hit dice')
+    } catch (error) {
+      if (error instanceof ApiRequestError) toast.error(error.detail.message)
+    }
+  }
   return (
     <div className="flex flex-col gap-6" data-testid={`monster-detail-${template.id}`}>
       <div className="flex flex-col gap-3">
@@ -661,6 +682,15 @@ function MonsterDetail({
           />
         </div>
       </div>
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="self-start"
+        onClick={() => void deriveFromHd()}
+      >
+        Derive from HD
+      </Button>
 
       <CombatSection template={template} patch={patch} update={update} />
       <MovementSection template={template} update={update} />

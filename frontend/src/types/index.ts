@@ -146,6 +146,40 @@ export type ProviderStatus = components['schemas']['ProviderStatus']
 export type ProviderFieldStatus = components['schemas']['ProviderFieldStatus']
 export type ProviderSettingsRequest = components['schemas']['ProviderSettingsRequest']
 
+// Phase 7: the authoring aids — stocking, previews, and the prose assistant.
+// osrlib's and osr-forge's own shapes ride the generated types, never mirrored.
+export type StockingState = components['schemas']['StockingState']
+export type StreamState = components['schemas']['StreamState']
+export type SetStockingSeed = components['schemas']['SetStockingSeed']
+export type AidsStockRequest = components['schemas']['AidsStockRequest']
+export type AidsStockResponse = components['schemas']['AidsStockResponse']
+export type StockRoll = components['schemas']['StockRoll']
+export type StockFollowUp = components['schemas']['StockFollowUp']
+export type TreasurePreviewRequest = components['schemas']['TreasurePreviewRequest']
+export type TreasurePreviewResponse = components['schemas']['TreasurePreviewResponse']
+export type TreasureSample = components['schemas']['TreasureSample']
+export type ValuableView = components['schemas']['ValuableView']
+export type MagicItemView = components['schemas']['MagicItemView']
+export type EncounterPreviewRequest = components['schemas']['EncounterPreviewRequest']
+export type EncounterPreviewResponse = components['schemas']['EncounterPreviewResponse']
+export type EncounterLineView = components['schemas']['EncounterLineView']
+export type StatblockPreviewRequest = components['schemas']['StatblockPreviewRequest']
+export type StatblockPreviewResponse = components['schemas']['StatblockPreviewResponse']
+export type ProseAreaTarget = components['schemas']['ProseAreaTarget']
+export type ProseHooksTarget = components['schemas']['ProseHooksTarget']
+export type ProseAreaResponse = components['schemas']['ProseAreaResponse']
+export type ProseHooksResponse = components['schemas']['ProseHooksResponse']
+export type TokenUsage = components['schemas']['TokenUsage']
+
+// The discriminated aid unions, composed from their members (the route bodies
+// and responses carry the union, not a named schema — the AnyEditOp pattern).
+export type AidsPreviewRequest =
+  TreasurePreviewRequest | EncounterPreviewRequest | StatblockPreviewRequest
+export type AidsPreviewResponse =
+  TreasurePreviewResponse | EncounterPreviewResponse | StatblockPreviewResponse
+export type AidsProseRequest = ProseAreaTarget | ProseHooksTarget
+export type AidsProseResponse = ProseAreaResponse | ProseHooksResponse
+
 // The conversion lifecycle, as ConversionState actually carries it — the union
 // the screen discriminates on.
 export type ConversionStateName = ConversionState['state']

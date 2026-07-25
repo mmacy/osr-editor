@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, XIcon } from 'lucide-react'
 
+import { EncounterPreviewPanel, TreasurePreviewPanel } from '@/components/aid-previews'
 import { EquipmentPicker } from '@/components/equipment-picker'
 import { MiniLevelPicker } from '@/components/mini-level-picker'
 import { MonsterPicker } from '@/components/monster-picker'
@@ -349,6 +350,19 @@ function EncounterCard({
             />
             Aware — the monsters expect intruders
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={encounter.hoard}
+              onCheckedChange={(checked) => {
+                const hoard = checked === true
+                void projectStore
+                  .getState()
+                  .commit((current) => encounterPatchOps(current, target, { hoard }))
+              }}
+            />
+            Lair hoard — generate the monsters&rsquo; treasure at first spawn
+          </label>
+          <EncounterPreviewPanel encounter={encounter} nameFor={nameFor} />
           <Button
             variant="destructive"
             size="sm"
@@ -510,6 +524,7 @@ function TreasureCard({
             )}
           </div>
         )}
+        {treasure && <TreasurePreviewPanel treasure={treasure} levelNumber={target.levelNumber} />}
         {treasure && (
           <Button
             variant="destructive"

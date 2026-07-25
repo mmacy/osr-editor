@@ -77,9 +77,18 @@ def test_create_writes_a_loadable_document_and_the_sidecar(tmp_path: Path) -> No
     assert provenance["created_by"].startswith("osr-editor ")
     assert provenance["osrlib_version"]
     assert provenance["created_at"]
-    # Schema version 1, additive-only: phase 5 grew the empty-defaulted fields.
-    assert set(sidecar) == {"schema_version", "provenance", "view_state", "notes", "review", "auto_reasons"}
+    # Schema version 1, additive-only: phase 5 grew the empty-defaulted fields, phase 7 added stocking.
+    assert set(sidecar) == {
+        "schema_version",
+        "provenance",
+        "view_state",
+        "notes",
+        "review",
+        "auto_reasons",
+        "stocking",
+    }
     assert sidecar["notes"] == {} and sidecar["review"] == [] and sidecar["auto_reasons"] == []
+    assert sidecar["stocking"] == {"master_seed": None, "streams": {}}
 
 
 def test_create_refuses_a_non_empty_directory(tmp_path: Path) -> None:

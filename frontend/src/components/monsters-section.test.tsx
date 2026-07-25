@@ -94,6 +94,7 @@ test('the list shows name, id, HD, XP, and the referenced-by count', () => {
         alignment: null,
         aware: false,
         stance: null,
+        hoard: true,
       },
       features: [],
       trap: null,

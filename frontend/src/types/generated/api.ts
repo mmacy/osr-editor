@@ -430,6 +430,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/aids/stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Aids Stock
+         * @description Roll SRD stocking over a single blank room or a level's unstocked areas.
+         *
+         *     Results apply as one ordinary op batch — one undo step for a sweep — so the
+         *     store consumes `result` exactly like an `/ops` response. Reproducible from
+         *     the sidecar's seeded streams; re-rolls advance them order-independently and
+         *     undo never rewinds them.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The dungeon, level, and single area (or `None` for a sweep), plus
+         *             the revision the roll was computed against.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The per-target report and the ordinary batch result (`None` when no ops
+         *         rolled).
+         */
+        post: operations["post_aids_stock_api_projects__project_id__aids_stock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/aids/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Aids Preview
+         * @description Preview treasure hoards, an encounter's stat table, or derived stat-block values.
+         *
+         *     Pure reads — no revision, no document mutation, no sidecar contact. The
+         *     encounter kind resolves lines against the effective catalog (the document's
+         *     bundled templates included); the sampling kinds take an optional `seed` for
+         *     reproducible test output, server entropy otherwise.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The discriminated preview request.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The per-kind preview response.
+         */
+        post: operations["post_aids_preview_api_projects__project_id__aids_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/aids/prose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Aids Prose
+         * @description Draft read-aloud area prose or adventure hooks through the configured provider.
+         *
+         *     The provider is built at request time — a 422 `provider_not_configured` when
+         *     none is set. Facts assemble from a locked snapshot of the document; the
+         *     synchronous generate call runs outside the lock, so edits stay live and the
+         *     client may abandon the request. A failed generate is 502
+         *     `provider_request_failed` with forge's message verbatim. Acceptance is
+         *     client-side: the accepted draft commits as an ordinary op batch.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The discriminated prose target.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The draft, the call's token usage, and the model id.
+         */
+        post: operations["post_aids_prose_api_projects__project_id__aids_prose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/export": {
         parameters: {
             query?: never;
@@ -1176,6 +1282,33 @@ export interface components {
             monsters: components["schemas"]["MonsterTemplate"][];
         };
         /**
+         * AidsStockRequest
+         * @description A stocking request: a single-room roll (`area_id` set) or a level sweep (`area_id=None`).
+         */
+        AidsStockRequest: {
+            /** Revision */
+            revision: string;
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id?: string | null;
+        };
+        /**
+         * AidsStockResponse
+         * @description The stocking answer: the per-target report and the ordinary batch result.
+         *
+         *     `result` is `None` when no ops rolled (an all-empty sweep, or a single empty
+         *     or special room) — the store consumes it exactly like an `/ops` response,
+         *     and the revision does not bump.
+         */
+        AidsStockResponse: {
+            /** Rolls */
+            rolls: components["schemas"]["StockRoll"][];
+            result?: components["schemas"]["OpBatchResult"] | null;
+        };
+        /**
          * Alignment
          * @description The three alignments.
          *
@@ -1876,21 +2009,21 @@ export interface components {
          *
          *     The envelope is a shipped contract, additive-only within its schema
          *     version. Phase 1 wrote only provenance; phase 5 grows `view_state`,
-         *     per-entity `notes`, forge `review` marks, and `auto_reasons` — absent
-         *     fields default empty, so every existing sidecar and every foreign project
-         *     reads clean. `provenance` is optional (an additive relaxation: a required
-         *     field made optional never breaks an existing reader) because a foreign
-         *     project the editor merely opens has no provenance to claim; its first note
-         *     persists a sidecar with `provenance=None`, honest about what the editor
-         *     did and didn't author.
+         *     per-entity `notes`, forge `review` marks, and `auto_reasons`; phase 7 grows
+         *     `stocking`, the reproducible-stocking seed — absent fields default empty, so
+         *     every existing sidecar and every foreign project reads clean. `provenance`
+         *     is optional (an additive relaxation: a required field made optional never
+         *     breaks an existing reader) because a foreign project the editor merely opens
+         *     has no provenance to claim; its first note persists a sidecar with
+         *     `provenance=None`, honest about what the editor did and didn't author.
          *
          *     Open tolerates a missing sidecar (foreign native projects open fine); the
          *     file is written on the first sidecar-bearing write, never at open. `notes`
-         *     is keyed by the diagnostics address grammar and exists for both project
-         *     types; `review` and `auto_reasons` are forge-only — `auto_reasons` holds
-         *     the kind-qualified override-entry keys whose reason is still a machine
-         *     draft, and rides the forge undo stack with the `overrides.yaml` snapshot
-         *     (derived state of the same commit).
+         *     and `stocking.streams` are keyed by the diagnostics address grammar and
+         *     exist for both project types; `review` and `auto_reasons` are forge-only —
+         *     `auto_reasons` holds the kind-qualified override-entry keys whose reason is
+         *     still a machine draft, and rides the forge undo stack with the
+         *     `overrides.yaml` snapshot (derived state of the same commit).
          */
         EditorSidecar: {
             /**
@@ -1922,6 +2055,12 @@ export interface components {
              * @default []
              */
             auto_reasons: string[];
+            /**
+             * @default {
+             *       "streams": {}
+             *     }
+             */
+            stocking: components["schemas"]["StockingState"];
         };
         /**
          * Element
@@ -1929,6 +2068,87 @@ export interface components {
          * @enum {string}
          */
         Element: "fire" | "cold" | "lightning" | "acid" | "gas" | "poison" | "steam";
+        /**
+         * EncounterLineView
+         * @description One encounter line, resolved against the effective catalog with sampled counts.
+         *
+         *     `resolution` is `unresolved` for a dangling id (diagnostics-legal, previewed
+         *     as such, never an error); the stat fields are `None` there. `sampled_counts`
+         *     holds one rolled count per sample.
+         */
+        EncounterLineView: {
+            /** Template Id */
+            template_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Resolution
+             * @enum {string}
+             */
+            resolution: "shipped" | "bundled" | "unresolved";
+            /** Ac */
+            ac?: number | null;
+            /** Ac Ascending */
+            ac_ascending?: number | null;
+            hit_dice?: components["schemas"]["MonsterHitDice"] | null;
+            /** Thac0 */
+            thac0?: number | null;
+            /** Attack Bonus */
+            attack_bonus?: number | null;
+            /**
+             * Movement
+             * @default
+             */
+            movement: string;
+            /** Morale */
+            morale?: number | null;
+            /** Xp */
+            xp?: number | null;
+            /**
+             * Number Appearing
+             * @default
+             */
+            number_appearing: string;
+            /**
+             * Sampled Counts
+             * @default []
+             */
+            sampled_counts: number[];
+        };
+        /**
+         * EncounterPreviewRequest
+         * @description Preview a keyed encounter's stat table with sampled counts and XP totals.
+         */
+        EncounterPreviewRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "encounter";
+            encounter: components["schemas"]["KeyedEncounter"];
+            /**
+             * Samples
+             * @default 3
+             */
+            samples: number;
+            /** Seed */
+            seed?: string | null;
+        };
+        /**
+         * EncounterPreviewResponse
+         * @description The encounter's resolved lines and per-sample XP totals.
+         */
+        EncounterPreviewResponse: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "encounter";
+            /** Lines */
+            lines: components["schemas"]["EncounterLineView"][];
+            /** Sample Xp Totals */
+            sample_xp_totals: number[];
+        };
         /**
          * EncounterTable
          * @description One dungeon level column: twenty d20 rows.
@@ -2345,7 +2565,12 @@ export interface components {
          *
          *     `aware=True` means the monsters expect intruders (they never roll surprise);
          *     `stance` pins the reaction outright (no reaction roll); `alignment` fixes the
-         *     spawn alignment for multi-option templates.
+         *     spawn alignment for multi-option templates. `hoard=True` (the default) means
+         *     the engine generates the keyed monsters' lair hoard the first time the
+         *     encounter spawns; `hoard=False` is the treasure-absent keyed room — a monster
+         *     room the stocking roll gave no treasure — expressible because SRD stocking
+         *     puts treasure on only some monster rooms, while an encounter would otherwise
+         *     always bring its lair letters.
          */
         KeyedEncounter: {
             /** Monsters */
@@ -2357,6 +2582,11 @@ export interface components {
              */
             aware: boolean;
             stance?: components["schemas"]["ReactionResult"] | null;
+            /**
+             * Hoard
+             * @default true
+             */
+            hoard: boolean;
         };
         /**
          * KeyedMonster
@@ -2454,6 +2684,20 @@ export interface components {
             location: string;
             /** Message */
             message: string;
+        };
+        /**
+         * MagicItemView
+         * @description One generated magic item, its template id resolved to a display name.
+         */
+        MagicItemView: {
+            /** Template Id */
+            template_id: string;
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity: number;
+            /** Charges Remaining */
+            charges_remaining?: number | null;
         };
         /**
          * ModuleInfo
@@ -2985,10 +3229,73 @@ export interface components {
              *       },
              *       "notes": {},
              *       "review": [],
-             *       "auto_reasons": []
+             *       "auto_reasons": [],
+             *       "stocking": {
+             *         "streams": {}
+             *       }
              *     }
              */
             sidecar: components["schemas"]["EditorSidecar"];
+        };
+        /**
+         * ProseAreaResponse
+         * @description An area description draft, with the call's token usage and model id.
+         */
+        ProseAreaResponse: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "area";
+            /** Description */
+            description: string;
+            usage: components["schemas"]["TokenUsage"];
+            /** Model Id */
+            model_id: string;
+        };
+        /**
+         * ProseAreaTarget
+         * @description Draft a keyed area's read-aloud description.
+         */
+        ProseAreaTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "area";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string;
+        };
+        /**
+         * ProseHooksResponse
+         * @description A hooks draft (the complete replacement list), with usage and model id.
+         */
+        ProseHooksResponse: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "hooks";
+            /** Hooks */
+            hooks: string[];
+            usage: components["schemas"]["TokenUsage"];
+            /** Model Id */
+            model_id: string;
+        };
+        /**
+         * ProseHooksTarget
+         * @description Draft the adventure's hooks — the complete replacement list.
+         */
+        ProseHooksTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "hooks";
         };
         /**
          * ProviderFieldStatus
@@ -3769,6 +4076,24 @@ export interface components {
             reason: string;
         };
         /**
+         * SetStockingSeed
+         * @description Set the stocking master seed and clear derived stream states.
+         *
+         *     Typed API surface with no dialog UI (the fixtures-kind precedent): the e2e
+         *     suite's determinism lever, and a reproducible-stocking lever for anyone
+         *     scripting the API. Clearing `streams` is mandatory — states derived from the
+         *     old seed are meaningless under the new one.
+         */
+        SetStockingSeed: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            action: "set_stocking_seed";
+            /** Master Seed */
+            master_seed: string;
+        };
+        /**
          * SetTemplatePatch
          * @description Patch one name's printed stat block — forge's `monster_templates:` kind.
          */
@@ -3893,7 +4218,7 @@ export interface components {
          */
         SidecarPatchRequest: {
             /** Patches */
-            patches: (components["schemas"]["SetViewState"] | components["schemas"]["SetNote"] | components["schemas"]["RemoveNote"] | components["schemas"]["DismissFlag"] | components["schemas"]["UndismissFlag"])[];
+            patches: (components["schemas"]["SetViewState"] | components["schemas"]["SetNote"] | components["schemas"]["RemoveNote"] | components["schemas"]["DismissFlag"] | components["schemas"]["UndismissFlag"] | components["schemas"]["SetStockingSeed"])[];
         };
         /**
          * SidecarProvenance
@@ -4042,6 +4367,38 @@ export interface components {
             special?: string[] | null;
         };
         /**
+         * StatblockPreviewRequest
+         * @description Derive a monster's XP, attack values, and saves from its hit dice (phase 4's deferral).
+         */
+        StatblockPreviewRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "statblock";
+            hit_dice: components["schemas"]["MonsterHitDice"];
+        };
+        /**
+         * StatblockPreviewResponse
+         * @description The derived stat-block values for a monster's hit dice.
+         */
+        StatblockPreviewResponse: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "statblock";
+            /** Xp */
+            xp: number;
+            /** Thac0 */
+            thac0: number;
+            /** Attack Bonus */
+            attack_bonus: number;
+            /** Save Band */
+            save_band: string;
+            saves: components["schemas"]["SavingThrows"];
+        };
+        /**
          * StatusResponse
          * @description The editor's identity and the engine it is running against.
          */
@@ -4052,6 +4409,98 @@ export interface components {
             engine_version: string;
             /** Schema Version */
             schema_version: number;
+        };
+        /**
+         * StockFollowUp
+         * @description One thing the dice left to the author — rendered as a report badge.
+         *
+         *     `special` and `trap_design` name work the SRD leaves to the referee;
+         *     `npc_party` carries the rolled kind and count (a party has no authorable
+         *     content model, so it is a follow-up, never a silent re-roll that would
+         *     distort the printed odds); `no_lair_treasure` means treasure was rolled but
+         *     the monster's type yields no lair letters and no extra gp — reported, never
+         *     backfilled from the unguarded band.
+         */
+        StockFollowUp: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "special" | "npc_party" | "trap_design" | "no_lair_treasure";
+            /** Npc Kind */
+            npc_kind?: ("basic" | "expert") | null;
+            /** Npc Count */
+            npc_count?: number | null;
+        };
+        /**
+         * StockRoll
+         * @description One target area's stocking result — what the report renders per room.
+         *
+         *     `summary` holds module-notation lines (`"5 × acolyte"`, `"type C"`,
+         *     `"unguarded"`); `follow_ups` the typed badges. The pair says what landed in
+         *     the room and what the author still owes it.
+         */
+        StockRoll: {
+            /** Area Id */
+            area_id: string;
+            /** Address */
+            address: string;
+            /**
+             * Contents
+             * @enum {string}
+             */
+            contents: "empty" | "monster" | "special" | "trap";
+            /** Treasure Present */
+            treasure_present: boolean;
+            /**
+             * Summary
+             * @default []
+             */
+            summary: string[];
+            /**
+             * Follow Ups
+             * @default []
+             */
+            follow_ups: components["schemas"]["StockFollowUp"][];
+        };
+        /**
+         * StockingState
+         * @description The reproducible-stocking seed: the master seed and per-area stream snapshots.
+         *
+         *     `master_seed` is minted once (server entropy) at the first stocking use and
+         *     persisted before the first draw; `streams` holds one advanced snapshot per
+         *     stocked area, keyed by the area address (the `notes` pattern). Per-address
+         *     streams make re-rolls order-independent — re-rolling one room never changes
+         *     what another would roll — and the master seed lets an identical action
+         *     sequence reproduce byte-identical documents. Decimal-string-encoded
+         *     (`master_seed` too, since `secrets.randbits(64)` exceeds 2^53).
+         */
+        StockingState: {
+            /** Master Seed */
+            master_seed?: string | null;
+            /**
+             * Streams
+             * @default {}
+             */
+            streams: {
+                [key: string]: components["schemas"]["StreamState"];
+            };
+        };
+        /**
+         * StreamState
+         * @description One stocking stream's PCG64 snapshot, both fields decimal-string-encoded.
+         *
+         *     Mirrors osrlib's `RngStreamState` (`state`, `inc`), but the two 128-bit
+         *     integers ride as decimal strings: the sidecar echoes into JavaScript on
+         *     every op result, and a number above 2^53 loses precision silently there.
+         *     A lossless-by-construction field beats one that is safe only while nobody
+         *     reads it back.
+         */
+        StreamState: {
+            /** State */
+            state: string;
+            /** Inc */
+            inc: string;
         };
         /**
          * SubtreeChange
@@ -4227,6 +4676,50 @@ export interface components {
             affects: "triggerer" | "party";
         };
         /**
+         * TreasurePreviewRequest
+         * @description Preview N example hoards from treasure letters, or an unguarded band.
+         */
+        TreasurePreviewRequest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "treasure";
+            /**
+             * Letters
+             * @default []
+             */
+            letters: string[];
+            /** Unguarded Level */
+            unguarded_level?: number | null;
+            /**
+             * Tier
+             * @default basic
+             * @enum {string}
+             */
+            tier: "basic" | "expert";
+            /**
+             * Samples
+             * @default 3
+             */
+            samples: number;
+            /** Seed */
+            seed?: string | null;
+        };
+        /**
+         * TreasurePreviewResponse
+         * @description N example hoards generated from the request.
+         */
+        TreasurePreviewResponse: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "treasure";
+            /** Samples */
+            samples: components["schemas"]["TreasureSample"][];
+        };
+        /**
          * TreasureRef
          * @description A faithful reference to the stat block's treasure type, as printed.
          *
@@ -4265,6 +4758,19 @@ export interface components {
              * @default false
              */
             see_below: boolean;
+        };
+        /**
+         * TreasureSample
+         * @description One example hoard: coins, valuables, magic items, and the total gp value.
+         */
+        TreasureSample: {
+            coins: components["schemas"]["Coins"];
+            /** Valuables */
+            valuables: components["schemas"]["ValuableView"][];
+            /** Magic Items */
+            magic_items: components["schemas"]["MagicItemView"][];
+            /** Total Gp */
+            total_gp: number;
         };
         /**
          * TreasureSection
@@ -4352,6 +4858,21 @@ export interface components {
              * @default 0
              */
             weight_coins: number;
+        };
+        /**
+         * ValuableView
+         * @description One generated gem or jewellery, resolved for display.
+         */
+        ValuableView: {
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "gem" | "jewellery";
+            /** Value Gp */
+            value_gp: number;
         };
         /**
          * ViewState
@@ -4914,6 +5435,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EditorSidecar"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_aids_stock_api_projects__project_id__aids_stock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AidsStockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AidsStockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_aids_preview_api_projects__project_id__aids_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TreasurePreviewRequest"] | components["schemas"]["EncounterPreviewRequest"] | components["schemas"]["StatblockPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreasurePreviewResponse"] | components["schemas"]["EncounterPreviewResponse"] | components["schemas"]["StatblockPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_aids_prose_api_projects__project_id__aids_prose_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProseAreaTarget"] | components["schemas"]["ProseHooksTarget"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProseAreaResponse"] | components["schemas"]["ProseHooksResponse"];
                 };
             };
             /** @description Validation Error */

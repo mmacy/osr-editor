@@ -160,7 +160,15 @@ export function encounterAddLineOps(
   if (!area) return []
   const current = area.encounter
   if (!current) {
-    return encounterOps(target, { monsters: [line], alignment: null, aware: false, stance: null })
+    // A hand-built encounter defaults to hoard on, matching osrlib's own default;
+    // stocking is the one path that turns it off (a treasure-absent monster room).
+    return encounterOps(target, {
+      monsters: [line],
+      alignment: null,
+      aware: false,
+      stance: null,
+      hoard: true,
+    })
   }
   return encounterOps(target, { ...current, monsters: [...current.monsters, line] })
 }

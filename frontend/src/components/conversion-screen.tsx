@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useConversionPoll } from '@/hooks/use-conversion-poll'
 import { api, ApiRequestError, conversionPreviewUrl } from '@/lib/api'
+import { setProviderStatus, useProviderStatus } from '@/lib/provider-status'
 import {
   canRegeneratePreviews,
   firstIncompleteStage,
@@ -31,7 +32,7 @@ import {
   RUNNABLE_STAGES,
 } from '@/lib/conversion'
 import { projectStore } from '@/store/project-store'
-import type { ConversionState, PreviewLevel, ProviderStatus, Stage } from '@/types'
+import type { ConversionState, PreviewLevel, Stage } from '@/types'
 
 function toastApiError(error: unknown): void {
   if (error instanceof ApiRequestError) {
@@ -72,7 +73,7 @@ export function ConversionView({ initial }: { initial: ConversionState }) {
   const [stage, setStage] = useState<Stage | null>(null)
   const [knobText, setKnobText] = useState('')
   const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<ProviderStatus | null>(null)
+  const status = useProviderStatus()
   const [providerOpen, setProviderOpen] = useState(false)
   const [previews, setPreviews] = useState<PreviewLevel[]>([])
   const [previewing, setPreviewing] = useState<PreviewLevel | null>(null)
@@ -92,10 +93,6 @@ export function ConversionView({ initial }: { initial: ConversionState }) {
     // landing. A failure or a cancel stays here, where the resume lives.
     if (settled.state === 'completed') void openReview(settled.workdir_path)
   })
-
-  useEffect(() => {
-    api.getProvider().then(setStatus).catch(toastApiError)
-  }, [])
 
   useEffect(() => {
     if (gone) {
@@ -302,7 +299,7 @@ export function ConversionView({ initial }: { initial: ConversionState }) {
           open={providerOpen}
           onOpenChange={setProviderOpen}
           status={status}
-          onStatus={setStatus}
+          onStatus={setProviderStatus}
         />
       )}
 

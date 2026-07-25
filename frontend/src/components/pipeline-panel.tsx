@@ -16,8 +16,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api, ApiRequestError } from '@/lib/api'
 import { isActive, modelStagesFrom, parseKnobEntry, RUNNABLE_STAGES } from '@/lib/conversion'
+import { refreshProviderStatus, setProviderStatus, useProviderStatus } from '@/lib/provider-status'
 import { projectStore, useProjectStore } from '@/store/project-store'
-import type { ConversionStageRow, ProjectState, ProviderStatus, Stage } from '@/types'
+import type { ConversionStageRow, ProjectState, Stage } from '@/types'
 
 const STAGE_ORDER: Stage[] = ['preprocess', 'survey', 'content', 'monsters', 'geometry', 'assemble']
 
@@ -43,7 +44,7 @@ export function PipelinePanel({ project }: { project: ProjectState }) {
   const [stage, setStage] = useState<Stage>('assemble')
   const [busy, setBusy] = useState(false)
   const [detachOpen, setDetachOpen] = useState(false)
-  const [status, setStatus] = useState<ProviderStatus | null>(null)
+  const status = useProviderStatus()
   const [providerOpen, setProviderOpen] = useState(false)
 
   const projectPath = project.path
@@ -53,17 +54,10 @@ export function PipelinePanel({ project }: { project: ProjectState }) {
   const conversion = useProjectStore((state) => state.conversion)
   const setConversion = projectStore.getState().setConversion
 
+  // A project change can bring a different environment into view; the shared
+  // store coalesces this with every other reader's fetch.
   useEffect(() => {
-    let cancelled = false
-    api
-      .getProvider()
-      .then((value) => {
-        if (!cancelled) setStatus(value)
-      })
-      .catch(toastApiError)
-    return () => {
-      cancelled = true
-    }
+    void refreshProviderStatus()
   }, [projectPath])
 
   if (!project.forge) return null
@@ -273,7 +267,7 @@ export function PipelinePanel({ project }: { project: ProjectState }) {
           open={providerOpen}
           onOpenChange={setProviderOpen}
           status={status}
-          onStatus={setStatus}
+          onStatus={setProviderStatus}
         />
       )}
     </section>

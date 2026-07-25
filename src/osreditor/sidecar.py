@@ -25,8 +25,11 @@ __all__ = [
     "RemoveNote",
     "ReviewMark",
     "SetNote",
+    "SetStockingSeed",
     "SetViewState",
     "SidecarProvenance",
+    "StockingState",
+    "StreamState",
     "UndismissFlag",
     "ViewState",
     "ZoomPan",
@@ -98,26 +101,60 @@ class ReviewMark(BaseModel):
     flag: str
 
 
+class StreamState(BaseModel):
+    """One stocking stream's PCG64 snapshot, both fields decimal-string-encoded.
+
+    Mirrors osrlib's `RngStreamState` (`state`, `inc`), but the two 128-bit
+    integers ride as decimal strings: the sidecar echoes into JavaScript on
+    every op result, and a number above 2^53 loses precision silently there.
+    A lossless-by-construction field beats one that is safe only while nobody
+    reads it back.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    state: str
+    inc: str
+
+
+class StockingState(BaseModel):
+    """The reproducible-stocking seed: the master seed and per-area stream snapshots.
+
+    `master_seed` is minted once (server entropy) at the first stocking use and
+    persisted before the first draw; `streams` holds one advanced snapshot per
+    stocked area, keyed by the area address (the `notes` pattern). Per-address
+    streams make re-rolls order-independent — re-rolling one room never changes
+    what another would roll — and the master seed lets an identical action
+    sequence reproduce byte-identical documents. Decimal-string-encoded
+    (`master_seed` too, since `secrets.randbits(64)` exceeds 2^53).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    master_seed: str | None = None
+    streams: dict[str, StreamState] = {}
+
+
 class EditorSidecar(BaseModel):
     """The `editor.json` envelope: editor-only data beside the deliverable.
 
     The envelope is a shipped contract, additive-only within its schema
     version. Phase 1 wrote only provenance; phase 5 grows `view_state`,
-    per-entity `notes`, forge `review` marks, and `auto_reasons` — absent
-    fields default empty, so every existing sidecar and every foreign project
-    reads clean. `provenance` is optional (an additive relaxation: a required
-    field made optional never breaks an existing reader) because a foreign
-    project the editor merely opens has no provenance to claim; its first note
-    persists a sidecar with `provenance=None`, honest about what the editor
-    did and didn't author.
+    per-entity `notes`, forge `review` marks, and `auto_reasons`; phase 7 grows
+    `stocking`, the reproducible-stocking seed — absent fields default empty, so
+    every existing sidecar and every foreign project reads clean. `provenance`
+    is optional (an additive relaxation: a required field made optional never
+    breaks an existing reader) because a foreign project the editor merely opens
+    has no provenance to claim; its first note persists a sidecar with
+    `provenance=None`, honest about what the editor did and didn't author.
 
     Open tolerates a missing sidecar (foreign native projects open fine); the
     file is written on the first sidecar-bearing write, never at open. `notes`
-    is keyed by the diagnostics address grammar and exists for both project
-    types; `review` and `auto_reasons` are forge-only — `auto_reasons` holds
-    the kind-qualified override-entry keys whose reason is still a machine
-    draft, and rides the forge undo stack with the `overrides.yaml` snapshot
-    (derived state of the same commit).
+    and `stocking.streams` are keyed by the diagnostics address grammar and
+    exist for both project types; `review` and `auto_reasons` are forge-only —
+    `auto_reasons` holds the kind-qualified override-entry keys whose reason is
+    still a machine draft, and rides the forge undo stack with the
+    `overrides.yaml` snapshot (derived state of the same commit).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -128,6 +165,7 @@ class EditorSidecar(BaseModel):
     notes: dict[str, str] = {}
     review: tuple[ReviewMark, ...] = ()
     auto_reasons: tuple[str, ...] = ()
+    stocking: StockingState = StockingState()
 
 
 class SetViewState(BaseModel):
@@ -178,8 +216,23 @@ class UndismissFlag(BaseModel):
     flag: Annotated[str, StringConstraints(min_length=1)]
 
 
+class SetStockingSeed(BaseModel):
+    """Set the stocking master seed and clear derived stream states.
+
+    Typed API surface with no dialog UI (the fixtures-kind precedent): the e2e
+    suite's determinism lever, and a reproducible-stocking lever for anyone
+    scripting the API. Clearing `streams` is mandatory — states derived from the
+    old seed are meaningless under the new one.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    action: Literal["set_stocking_seed"] = "set_stocking_seed"
+    master_seed: Annotated[str, StringConstraints(pattern=r"^[0-9]+$")]
+
+
 AnySidecarPatch = Annotated[
-    SetViewState | SetNote | RemoveNote | DismissFlag | UndismissFlag,
+    SetViewState | SetNote | RemoveNote | DismissFlag | UndismissFlag | SetStockingSeed,
     Field(discriminator="action"),
 ]
 """Any sidecar patch, discriminated by `action`."""
@@ -202,6 +255,7 @@ def apply_sidecar_patches(sidecar: EditorSidecar, patches: tuple[AnySidecarPatch
     view_state = sidecar.view_state
     notes = dict(sidecar.notes)
     review = list(sidecar.review)
+    stocking = sidecar.stocking
     for patch in patches:
         if isinstance(patch, SetViewState):
             view_state = patch.view_state
@@ -213,9 +267,14 @@ def apply_sidecar_patches(sidecar: EditorSidecar, patches: tuple[AnySidecarPatch
             mark = ReviewMark(address=patch.address, flag=patch.flag)
             if mark not in review:
                 review.append(mark)
-        else:
+        elif isinstance(patch, UndismissFlag):
             review = [mark for mark in review if not (mark.address == patch.address and mark.flag == patch.flag)]
-    return sidecar.model_copy(update={"view_state": view_state, "notes": notes, "review": tuple(review)})
+        else:
+            # A new master seed retires every stream derived from the old one.
+            stocking = StockingState(master_seed=patch.master_seed)
+    return sidecar.model_copy(
+        update={"view_state": view_state, "notes": notes, "review": tuple(review), "stocking": stocking}
+    )
 
 
 def load_sidecar(store: ProjectStore, project_id: str) -> EditorSidecar:

@@ -326,3 +326,114 @@ def test_a_cascade_landing_on_a_dormant_note_overwrites_it(tmp_path: Path) -> No
     )
     # The live entity's note wins — pinned as acceptable for dormant addresses.
     assert project.sidecar.notes == {"dungeon:dungeon-1/level:1/area:7": "The live note."}
+
+
+# --- the stocking seed and its cascade parity with notes ---------------------
+
+
+def plant_stream(service: DocumentService, project: OpenProject, address: str, state: str, inc: str) -> None:
+    """Plant one advanced stocking-stream snapshot at an address, the way a stock roll would leave it."""
+    from osreditor.sidecar import StockingState, StreamState
+
+    streams = {**project.sidecar.stocking.streams, address: StreamState(state=state, inc=inc)}
+    project.sidecar = project.sidecar.model_copy(update={"stocking": StockingState(streams=streams)})
+    service.persist_sidecar(project)
+
+
+def make_area(service: DocumentService, project: OpenProject, area_id: str) -> None:
+    service.apply_batch(
+        project,
+        batch(
+            project,
+            {"op": "create_area", "dungeon_id": "dungeon-1", "level_number": 1, "area_id": area_id, "cells": [[1, 1]]},
+        ),
+    )
+
+
+def test_stream_state_round_trips_128_bit_values_as_decimal_strings() -> None:
+    from osreditor.sidecar import StreamState
+
+    # A 128-bit PCG state well above 2^53 — lossless only because it is a string.
+    big = str((1 << 127) + 12345)
+    value = StreamState.model_validate(StreamState(state=big, inc="3").model_dump())
+    assert value.state == big and int(value.state) == (1 << 127) + 12345
+
+
+def test_set_stocking_seed_sets_the_master_and_clears_streams(tmp_path: Path) -> None:
+    from osreditor.sidecar import SetStockingSeed
+
+    service, project = open_native(tmp_path)
+    plant_stream(service, project, "dungeon:dungeon-1/level:1/area:7", state="1", inc="3")
+    service.apply_sidecar_patch(project, (SetStockingSeed(master_seed="12345678901234567890"),))
+    assert project.sidecar.stocking.master_seed == "12345678901234567890"
+    assert project.sidecar.stocking.streams == {}
+
+
+def test_stocking_streams_cascade_key_for_key_with_notes_on_area_rekey(tmp_path: Path) -> None:
+    service, project = open_native(tmp_path)
+    make_area(service, project, "7")
+    addr = "dungeon:dungeon-1/level:1/area:7"
+    set_note(service, project, addr, "The bone room.")
+    plant_stream(service, project, addr, state="42", inc="99")
+    service.apply_batch(
+        project,
+        batch(
+            project,
+            {
+                "op": "set_area_field",
+                "dungeon_id": "dungeon-1",
+                "level_number": 1,
+                "area_id": "7",
+                "field": "id",
+                "value": "7a",
+            },
+        ),
+    )
+    moved = "dungeon:dungeon-1/level:1/area:7a"
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {moved}
+    # The key followed the re-key; the stream state itself never rewound.
+    assert project.sidecar.stocking.streams[moved].state == "42"
+    # Undo and redo keep the two maps key-for-key identical.
+    service.undo(project)
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {addr}
+    assert project.sidecar.stocking.streams[addr].state == "42"
+    service.redo(project)
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {moved}
+
+
+def test_stocking_streams_cascade_with_notes_on_dungeon_rename_and_level_renumber(tmp_path: Path) -> None:
+    service, project = open_native(tmp_path)
+    make_area(service, project, "7")
+    addr = "dungeon:dungeon-1/level:1/area:7"
+    set_note(service, project, addr, "note")
+    plant_stream(service, project, addr, state="7", inc="9")
+    service.apply_batch(project, batch(project, {"op": "rename_dungeon", "old_id": "dungeon-1", "new_id": "vaults"}))
+    after_rename = "dungeon:vaults/level:1/area:7"
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_rename}
+    service.apply_batch(
+        project, batch(project, {"op": "renumber_level", "dungeon_id": "vaults", "old_number": 1, "new_number": 3})
+    )
+    after_renumber = "dungeon:vaults/level:3/area:7"
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_renumber}
+    # Parity holds through undo/redo of both re-keying ops, and the stream state
+    # never rewinds — only the key follows history.
+    service.undo(project)  # undo the renumber
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_rename}
+    service.undo(project)  # undo the rename
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {addr}
+    assert project.sidecar.stocking.streams[addr].state == "7"
+    service.redo(project)
+    service.redo(project)
+    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_renumber}
+    assert project.sidecar.stocking.streams[after_renumber].state == "7"
+
+
+def test_a_stream_with_no_paired_note_still_cascades(tmp_path: Path) -> None:
+    # The maps are keyed independently; a stocked room the author never annotated
+    # still remaps — the guard must not skip when only one map has the key.
+    service, project = open_native(tmp_path)
+    make_area(service, project, "7")
+    plant_stream(service, project, "dungeon:dungeon-1/level:1/area:7", state="5", inc="7")
+    service.apply_batch(project, batch(project, {"op": "rename_dungeon", "old_id": "dungeon-1", "new_id": "vaults"}))
+    assert set(project.sidecar.stocking.streams) == {"dungeon:vaults/level:1/area:7"}
+    assert project.sidecar.notes == {}

@@ -90,8 +90,8 @@ export function effectiveMonsterCatalog(
   return [...bundledEntries, ...shippedEntries]
 }
 
-// Recently-used is in-memory session state; persisted stocking state is
-// phase 7's sidecar work.
+// Recently-used is in-memory session state — deliberately not persisted; the
+// sidecar's stocking seeds are the reproducible state that does persist.
 const MAX_RECENT_MONSTERS = 10
 let recentMonsters: string[] = []
 

@@ -22,6 +22,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api, ApiRequestError } from '@/lib/api'
+import { refreshProviderStatus, setProviderStatus, useProviderStatus } from '@/lib/provider-status'
 import {
   defaultWorkdirPath,
   estimateRows,
@@ -30,7 +31,7 @@ import {
   parseKnobEntry,
 } from '@/lib/conversion'
 import { useConversionPoll } from '@/hooks/use-conversion-poll'
-import type { CostEstimate, ProviderStatus } from '@/types'
+import type { CostEstimate } from '@/types'
 
 export function EstimateCard({ estimate }: { estimate: CostEstimate }) {
   return (
@@ -78,7 +79,7 @@ export function ConvertPdfDialog({ onConverted }: { onConverted?: () => void }) 
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const [confirmExisting, setConfirmExisting] = useState<{ completed: boolean } | null>(null)
-  const [status, setStatus] = useState<ProviderStatus | null>(null)
+  const status = useProviderStatus()
   const [providerOpen, setProviderOpen] = useState(false)
   const { conversion, setConversion } = useConversionPoll(null)
 
@@ -87,7 +88,7 @@ export function ConvertPdfDialog({ onConverted }: { onConverted?: () => void }) 
     if (next) {
       setFailure(null)
       setConfirmExisting(null)
-      void api.getProvider().then(setStatus).catch(noteApiError)
+      void refreshProviderStatus()
     }
   }
 
@@ -288,7 +289,7 @@ export function ConvertPdfDialog({ onConverted }: { onConverted?: () => void }) 
           open={providerOpen}
           onOpenChange={setProviderOpen}
           status={status}
-          onStatus={setStatus}
+          onStatus={setProviderStatus}
         />
       )}
     </Dialog>

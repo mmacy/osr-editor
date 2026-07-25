@@ -125,6 +125,7 @@ describe('counts and encounters', () => {
       alignment: null,
       aware: false,
       stance: null,
+      hoard: true,
     }
     expect(formatEncounter(encounter, nameFor)).toBe('3d4 × orc + 6 × skeleton')
   })
@@ -325,6 +326,7 @@ describe('hit dice and area contents', () => {
           alignment: null,
           aware: false,
           stance: null,
+          hoard: true,
         },
         treasure: { letters: ['C'], unguarded: false },
         trap: trap({ damage_dice: '2d6' }),

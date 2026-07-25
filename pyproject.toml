@@ -29,7 +29,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "osrlib>=1.2,<2",
+    "osrlib>=1.3,<2",
     "osr-forge>=0.1,<0.2",
     "pydantic>=2",
     "pyyaml>=6",
@@ -85,6 +85,10 @@ select = ["E", "F", "W", "I", "D", "UP", "B", "SIM", "RUF"]
 ignore = [
     "D105", # missing docstring in magic method — __str__ and friends are self-evident
 ]
+# Intentional module notation, not confusable typos: the multiplication sign
+# ("5 × acolyte", matching the frontend) and the en dash osrlib's save-band
+# labels print ("1–3").
+allowed-confusables = ["×", "–"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
