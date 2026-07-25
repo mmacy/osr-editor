@@ -24,8 +24,8 @@ A forge-backed project is an [osr-forge](https://mmacy.github.io/osr-forge/) wor
 
 There is no save button. A committed edit persists immediately and atomically; the revision token in every commit means a stale client gets a conflict answer, never a silent overwrite. Every commit — whether it changed one word of prose or landed an entire imported level — is exactly one undo step, and undo history survives the session.
 
-![The project chrome: the adventure sections beside the map, with the revision token and undo controls](../assets/screenshots/project-chrome-light.png#only-light)
-![The project chrome: the adventure sections beside the map, with the revision token and undo controls](../assets/screenshots/project-chrome-dark.png#only-dark)
+![The project chrome: the sections rail beside the adventure form, with the revision token and the undo and redo controls](../assets/screenshots/project-chrome-light.png#only-light)
+![The project chrome: the sections rail beside the adventure form, with the revision token and the undo and redo controls](../assets/screenshots/project-chrome-dark.png#only-dark)
 
 ## Git-friendly documents
 

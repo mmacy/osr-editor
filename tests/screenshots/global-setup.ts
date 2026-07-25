@@ -13,6 +13,12 @@ import { dirname } from 'node:path'
 import { MANIFEST, PRISTINE_HOME, SHOTS_HOME } from './paths'
 
 export default function globalSetup(): void {
+  // Playwright runs globalSetup for every invocation, including `--project=e2e`
+  // and the release gate. Nothing here may touch those runs: the plan's promise is
+  // that a mistake in the capture environment can never break the shipped
+  // artifact's gate, and an unguarded body would falsify it.
+  if (!process.env.PLAYWRIGHT_SHOTS) return
+
   for (const home of [SHOTS_HOME, PRISTINE_HOME]) {
     rmSync(home, { recursive: true, force: true })
     mkdirSync(home, { recursive: true })

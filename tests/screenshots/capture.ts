@@ -17,6 +17,8 @@ import { dirname, join } from 'node:path'
 
 import type { Locator, Page, TestInfo } from '@playwright/test'
 
+import { MANIFEST } from './paths'
+
 /** The pristine server, reached by absolute URL from the home-screen shot alone. */
 export const PRISTINE_URL = 'http://127.0.0.1:8633'
 
@@ -24,11 +26,6 @@ export const PRISTINE_URL = 'http://127.0.0.1:8633'
 export function repoRoot(testInfo: TestInfo): string {
   // testDir is <repo>/tests/screenshots.
   return dirname(dirname(testInfo.project.testDir))
-}
-
-/** The manifest of slugs the harness actually produced this run. */
-export function manifestPath(root: string): string {
-  return join(root, 'frontend', 'test-results', 'produced-shots.txt')
 }
 
 function themeOf(testInfo: TestInfo): string {
@@ -69,7 +66,7 @@ export async function shoot(
       await target
         .page()
         .screenshot({ ...options, path, clip: { x: box.x, y: top, width: box.width, height } })
-      appendFileSync(manifestPath(root), `${name}\n`, 'utf-8')
+      appendFileSync(MANIFEST, `${name}\n`, 'utf-8')
       return
     }
   }
@@ -78,5 +75,5 @@ export async function shoot(
   // Recorded per theme, not per slug: a shot skipped under one project only would
   // otherwise still have its slug contributed by the other, leaving a stale twin
   // on disk with nothing to notice.
-  appendFileSync(manifestPath(root), `${name}\n`, 'utf-8')
+  appendFileSync(MANIFEST, `${name}\n`, 'utf-8')
 }

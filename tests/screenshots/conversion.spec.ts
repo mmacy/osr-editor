@@ -63,21 +63,22 @@ test('the pipeline and the printed page', async ({ page, request }, testInfo) =>
   await expect(page.getByRole('heading', { name: 'Conversion' })).toBeVisible()
   await expect(page.getByTestId('stage-row-preprocess')).toContainText('completed')
 
-  await page.getByRole('button', { name: 'Run' }).click()
-  await expect(page.getByRole('heading', { name: 'The Root Cellar of Old Wenna' })).toBeVisible({
-    timeout: 120_000,
-  })
-
-  // The stage table, clipped to the rows: the provider strip beside it reads
-  // "FixtureProvider", which is a test harness no reader can configure, so it
-  // stays out of frame rather than becoming a caption that lies.
-  await page.getByRole('button', { name: 'Pipeline' }).click()
-  await expect(page.getByTestId('stage-row-assemble')).toContainText('completed')
+  // The stage table of a workdir whose conversion never completed — one stage done,
+  // the rest pending — which is the state the guide's paragraph is about. Captured
+  // before the run, not after: a table of six completed stages would illustrate the
+  // opposite of the sentence beside it. Clipped to the rows, because the provider
+  // strip reads "FixtureProvider", a harness no reader can configure.
+  await expect(page.getByTestId('stage-row-survey')).toContainText('pending')
   await shoot(
     page.getByTestId('stage-row-preprocess').locator('xpath=..'),
     'pipeline-stages',
     testInfo,
   )
+
+  await page.getByRole('button', { name: 'Run' }).click()
+  await expect(page.getByRole('heading', { name: 'The Root Cellar of Old Wenna' })).toBeVisible({
+    timeout: 120_000,
+  })
 
   // A flagged area with its printed page alongside — correction happens against
   // the page, which is the whole argument of the review guide.

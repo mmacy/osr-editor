@@ -21,8 +21,8 @@ Pan with space-drag or middle-drag, zoom with the wheel, reset to 100% with `0`.
 
 An adventure holds any number of dungeons, each with any number of levels. The map chrome manages both: create, rename, and renumber (renames cascade through every reference in one undo step), and resize a level — with the offenders listed first when a shrink would strand geometry.
 
-![The level and dungeon chrome, with the level picker and level properties](../assets/screenshots/level-chrome-light.png#only-light)
-![The level and dungeon chrome, with the level picker and level properties](../assets/screenshots/level-chrome-dark.png#only-dark)
+![The level row: the level picker, add level, and level properties](../assets/screenshots/level-chrome-light.png#only-light)
+![The level row: the level picker, add level, and level properties](../assets/screenshots/level-chrome-dark.png#only-dark)
 
 ## The live lint
 

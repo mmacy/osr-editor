@@ -9,7 +9,7 @@ import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
-import { cellCenter, createProject, drag, drawRoom } from '../e2e/helpers'
+import { cellCenter, createProject, drag, drawRoom, openMap } from '../e2e/helpers'
 import { repoRoot, shoot } from './capture'
 import { SHOTS_HOME } from './paths'
 
@@ -29,9 +29,7 @@ test('the prose assistant and the stocking report', async ({ page }, testInfo) =
   })
   expect(provider.ok()).toBeTruthy()
 
-  await page.getByRole('button', { name: 'Level 1' }).click()
-  await expect(page.getByTestId('map-canvas')).toBeVisible()
-  await page.getByRole('button', { name: 'Reset zoom' }).click()
+  await openMap(page)
   await drawRoom(page, [0, 0], [1, 1])
   const roomOne = await cellCenter(page, 0, 0)
   await page.mouse.click(roomOne.x, roomOne.y)

@@ -27,5 +27,5 @@ The prose assistant drafts read-aloud area descriptions and adventure hooks. **D
 
 The draft renders beside your current text with its token usage on every draft; nothing changes until you accept it, and acceptance commits as an ordinary batch you can undo. The call is synchronous and abandonable — close the panel and nothing happened.
 
-![The prose assistant's drafted read-aloud description beside the current text, with token usage](../assets/screenshots/prose-assistant-light.png#only-light)
-![The prose assistant's drafted read-aloud description beside the current text, with token usage](../assets/screenshots/prose-assistant-dark.png#only-dark)
+![The prose assistant's drafted read-aloud description, with the token usage shown on every draft](../assets/screenshots/prose-assistant-light.png#only-light)
+![The prose assistant's drafted read-aloud description, with the token usage shown on every draft](../assets/screenshots/prose-assistant-dark.png#only-dark)

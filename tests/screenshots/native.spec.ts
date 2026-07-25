@@ -14,7 +14,7 @@ import { join } from 'node:path'
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
-import { cellCenter, drag, openMap } from '../e2e/helpers'
+import { cellCenter, createProject, drag, openMap } from '../e2e/helpers'
 import { repoRoot, shoot } from './capture'
 import { SHOTS_HOME } from './paths'
 
@@ -25,16 +25,12 @@ function adventureDir(testInfo: TestInfo, name: string): string {
   return join(SHOTS_HOME, testInfo.project.name, 'adventures', name)
 }
 
-async function newProject(page: Page, projectDir: string, name: string): Promise<void> {
+// A clean slate for a capture, then the suite's own create gesture. The prologue
+// is all this adds — the create flow itself stays in one place.
+async function freshProject(page: Page, projectDir: string, name: string): Promise<void> {
   rmSync(projectDir, { recursive: true, force: true })
   mkdirSync(join(projectDir, '..'), { recursive: true })
-  await page.goto('/')
-  await page.getByRole('button', { name: 'New adventure' }).click()
-  const dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Adventure name').fill(name)
-  await dialog.getByLabel('Destination directory').fill(projectDir)
-  await dialog.getByRole('button', { name: 'Create' }).click()
-  await expect(page.getByTestId('revision')).toHaveText('r1')
+  await createProject(page, projectDir, name)
 }
 
 test('the project chrome, the map editor, and the stocking surfaces', async ({ page }, testInfo) => {
@@ -43,19 +39,15 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
 
   // The new-adventure dialog, captured empty: its destination field would
   // otherwise carry this machine's path into the quickstart.
-  rmSync(projectDir, { recursive: true, force: true })
-  mkdirSync(join(projectDir, '..'), { recursive: true })
   await page.goto('/')
   await page.getByRole('button', { name: 'New adventure' }).click()
   const createDialog = page.getByRole('dialog')
   await expect(createDialog.getByLabel('Adventure name')).toBeVisible()
   await expect(createDialog.getByLabel('Destination directory')).toHaveValue('')
   await shoot(createDialog, 'new-adventure-dialog', testInfo)
+  await page.keyboard.press('Escape')
 
-  await createDialog.getByLabel('Adventure name').fill('The mill on the moor')
-  await createDialog.getByLabel('Destination directory').fill(projectDir)
-  await createDialog.getByRole('button', { name: 'Create' }).click()
-  await expect(page.getByTestId('revision')).toHaveText('r1')
+  await freshProject(page, projectDir, 'The mill on the moor')
 
   // The project chrome: the sections beside the working document, the revision
   // token, undo and redo — the projects guide's actual subject.
@@ -71,7 +63,10 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   // The room tool's first rectangle — the quickstart's "one gesture makes a room".
   await page.getByRole('button', { name: 'Room tool' }).click()
   await drag(page, await cellCenter(page, 0, 0), await cellCenter(page, 2, 2))
-  await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
+  // The revision, not the diagnostics count: the count reads 0 before and after the
+  // drag, so only the commit proves a room actually landed.
+  await expect(page.getByTestId('revision')).toHaveText('r2')
+  await page.getByRole('button', { name: 'Select tool' }).click()
   await shoot(page.getByTestId('map-editor'), 'first-room', testInfo)
 
   // The tool palette. With `asChild`, the tooltip trigger *is* the button, so the
@@ -124,6 +119,11 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   await expect(
     inspector.getByTestId('card-treasure').getByRole('button', { name: 'C', exact: true }),
   ).toBeVisible()
+  // Scroll back to the top: committing the cards leaves the inspector at its
+  // bottom, which would put the encounter's monster line — the thing the caption
+  // is about — above the frame.
+  await inspector.getByLabel('Monster lines').scrollIntoViewIfNeeded()
+  await expect(inspector.getByLabel('Monster lines')).toContainText('Skeleton')
   await shoot(inspector, 'area-content-cards', testInfo)
 
   // The map's own reading: a stocked key number beside a hollow one, with the
@@ -140,10 +140,35 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   await page.getByRole('button', { name: 'Level properties' }).click()
   const properties = page.getByRole('dialog')
   await expect(properties.getByLabel('Chance-in-six')).toBeVisible()
+  // Seed the editable copy: without it the dialog shows only the chance and the
+  // interval, and the shot would carry a caption promising a table it does not show.
+  await properties.getByRole('button', { name: 'Override the compiled table' }).click()
+  await expect(properties.getByLabel('Custom wandering table')).toBeVisible()
   await shoot(properties, 'wandering-table', testInfo)
   await page.keyboard.press('Escape')
 
-  // The hero: the whole editor over a level with content in it.
+  // A third room and a second stocked area, so the hero is a level with a module on
+  // it rather than one keyed room in a field of empty grid.
+  await page.getByRole('button', { name: 'Room tool' }).click()
+  await drag(page, await cellCenter(page, 5, 4), await cellCenter(page, 7, 6))
+  await page.getByRole('button', { name: 'Corridor tool' }).click()
+  await drag(page, await cellCenter(page, 6, 2), await cellCenter(page, 6, 4))
+  await page.getByRole('button', { name: 'Entrance tool' }).click()
+  await page.mouse.click((await cellCenter(page, 0, 0)).x, (await cellCenter(page, 0, 0)).y)
+  await page.getByRole('button', { name: 'Select tool' }).click()
+
+  const vaultCell = await cellCenter(page, 6, 5)
+  await page.mouse.click(vaultCell.x, vaultCell.y, { button: 'right' })
+  await page.getByRole('menuitem', { name: 'Add treasure' }).click()
+  await inspector.getByRole('button', { name: 'Pick types…' }).click()
+  await page.getByRole('option', { name: 'A', exact: true }).click()
+  await page.keyboard.press('Escape')
+
+  // The hero: the whole editor over a level with content in it. The dialog must be
+  // gone and the map back before the shutter — otherwise the first image a reader
+  // sees could be of a half-dismissed dialog.
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(page.getByTestId('map-canvas')).toBeVisible()
   await shoot(page, 'map-editor-hero', testInfo)
 })
 
@@ -151,7 +176,7 @@ test('the live lint and the diagnostics panel', async ({ page }, testInfo) => {
   test.setTimeout(120_000)
   const projectDir = adventureDir(testInfo, 'lint-demo.osr')
 
-  await newProject(page, projectDir, 'The sunken vault')
+  await freshProject(page, projectDir, 'The sunken vault')
   await openMap(page)
 
   // Two rooms with no path between them: the far one is unreachable, which the
@@ -171,7 +196,7 @@ test('the monster editor', async ({ page }, testInfo) => {
   test.setTimeout(120_000)
   const projectDir = adventureDir(testInfo, 'monster-demo.osr')
 
-  await newProject(page, projectDir, 'The moor barrows')
+  await freshProject(page, projectDir, 'The moor barrows')
   await page.getByRole('button', { name: 'Monsters', exact: true }).click()
 
   // Clone a catalog monster so the bundle has a template with a real stat block —
@@ -213,7 +238,7 @@ test('import, export, and publish', async ({ page }, testInfo) => {
   const opdSource = join(root, 'tests', 'assets', 'opd', 'torture.json')
   copyFileSync(opdSource, join(exportsDir, 'coppergrave.json'))
 
-  await newProject(page, projectDir, 'Coppergrave')
+  await freshProject(page, projectDir, 'Coppergrave')
   await openMap(page)
 
   // The import dialog is the tallest surface in the editor — its notes list is the
@@ -234,6 +259,7 @@ test('import, export, and publish', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: 'Export' }).click()
   const exportDialog = page.getByRole('dialog')
   await expect(exportDialog.getByRole('button', { name: 'Export' })).toBeVisible()
+  await expect(exportDialog.getByLabel('Destination file')).toHaveValue('')
   await shoot(exportDialog, 'export-dialog', testInfo)
   await page.keyboard.press('Escape')
 

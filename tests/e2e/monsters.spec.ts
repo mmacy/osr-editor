@@ -10,7 +10,7 @@ import { lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 import { cellCenter } from './helpers'
 

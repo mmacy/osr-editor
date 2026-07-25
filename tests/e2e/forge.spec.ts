@@ -9,7 +9,7 @@ import { cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 import { edgePoint } from './helpers'
 

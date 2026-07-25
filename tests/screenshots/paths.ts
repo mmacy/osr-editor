@@ -13,16 +13,16 @@
 // machine's username into every shot of the import and convert dialogs.
 import { join } from 'node:path'
 
-function required(name: string): string {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`${name} is unset — the capture specs must run through playwright.config.ts`)
-  }
-  return value
+// Absent on a non-capture run (`--project=e2e`), where this module is still loaded
+// because Playwright resolves globalSetup for every invocation. Returning an empty
+// string keeps that path inert; a capture run always has the values, because
+// playwright.config.ts publishes them before any spec loads.
+function published(name: string): string {
+  return process.env[name] ?? ''
 }
 
-export const SHOTS_HOME = required('OSR_SHOTS_HOME')
-export const PRISTINE_HOME = required('OSR_PRISTINE_HOME')
+export const SHOTS_HOME = published('OSR_SHOTS_HOME')
+export const PRISTINE_HOME = published('OSR_PRISTINE_HOME')
 
 /** Where the capture harness records the shots it actually ran. */
 export const MANIFEST = join(__dirname, '..', '..', 'frontend', 'test-results', 'produced-shots.txt')

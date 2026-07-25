@@ -12,9 +12,9 @@ import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { expect, test, type Page, type TestInfo } from '@playwright/test'
+import { expect, test, type TestInfo } from '@playwright/test'
 
-import { cellCenter, drag, drawRoom } from './helpers'
+import { cellCenter, createProject, drag, drawRoom } from './helpers'
 
 // The committed prose fixtures, resolved through Playwright's own testDir so the
 // path holds however the suite is invoked (spec files load as CJS here, so
@@ -46,17 +46,9 @@ test('draft prose on a blank room, sweep the level, and publish', async ({ page 
   const checkout = join(workspace, 'osr-web')
   mkdirSync(join(checkout, 'adventures'), { recursive: true })
 
-  // Create the project, capturing its server-minted id from the response.
-  await page.goto('/')
-  await page.getByRole('button', { name: 'New adventure' }).click()
-  await page.getByLabel('Adventure name').fill('Stocking demo')
-  await page.getByLabel('Destination directory').fill(projectDir)
-  const created = page.waitForResponse(
-    (response) => response.url().endsWith('/api/projects') && response.request().method() === 'POST',
-  )
-  await page.getByRole('button', { name: 'Create' }).click()
-  const projectId = ((await (await created).json()) as { id: string }).id
-  await expect(page.getByTestId('revision')).toHaveText('r1')
+  // The shared helper returns the server-minted id, which the sidecar seeding below
+  // needs — that requirement is why it returns one at all.
+  const projectId = await createProject(page, projectDir, 'Stocking demo')
 
   // Configure the fixtures provider through the typed route — the prose assistant
   // renders only when a provider is configured.
