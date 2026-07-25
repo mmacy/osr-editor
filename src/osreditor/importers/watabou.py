@@ -34,7 +34,7 @@ renders.
 import json
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from math import floor
+from math import floor, isfinite
 from pathlib import Path
 from typing import NamedTuple, cast
 
@@ -232,11 +232,24 @@ def _as_int(value: object) -> int | None:
 
 
 def _as_number(value: object) -> float | None:
-    """A note position's coordinate — room centres are half-integers; None for anything else."""
+    """A note position's coordinate — room centres are half-integers; None for anything else.
+
+    Non-finite and unrepresentable numbers answer None too. `json.loads`
+    accepts `Infinity` and `NaN` by default and `json.dumps` emits them, so a
+    Python-side producer whose room-centre arithmetic divided by zero writes
+    exactly that file; a JSON integer of a few hundred digits is the same class
+    from the other end. Neither can be floored onto a cell, and a coordinate
+    that cannot be floored is no readable position — which is a dropped note,
+    not a crash escaping `load` as a 500.
+    """
     if isinstance(value, bool):
         return None
     if isinstance(value, int | float):
-        return float(value)
+        try:
+            number = float(value)
+        except OverflowError:
+            return None
+        return number if isfinite(number) else None
     return None
 
 

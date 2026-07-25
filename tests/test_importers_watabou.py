@@ -374,6 +374,26 @@ def test_a_malformed_note_record_is_dropped_with_a_note(tmp_path: Path) -> None:
     assert any(entry.startswith("dropped notes[0]") for entry in level.notes)
 
 
+@pytest.mark.parametrize("coordinate", ["Infinity", "-Infinity", "NaN", "1" + "0" * 400])
+def test_an_unfloorable_note_position_is_dropped_rather_than_escaping_load(tmp_path: Path, coordinate: str) -> None:
+    # json.loads accepts Infinity and NaN by default and json.dumps emits them,
+    # so these reach the reader from any Python-side producer; a few hundred
+    # digits is the same class from the other end. None can be floored onto a
+    # cell, and an exception escaping load surfaces as a 500 rather than the
+    # protocol's 4xx. Written as raw text — json.dumps will not round-trip a
+    # note this test needs verbatim.
+    source = tmp_path / "unfloorable.json"
+    source.write_text(
+        '{"version": "1.2.7", "title": "", "story": "", "rects": [{"x": 0, "y": 0, "w": 2, "h": 2}], '
+        '"doors": [], "columns": [], "water": [], '
+        f'"notes": [{{"pos": {{"x": {coordinate}, "y": 0.5}}, "ref": "1", "text": "…"}}]}}',
+        encoding="utf-8",
+    )
+    level = OPDImporter().load(source).levels[0]
+    assert level.areas == ()
+    assert any(entry.startswith("dropped notes[0]") for entry in level.notes)
+
+
 # The entrance invariant, and the level transition's fabricated destination.
 
 
