@@ -207,7 +207,7 @@ def test_two_doors_on_one_cell_resolve_first_wins(tmp_path: Path) -> None:
     )
     assert level.edges[edge_key((1, 0), Direction.EAST)] == SECRET
     assert level.edges[edge_key((1, 0), Direction.WEST)] == OPEN
-    assert any("a door already occupies the cell, and the first wins" in entry for entry in level.notes)
+    assert "dropped the door at (1, 0): the secret door already on that cell wins, being first" in level.notes
 
 
 def test_two_doors_claiming_one_edge_from_opposite_cells_resolve_first_wins(tmp_path: Path) -> None:
@@ -217,7 +217,25 @@ def test_two_doors_claiming_one_edge_from_opposite_cells_resolve_first_wins(tmp_
         doors=[door(0, 0, 1, 0, 6), door(1, 0, -1, 0, 1)],
     )
     assert level.edges == {edge_key((0, 0), Direction.EAST): SECRET}
-    assert any("edge, and the first wins" in entry for entry in level.notes)
+    assert (
+        "dropped the door at (1, 0): the secret door at (0, 0) already holds the '1,0:west' edge "
+        "between them, being first" in level.notes
+    )
+
+
+def test_a_first_wins_note_names_what_actually_holds_the_edge(tmp_path: Path) -> None:
+    # The winner is often an opening — types 0, 2, and 9 map to OPEN — so the
+    # note must not tell the author to look for a door that is not there.
+    level = load_level(
+        tmp_path,
+        rects=[rect(0, 0, 2, 1)],
+        doors=[door(0, 0, 1, 0, 0), door(1, 0, -1, 0, 1)],
+    )
+    assert level.edges == {edge_key((0, 0), Direction.EAST): OPEN}
+    assert (
+        "dropped the door at (1, 0): the opening at (0, 0) already holds the '1,0:west' edge "
+        "between them, being first" in level.notes
+    )
 
 
 @pytest.mark.parametrize(
@@ -320,16 +338,20 @@ def test_notes_key_rooms_by_ref_under_a_shuffled_array_order(tmp_path: Path) -> 
     assert all(area.name == "" for area in level.areas)
 
 
-def test_a_duplicate_or_empty_ref_renames_past_every_authored_ref(tmp_path: Path) -> None:
+def test_an_unusable_ref_renames_past_every_authored_ref(tmp_path: Path) -> None:
+    # The three ids CreateArea rejects, each repaired: a duplicate, an empty
+    # one, and one carrying the slash forge keys area entries with. The batch
+    # is atomic, so any of the three would 422 the whole import.
     level = load_level(
         tmp_path,
-        rects=[rect(0, 0, 2, 2), rect(4, 0, 2, 2), rect(8, 0, 2, 2), rect(12, 0, 2, 2)],
-        notes=[note(1, 1, "1"), note(5, 1, "1"), note(9, 1, ""), note(13, 1, "2")],
+        rects=[rect(0, 0, 2, 2), rect(4, 0, 2, 2), rect(8, 0, 2, 2), rect(12, 0, 2, 2), rect(16, 0, 2, 2)],
+        notes=[note(1, 1, "1"), note(5, 1, "1"), note(9, 1, ""), note(13, 1, "2"), note(17, 1, "a/b")],
     )
-    assert [area.id for area in level.areas] == ["1", "3", "4", "2"]
+    assert [area.id for area in level.areas] == ["1", "3", "4", "2", "5"]
     assert [entry for entry in level.notes if entry.startswith("renamed")] == [
         "renamed area '1' to '3' (duplicate of area '1'); geometry preserved",
-        "renamed area '' to '4' (empty ref); geometry preserved",
+        "renamed area '' to '4' (empty id); geometry preserved",
+        "renamed area 'a/b' to '5' ('/' is not addressable in a forge-backed project); geometry preserved",
     ]
 
 
@@ -361,6 +383,28 @@ def test_an_export_with_no_origin_boundary_door_imports_without_an_entrance(tmp_
     level = load_level(tmp_path, rects=[rect(0, 0, 3, 1)], doors=[door(1, 0, 1, 0, 1)])
     assert level.entrance is None
     assert any(entry.startswith("no entrance:") for entry in level.notes)
+
+
+def test_an_origin_door_on_no_floor_cell_drops_the_entrance_rather_than_stranding_it(
+    tmp_path: Path,
+) -> None:
+    # SetEntrance rejects an out-of-bounds cell at apply and the batch is
+    # atomic, so an entrance pointing off the grid would 422 the whole import.
+    level = load_level(tmp_path, rects=[rect(4, 4, 2, 1)], doors=[door(0, 0, 1, 0, 3)])
+    assert level.entrance is None
+    assert any(entry.startswith("dropped the entrance:") for entry in level.notes)
+
+
+def test_a_second_level_transition_on_one_cell_is_dropped_rather_than_stacked(tmp_path: Path) -> None:
+    # AddTransition rejects a second transition on one source cell, so a
+    # stacked pair would 422 the whole import.
+    level = load_level(
+        tmp_path,
+        rects=[rect(0, 0, 2, 1)],
+        doors=[door(1, 0, 1, 0, 8), door(1, 0, 0, -1, 8)],
+    )
+    assert [transition.position for transition in level.transitions] == [(1, 0)]
+    assert any("a transition already occupies the cell" in entry for entry in level.notes)
 
 
 def test_a_second_boundary_door_is_noted_rather_than_dropped_silently(tmp_path: Path) -> None:
@@ -426,6 +470,22 @@ def test_load_raises_naming_every_missing_required_key(tmp_path: Path) -> None:
 def test_load_raises_on_a_non_array_geometry_key(tmp_path: Path, key: str) -> None:
     with pytest.raises(ImportSourceInvalidError, match="rects and doors must be arrays"):
         OPDImporter().load(write_opd(tmp_path, opd_document(**{key: {"x": 0}})))
+
+
+@pytest.mark.parametrize(
+    "rects",
+    [
+        # One rect claiming more grid than exists, and a pair of tiny rects
+        # flung far enough apart to make the bounding box do the same.
+        [rect(0, 0, 10_000_000, 1)],
+        [rect(0, 0, 1, 1), rect(2_000_000, 2_000_000, 1, 1)],
+    ],
+)
+def test_load_raises_rather_than_converting_an_absurd_extent(tmp_path: Path, rects: list[object]) -> None:
+    # The route is synchronous, so an unbounded expansion would hold a worker
+    # thread and unbounded memory instead of answering.
+    with pytest.raises(ImportSourceInvalidError, match="describes more than 1000000 cells"):
+        OPDImporter().load(write_opd(tmp_path, opd_document(rects=rects)))
 
 
 def test_load_raises_on_a_floorless_export(tmp_path: Path) -> None:

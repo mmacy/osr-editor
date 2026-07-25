@@ -49,9 +49,20 @@ from osrlib.crawl.dungeon import (
 )
 
 from osreditor.errors import ImportSourceInvalidError
-from osreditor.importers import ImportedArea, ImportedGeometry, ImportedLevel, next_free_key
+from osreditor.importers import ImportedArea, ImportedGeometry, ImportedLevel, repair_area_id
 
 __all__ = ["OPDImporter"]
+
+_MAX_CELLS = 1_000_000
+"""The floor-cell ceiling `load` refuses past.
+
+A 1000×1000 dungeon is three orders of magnitude beyond any real export, and
+the load route is synchronous: without a ceiling a single 40-byte rect claiming
+`"w": 1e12` would hold a worker thread and unbounded memory rather than
+answering. Both the rects' own extent and the resulting bounding box are
+measured against it — a few tiny rects flung far apart bound the first and not
+the second.
+"""
 
 _SNIFF_LIMIT = 64 * 1024
 """How far into the file the sniff reads, in bytes.
@@ -96,11 +107,12 @@ _DOOR_EDGES: dict[int, Edge] = {
 }
 """The interior door types and the edge each becomes. Types 3 and 8 are boundaries, not edges."""
 
+# Type 3 is absent deliberately: the entrance branch owns its own prose and
+# never reaches a name lookup.
 _DOOR_NAMES: dict[int, str] = {
     0: "opening",
     1: "door",
     2: "narrow opening",
-    3: "boundary door",
     4: "portcullis",
     5: "double door",
     6: "secret door",
@@ -285,12 +297,16 @@ def _convert(path: Path, data: Mapping[str, object]) -> ImportedGeometry:
     rect_notes: list[str] = []
     rects: list[tuple[int, int, int, int]] = []
     rotundas = 0
+    extent = 0
     for index, entry in enumerate(source_rects):
         parsed = _rect(entry)
         if parsed is None:
             rect_notes.append(f"dropped rects[{index}]: not a rectangle with integer x, y and w, h of at least 1")
             continue
         x, y, w, h, rotunda = parsed
+        extent += w * h
+        if extent > _MAX_CELLS:
+            raise ImportSourceInvalidError(_too_large(path))
         rects.append((x, y, w, h))
         if rotunda:
             rotundas += 1
@@ -307,6 +323,8 @@ def _convert(path: Path, data: Mapping[str, object]) -> ImportedGeometry:
     origin = (-min(x for x, _ in source_floor), -min(y for _, y in source_floor))
     width = max(x for x, _ in source_floor) + origin[0] + 1
     height = max(y for _, y in source_floor) + origin[1] + 1
+    if width * height > _MAX_CELLS:
+        raise ImportSourceInvalidError(_too_large(path))
     floor = {_shift(cell, origin) for cell in source_floor}
 
     edges = _open_edges(floor)
@@ -338,6 +356,11 @@ def _convert(path: Path, data: Mapping[str, object]) -> ImportedGeometry:
         notes=tuple(notes),
     )
     return ImportedGeometry(title=title or None, description=story or None, levels=(level,))
+
+
+def _too_large(path: Path) -> str:
+    """The message for a source describing more grid than this reader will convert."""
+    return f"{path} describes more than {_MAX_CELLS} cells — larger than any dungeon this reader converts"
 
 
 def _shift(cell: Position, origin: Position) -> Position:
@@ -376,8 +399,11 @@ def _read_doors(entries: Sequence[object], floor: set[Position], origin: Positio
     transitions: list[TransitionSpec] = []
     mapped: Counter[int] = Counter()
     unknown: Counter[int] = Counter()
-    claimed_cells: set[Position] = set()
-    claimed_edges: set[str] = set()
+    # Both claims remember *what* holds them: the winner is often an opening
+    # (types 0, 2, and 9 map to `OPEN`), so a note saying "a door already holds
+    # this edge" would misreport what the author will find on the map.
+    claimed_cells: dict[Position, str] = {}
+    claimed_edges: dict[str, tuple[str, Position]] = {}
     occupied: set[Position] = set()
     origin_door_seen = False
 
@@ -396,7 +422,10 @@ def _read_doors(entries: Sequence[object], floor: set[Position], origin: Positio
                 if cell in floor:
                     entrance = cell
                 else:
-                    notes.append(f"dropped the entrance at {cell}: the source's origin door sits on no floor cell")
+                    notes.append(
+                        "dropped the entrance: the source's origin door sits on no floor cell, so there is "
+                        "nothing to place it on"
+                    )
             else:
                 notes.append(
                     f"noted a second boundary door at {cell}: the editor's level carries one entrance, so place "
@@ -436,15 +465,21 @@ def _read_doors(entries: Sequence[object], floor: set[Position], origin: Positio
             notes.append(f"dropped the {name} at {cell}: it opens onto {ahead}, which is not floor")
             continue
         if cell in claimed_cells:
-            notes.append(f"dropped the {name} at {cell}: a door already occupies the cell, and the first wins")
+            notes.append(
+                f"dropped the {name} at {cell}: the {claimed_cells[cell]} already on that cell wins, being first"
+            )
             continue
         key = edge_key(cell, direction)
         if key in claimed_edges:
-            notes.append(f"dropped the {name} at {cell}: a door already holds the {key!r} edge, and the first wins")
+            holder, holder_cell = claimed_edges[key]
+            notes.append(
+                f"dropped the {name} at {cell}: the {holder} at {holder_cell} already holds the {key!r} edge "
+                "between them, being first"
+            )
             continue
 
-        claimed_cells.add(cell)
-        claimed_edges.add(key)
+        claimed_cells[cell] = name
+        claimed_edges[key] = (name, cell)
         edge = _DOOR_EDGES.get(kind)
         if edge is None:
             unknown[kind] += 1
@@ -499,10 +534,8 @@ def _read_areas(
         if rect_index in claimed:
             notes.append(f"dropped note {ref!r}: its room is already keyed as area {claimed[rect_index]!r}")
             continue
-        area_id = ref
-        if not area_id or area_id in used:
-            area_id = next_free_key(taken | used)
-            reason = "empty ref" if not ref else f"duplicate of area {ref!r}"
+        area_id, reason = repair_area_id(ref, used, taken)
+        if reason is not None:
             notes.append(f"renamed area {ref!r} to {area_id!r} ({reason}); geometry preserved")
         used.add(area_id)
         claimed[rect_index] = area_id

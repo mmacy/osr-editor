@@ -11,7 +11,7 @@ from osrlib.crawl.dungeon import Edge, EdgeKind, LevelSpec, Position, Transition
 
 from osreditor.documents import ADVENTURE_ARTIFACT, canonical_edge_cells, load_adventure
 from osreditor.errors import ImportSourceInvalidError
-from osreditor.importers import ImportedArea, ImportedGeometry, ImportedLevel, next_free_key
+from osreditor.importers import ImportedArea, ImportedGeometry, ImportedLevel, repair_area_id
 
 __all__ = ["ProjectImporter"]
 
@@ -106,10 +106,8 @@ def _imported_level(label: str, level: LevelSpec) -> ImportedLevel:
             continue
         if dropped:
             notes.append(f"dropped {dropped} out-of-bounds cell(s) from area {area.id!r}")
-        area_id = area.id
-        if not area_id or area_id in used:
-            area_id = next_free_key(taken | used)
-            reason = "empty id" if not area.id else f"duplicate of area {area.id!r}"
+        area_id, reason = repair_area_id(area.id, used, taken)
+        if reason is not None:
             notes.append(f"renamed area {area.id!r} to {area_id!r} ({reason}); geometry preserved")
         used.add(area_id)
         areas.append(ImportedArea(id=area_id, name=area.name, description=area.description, cells=cells))

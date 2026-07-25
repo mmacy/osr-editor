@@ -12,12 +12,12 @@ the seam is what keeps the protocol honest. Imported geometry lands as ordinary
 op batches built by the frontend's import dialog — undoable, revision-guarded,
 immediately linted — and the backend contributes no special apply path.
 
-The converters that ship in the wheel live beside this module:
-[`ProjectImporter`][osreditor.importers.project.ProjectImporter] for another
-editor project and [`OPDImporter`][osreditor.importers.watabou.OPDImporter] for
-Watabou's One Page Dungeon JSON. Nothing here knows either format — a bundled
-converter is one that met the bar (broadly useful, permissively licensed,
-parseable with no new dependency), not one with a private path into the editor.
+Two converters ship in the wheel — `project.py` and `watabou.py`, beside this
+module. Neither is imported here and neither has a private path into the
+editor: both are discovered through the entry-point group, exactly as a
+third-party package would be. Bundling is a distribution decision, not an
+architectural one, and the bar is the spec's: a format bundles when it is
+broadly useful, permissively licensed, and parseable with no new dependency.
 """
 
 import logging
@@ -35,7 +35,7 @@ __all__ = [
     "ImportedGeometry",
     "ImportedLevel",
     "discover_importers",
-    "next_free_key",
+    "repair_area_id",
 ]
 
 logger = logging.getLogger(__name__)
@@ -85,22 +85,40 @@ class ImportedGeometry(BaseModel):
     levels: tuple[ImportedLevel, ...] = Field(min_length=1)
 
 
-def next_free_key(taken: set[str]) -> str:
-    """The smallest positive integer, as a string, not in `taken`.
+def repair_area_id(candidate: str, used: set[str], taken: set[str]) -> tuple[str, str | None]:
+    """The id an area may safely carry, plus the reason it differs from the source's own.
 
-    Every importer needs the same repair: `CreateArea` rejects a duplicate or
-    empty `area_id` at apply and the batch is atomic, so a payload carrying two
-    areas with one id would 422 the whole import with no path forward. The rule
-    belongs to [`ImportedArea`][osreditor.importers.ImportedArea]'s id
-    contract, not to any one format.
+    `CreateArea` rejects three ids at apply — an empty one, a duplicate, and
+    (in a forge-backed project, whose area keys are `<dungeon>/<level>/<key>`)
+    one carrying a slash — and an import batch is atomic, so any of the three
+    would 422 a whole import with no path forward. Every importer meets the
+    same three, so the repair belongs to
+    [`ImportedArea`][osreditor.importers.ImportedArea]'s id contract rather
+    than to any one format.
 
     Args:
-        taken: Every id already spoken for — authored and assigned both, so a
-            rename never lands on an id a later area legitimately holds.
+        candidate: The source's own id.
+        used: The ids already assigned on this level.
+        taken: Every id the source authored, so a rename never lands on one a
+            later area legitimately holds.
 
     Returns:
-        The next free key.
+        The id to use, and the reason it had to change — `None` when the
+        source's own id stands.
     """
+    if not candidate:
+        reason = "empty id"
+    elif "/" in candidate:
+        reason = "'/' is not addressable in a forge-backed project"
+    elif candidate in used:
+        reason = f"duplicate of area {candidate!r}"
+    else:
+        return candidate, None
+    return _next_free_key(taken | used), reason
+
+
+def _next_free_key(taken: set[str]) -> str:
+    """The smallest positive integer, as a string, not in `taken`."""
     candidate = 1
     while str(candidate) in taken:
         candidate += 1
