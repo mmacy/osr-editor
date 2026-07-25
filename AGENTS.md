@@ -68,7 +68,7 @@ These are contracts, not suggestions — see the corresponding spec sections bef
 
 ## Releasing
 
-Release engineering lands in phase 9 and mirrors the siblings: version in `pyproject.toml` alone, tag-driven `release.yml` with trusted publishing, dist audit, fresh-venv smoke tests. Changelog discipline applies from the first phase: a PR that changes user-visible behavior adds its bullet to the `[Unreleased]` section of `CHANGELOG.md` in the same PR.
+Release engineering lands in phase 10 and mirrors the siblings: version in `pyproject.toml` alone, tag-driven `release.yml` with trusted publishing, dist audit, fresh-venv smoke tests. Changelog discipline applies from the first phase: a PR that changes user-visible behavior adds its bullet to the `[Unreleased]` section of `CHANGELOG.md` in the same PR.
 
 ## Licensing
 
