@@ -1,0 +1,249 @@
+# Tag-driven release: gate, build once, audit and smoke the artifact on both
+# OSes, publish to PyPI via trusted publishing, and cut the GitHub Release from
+# the changelog. Any failure before the publish job leaves PyPI untouched:
+# delete the tag, fix on a branch, re-tag. The releasing runbook in AGENTS.md
+# has the full procedure.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  # A tag on an unbumped tree dies here before any matrix spins up.
+  check-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches the pyproject version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "tag $GITHUB_REF_NAME does not match pyproject version $version"
+            exit 1
+          fi
+
+  # The standing gate, duplicated from ci.yml (a tag push triggers no CI run,
+  # so the release re-proves the tree itself). The editor's gate is four jobs
+  # where the siblings have one — both toolchains, the types drift gate, and
+  # the e2e smoke over the flagship loops. Keep these jobs in sync with
+  # ci.yml by hand.
+  backend:
+    needs: check-tag
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - run: uv sync --locked
+      - run: uv run ruff format --check
+      - run: uv run ruff check
+      - run: uv run pyright
+      - run: uv run pytest
+
+  frontend:
+    needs: check-tag
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx prettier --check .
+      - run: npx eslint .
+      - run: npx tsc -b --force
+      - run: npx vitest run
+      - run: npm run build
+
+  types:
+    needs: check-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: uv sync --locked
+      - run: npm ci
+        working-directory: frontend
+      - run: uv run scripts/generate_types.py
+      - name: Fail on drift
+        run: |
+          status=$(git status --porcelain -- frontend/src/types/generated)
+          if [ -n "$status" ]; then
+            echo "generated types are out of date; run: uv run scripts/generate_types.py"
+            echo "$status"
+            git diff -- frontend/src/types/generated
+            exit 1
+          fi
+
+  e2e:
+    needs: check-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: uv sync --locked
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npx tsc -p ../tests/e2e
+        working-directory: frontend
+      - run: npx playwright test
+        working-directory: frontend
+
+  docs:
+    needs: check-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - run: uv sync --locked
+      - run: uv run mkdocs build --strict
+
+  # Build once; everything downstream — the smoke, the publish — consumes this
+  # exact artifact, so what publishes is byte-for-byte what was audited. The
+  # step order is the whole packaging story: the Vite build populates
+  # src/osreditor/static/ before uv build packages the tree.
+  build:
+    needs: [backend, frontend, types, e2e, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build the frontend into the package tree
+        run: npm ci && npm run build
+        working-directory: frontend
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build
+        run: uv build
+
+      - name: Audit the artifact contents
+        run: python3 scripts/release/check_dist.py dist "${GITHUB_REF_NAME#v}"
+
+      - name: Upload the dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # The wheel is pure Python, but the smoke is cheap and mirrors the support
+  # matrix CI promises: one build, two install proofs — and each boots the
+  # installed console script and fetches the UI from it.
+  install-smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Download the dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Install the wheel into a fresh venv and smoke it
+        run: |
+          uv venv --python 3.14 smoke-venv
+          uv pip install --python smoke-venv/bin/python dist/osr_editor-*.whl
+          smoke-venv/bin/python scripts/release/install_smoke.py "${GITHUB_REF_NAME#v}"
+
+  # OIDC trusted publishing: no credentials anywhere in the repository. The
+  # pypi environment and the pending publisher on pypi.org are the one-time
+  # manual setup — see the releasing runbook in AGENTS.md.
+  publish:
+    needs: install-smoke
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/osr-editor/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download the dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  # The GitHub Release carries the tagged version's changelog section verbatim.
+  # If this job alone fails after a successful publish, recover by hand with
+  # `gh release create` — the publication stands.
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract the changelog section
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
+            found && (/^## / || /^\[[^]]+\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "osr-editor ${GITHUB_REF_NAME#v}" --notes-file release-notes.md
