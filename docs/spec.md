@@ -4,7 +4,7 @@ A local GUI application for creating and modifying adventure modules playable by
 
 ## Vision
 
-One tool for the whole module lifecycle: convert a PDF module with osr-forge, review and correct the draft on a graph-paper map beside the scanned pages, or author an adventure from a blank grid — then validate it, walk it, and publish it to osr-web. The editor never reimplements rules or invents formats; osrlib's pydantic models are the schema, osrlib's validators are the referee, and osr-forge's artifacts are the conversion contract. The editor's job is to make those contracts directly manipulable.
+One tool for the whole module lifecycle: convert a PDF module with osr-forge, review and correct the draft on a graph-paper map beside the scanned pages, or author an adventure from a blank grid — then validate it and publish it to osr-web. The editor never reimplements rules or invents formats; osrlib's pydantic models are the schema, osrlib's validators are the referee, and osr-forge's artifacts are the conversion contract. The editor's job is to make those contracts directly manipulable.
 
 Two principles govern everything:
 
@@ -54,7 +54,6 @@ osr-editor/
 │   ├── overrides.py        # op → overrides.yaml translation for forge-backed mode
 │   ├── forge.py            # osr-forge bridge: assemble, check, rerun, convert, estimate
 │   ├── aids.py             # stocking, treasure/encounter preview, prose assist
-│   ├── walk.py             # walk-mode sessions over osrlib GameSession
 │   ├── publish.py          # export + publish-to-osr-web
 │   └── static/             # built frontend (generated at build time, shipped in wheel)
 ├── frontend/               # React + TypeScript + Vite source
@@ -68,7 +67,7 @@ osr-editor/
 - **Storage:** every project artifact read and write goes through a `ProjectStore` protocol (list, read, write artifacts by project) — forge's `ModelProvider` seam, applied to persistence. The local filesystem store ships; blob or database stores are later drop-ins. Forge operations always run against a locally materialized workdir (osr-forge is file-based), so a remote store syncs workdirs down and back rather than teaching forge about remotes — the same archive-the-workdir pattern osr-web's planned conversion worker uses.
 - **Frontend:** React + TypeScript + Vite, with UI chrome built from shadcn/ui components (vendored Radix primitives, styled with Tailwind CSS) — pre-built parts for the panels, forms, dialogs, and trees that make up most of the editor, themed rather than hand-built. The map pane is the one fully bespoke surface: a 2D `<canvas>`. State management is chosen at phase-plan time (a small store like zustand; not spec-relevant).
 - **Type generation:** a `uv run` script emits JSON Schema from the osrlib models and the editor's own API models, and generates TypeScript declarations into `frontend/src/types/generated/`. CI regenerates and fails on diff — the same drift discipline as osrlib's SRD pipeline.
-- **Transport:** REST over `fetch`, polling for long-running progress (conversion, walk sessions are request/response anyway) — the osr-web precedent; no WebSockets.
+- **Transport:** REST over `fetch`, polling for long-running progress (conversion) — the osr-web precedent; no WebSockets.
 - **Dev loop:** Vite dev server proxies `/api` to the backend; production and the wheel serve the built `static/` directly, so runtime needs Python only. Node is a development-time dependency exclusively.
 
 ## The document service
@@ -163,10 +162,9 @@ In scope from 1.0: the editor is the front door to the pipeline, not just the ba
 - On confirm, the chain runs on a worker thread with `on_progress` streamed to a progress view — stage transitions, token usage, per-stage status. The confirm resumes rather than restarts: `estimate()` runs the real `preprocess()` into the workdir and leaves it warm (the licensing invariant forbids persisting module text anywhere else), so the editor calls `rerun(workdir, Stage.SURVEY, provider, …)` and never `convert()`, which would re-render every page. Cancellation is cooperative and takes effect at the next stage boundary, so completed stages persist (forge's own resume semantics) and `rerun` picks up where it stopped; the editor never hard-kills mid-stage, which is what keeps `run.json` consistent. Declining the confirm needs no cleanup: the warm workdir is honestly resumable and opens into the pipeline view. On success the project opens directly into the review queue.
 - **Provider configuration** reads the same environment the forge CLI reads (Foundry endpoint, deployment, key or Entra ID). A settings panel shows detected provider status and lets values be set for the session; secrets are never written to editor config on disk.
 
-## Validation, playtesting, and publishing
+## Validation and publishing
 
 - **Live diagnostics** are always on (see the document service).
-- **Walk mode** (a staged phase, not first playable): a real seeded `GameSession` over the current draft, driven from the map — a party marker moved with the movement keys, doors opened, searches rolled, transitions taken, with the referee-visibility event feed alongside so authored traps, encounters, and secrets can be verified to fire. Encounters are noted and evaded rather than fought (forge's smoke-delve convention); full combat belongs to osr-web. Walk sessions are throwaway: nothing persists, and the working document is never touched.
 - **Publish to osr-web** — with a configured osr-web checkout, publish places the stamped document in its `adventures/` directory (symlink to the project by default, so saves republish live; copy as the alternative). Publishing gates on content validation passing; lint warnings prompt but don't block (secret-only access is sometimes the point). Export writes the stamped JSON anywhere.
 
 ## Authoring aids
@@ -210,7 +208,6 @@ POST /projects/{id}/forge/{assemble|check|rerun|detach}
 GET  /projects/{id}/forge/pages/{n}   # workdir page image
 POST /conversions                     # estimate → confirm token → run
 GET  /conversions/{id}                # progress poll
-POST /projects/{id}/walk              # start/drive/end walk sessions
 ```
 
 Error conventions follow the family pattern: structured rejections for editing conflicts (409 on stale revision), 422 for malformed requests, osrlib/forge typed errors mapped with their remedies attached.
@@ -237,7 +234,7 @@ Every route resolves its caller through one FastAPI auth dependency whose shippe
 
 ## Future extensions
 
-Named so the systems around them grow the right seams — these are directions, not commitments:
+Named so the systems around them grow the right seams — these are directions, not commitments. Features cut from this spec and deferred indefinitely live in `backlog.md`, which is a record, not scope:
 
 - **Quests.** Neither the adventure document nor osr-web has a quest surface today, and osrlib deliberately leaves quest systems to games, built on its session flags and event listeners. When the ecosystem grows an authored quest model — definitions, triggers bound to areas, cells, or flags, rewards issued as referee commands — the editor's growth path is already the design: osrlib owns the schema, the generated types pick it up, the ops vocabulary grows additively, triggers place on the map the way transitions do, and diagnostics lint dangling quest references the way they lint monster ids. The open-fields fidelity guard (see documents and versioning) keeps an older editor from silently eating a newer document in the meantime.
 - **Map-format converter plugins.** The `GeometryImporter` entry-point seam ships in 1.0 and Watabou's One Page Dungeon rides it in phase 8. Formats beyond those two are built as demand strikes, and the bar decides where one lives: a converter is **bundled** when its format is broadly useful, permissively licensed, and parseable with no new dependency, and is a **separate installable package** otherwise. The entry-point group is public either way — the built-in importers register through the same group any third party uses, so the third-party path is exercised rather than merely promised, and no converter needs the editor's permission to exist. Candidates as demand strikes: Dungeon Scrawl, donjon, Dungeondraft.
@@ -266,6 +263,4 @@ Each phase ends with working, tested, documented software.
 
 **Phase 8 — external map import.** The first converter over the `GeometryImporter` seam: Watabou's One Page Dungeon JSON, with its door cells resolved onto edges, its keyed notes onto areas, its entrance-relative coordinates normalized, and every judgment call flagged — plus the metadata adoption phase 2 deferred to exactly this converter. Milestone: generate a dungeon at Watabou's generator, import it into a blank project, adopt its title and story, stock and publish it, and play it in osr-web.
 
-**Phase 9 — walk mode.** The embedded GameSession playtest: party marker on the map, movement/doors/searches/transitions, referee event feed, evade-encounters convention. Milestone: walk a converted module end to end and watch its traps and encounters fire where the pages said they would.
-
-**Phase 10 — documentation and release.** Docs site (mkdocs-material), README, packaging audit, tag-driven trusted publishing, PyPI release as `osr-editor` 0.1.0 (Development Status :: 4 — Beta), matching the family's release engineering.
+**Phase 9 — documentation and release.** Docs site (mkdocs-material), README, packaging audit, tag-driven trusted publishing, PyPI release as `osr-editor` 0.1.0 (Development Status :: 4 — Beta), matching the family's release engineering.
