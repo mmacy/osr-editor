@@ -42,11 +42,14 @@ dependencies = [
 osr-editor = "osreditor.app:main"
 
 # The geometry importer seam: each entry is a zero-arg callable returning a
-# GeometryImporter instance. The built-in import-from-project importer
-# registers through the same public group any third-party converter uses —
-# dogfooding the seam keeps the protocol honest.
+# GeometryImporter instance. The built-in converters register through the same
+# public group any third-party converter uses — dogfooding the seam keeps the
+# protocol honest. A format ships bundled when it is broadly useful,
+# permissively licensed, and parseable with no new dependency; everything else
+# is a separate installable package, and the group stays public either way.
 [project.entry-points."osreditor.importers"]
-project = "osreditor.importers:ProjectImporter"
+project = "osreditor.importers.project:ProjectImporter"
+watabou-opd = "osreditor.importers.watabou:OPDImporter"
 
 [project.urls]
 Repository = "https://github.com/mmacy/osr-editor"

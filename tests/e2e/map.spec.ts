@@ -17,6 +17,7 @@ import { CELL_SIZE, RESET_MARGIN } from '../../frontend/src/map/view'
 
 // Playwright transpiles specs to CJS, so __dirname is the reliable anchor.
 const FIXTURES = join(__dirname, '..', 'fixtures')
+const ASSETS = join(__dirname, '..', 'assets')
 
 interface StampedLevel {
   number: number
@@ -199,6 +200,82 @@ test('import a fixture project level as a new level', async ({ page }) => {
   await expect(
     page.getByTestId('map-editor').getByRole('button', { name: 'Level 2' }),
   ).not.toBeVisible()
+  await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
+})
+
+// The phase 8 milestone, deterministic half: a One Page Dungeon export imports
+// into a blank project through the same seam and the same op batch, with its
+// title and story adopted in the one undo step.
+test('import a One Page Dungeon export, adopting its title and story', async ({ page }) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'osr-editor-e2e-opd-'))
+  const projectDir = join(workspace, 'coppergrave.osr')
+  const source = join(ASSETS, 'opd', 'torture.json')
+
+  await createProject(page, projectDir, 'Import target')
+  await openMap(page)
+
+  await page.getByRole('button', { name: 'Import geometry' }).click()
+  await page.getByLabel('Source path').fill(source)
+  await page.getByRole('button', { name: 'Sniff' }).click()
+  // The path is a file, not a directory: only the OPD converter recognizes it.
+  await expect(page.getByLabel('Importer')).toHaveValue('watabou-opd')
+  await page.getByRole('button', { name: 'Load' }).click()
+  await expect(page.getByLabel('Source level')).toBeVisible()
+
+  // Every judgment call is on screen before anything commits.
+  await expect(page.getByLabel('Importer notes')).toContainText(
+    'carry a fabricated destination',
+  )
+  await expect(page.getByLabel('Importer notes')).toContainText('unrecognized type 12')
+
+  await page.getByRole('checkbox', { name: /Adopt the title/ }).check()
+  await page.getByRole('checkbox', { name: /Adopt the description/ }).check()
+  // The stair's destination is fabricated, so it never resolves — the dialog
+  // drops it by default and this keeps it, exactly as an author would.
+  await page.getByLabel('Unresolved transitions').getByRole('checkbox').check()
+  await page.getByRole('dialog').getByRole('button', { name: 'Import' }).click()
+
+  // The map drew: level 2 exists, is selected, and its canvas is up.
+  await expect(page.getByTestId('map-editor').getByRole('button', { name: 'Level 2' })).toBeVisible()
+  await expect(page.getByTestId('map-canvas')).toBeVisible()
+
+  // The complete finding list, asserted rather than counted: the fabricated
+  // destination is a validation error (so publish refuses until the author
+  // resolves or drops the stair — the to-do list has a deadline), the imported
+  // level is honestly unreachable from level 1's entrance (reachability seeds
+  // from the first entrance-bearing level only), its eight unkeyed door cells
+  // are orphans, and the kept stair is unpaired until the author resolves it.
+  await expect(page.getByRole('region', { name: 'Diagnostics' }).getByRole('listitem')).toHaveText([
+    "transition_target_unknown dungeon-1 level 2: transition targets unknown '' level 2",
+    'area_unreachable no path from any entrance reaches this area',
+    'area_unreachable no path from any entrance reaches this area',
+    'area_unreachable no path from any entrance reaches this area',
+    'area_unreachable no path from any entrance reaches this area',
+    'area_unreachable no path from any entrance reaches this area',
+    'area_unreachable no path from any entrance reaches this area',
+    'area_unreachable no path from any entrance reaches this area',
+    'orphan_cell cell (3, 2) renders as corridor but no path reaches it',
+    'orphan_cell cell (5, 2) renders as corridor but no path reaches it',
+    'orphan_cell cell (3, 6) renders as corridor but no path reaches it',
+    'orphan_cell cell (5, 6) renders as corridor but no path reaches it',
+    'orphan_cell cell (3, 10) renders as corridor but no path reaches it',
+    'orphan_cell cell (5, 10) renders as corridor but no path reaches it',
+    'orphan_cell cell (9, 10) renders as corridor but no path reaches it',
+    'orphan_cell cell (4, 12) renders as corridor but no path reaches it',
+    'transition_unpaired stairs_down at (4, 0) has no transition back from /2 (0, 0)',
+  ])
+
+  // Adoption rode the geometry batch: the adventure took the source's name and
+  // story, and one undo takes back the whole import — map and metadata.
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('button', { name: 'Adventure', exact: true })
+    .click()
+  await expect(page.locator('#adventure-name')).toHaveValue('The Coppergrave Warrens')
+  await expect(page.locator('#adventure-description')).toHaveValue(/spoil shaft/)
+
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(page.locator('#adventure-name')).toHaveValue('Import target')
   await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
 })
 

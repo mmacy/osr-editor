@@ -6,7 +6,7 @@ import { ImportDialog } from '@/components/import-dialog'
 import { api } from '@/lib/api'
 import { projectStore } from '@/store/project-store'
 import { makeDocument, makeForgeState, makeProjectState } from '@/test/fixtures'
-import type { ImportedLevel } from '@/types'
+import type { Adventure, ImportedLevel, OpBatchResult } from '@/types'
 
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
@@ -29,6 +29,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 const listImporters = vi.mocked(api.listImporters)
 const sniffImporters = vi.mocked(api.sniffImporters)
 const loadGeometry = vi.mocked(api.loadGeometry)
+const postOps = vi.mocked(api.postOps)
 
 function importedLevel(): ImportedLevel {
   return {
@@ -50,13 +51,21 @@ beforeEach(() => {
   listImporters.mockResolvedValue({ importers: [{ format_id: 'fmt', label: 'Format' }] })
   sniffImporters.mockResolvedValue({ format_ids: ['fmt'] })
   loadGeometry.mockResolvedValue({ levels: [importedLevel()] })
+  postOps.mockResolvedValue({
+    revision: 'r2',
+    diagnostics: { validation: [], lint: [], forge: [] },
+    delta: [],
+    can_undo: true,
+    can_redo: false,
+  } satisfies OpBatchResult)
 })
 
-async function renderForgeDialogWithGeometry() {
-  const document = makeDocument()
+async function renderDialogWithGeometry(document: Adventure, forge = false) {
   projectStore
     .getState()
-    .setProject(makeProjectState({ type: 'forge', forge: makeForgeState(), document }))
+    .setProject(
+      makeProjectState(forge ? { type: 'forge', forge: makeForgeState(), document } : { document }),
+    )
   render(
     <ImportDialog
       open
@@ -64,7 +73,7 @@ async function renderForgeDialogWithGeometry() {
       document={document}
       dungeonId="dungeon-1"
       onNavigate={() => undefined}
-      forge
+      forge={forge}
     />,
   )
   fireEvent.change(screen.getByLabelText('Source path'), { target: { value: '/tmp/source' } })
@@ -73,6 +82,55 @@ async function renderForgeDialogWithGeometry() {
   fireEvent.click(screen.getByRole('button', { name: 'Load' }))
   await waitFor(() => screen.getByLabelText('Source level'))
 }
+
+async function renderForgeDialogWithGeometry() {
+  await renderDialogWithGeometry(makeDocument(), true)
+}
+
+test('the adoption controls appear only for fields the source carries and differs on', async () => {
+  loadGeometry.mockResolvedValue({
+    title: 'The Coppergrave Warrens',
+    description: makeDocument().description,
+    levels: [importedLevel()],
+  })
+  await renderDialogWithGeometry(makeDocument())
+  // The title differs, so it is offered — off by default; the description
+  // matches the project's own, so there is nothing to adopt.
+  const adoptTitle = screen.getByRole('checkbox', { name: /Adopt the title/ })
+  expect(adoptTitle).not.toBeChecked()
+  expect(screen.queryByRole('checkbox', { name: /Adopt the description/ })).toBeNull()
+})
+
+test('a source carrying no metadata offers no adoption at all', async () => {
+  await renderDialogWithGeometry(makeDocument())
+  expect(screen.queryByLabelText('Adopt source metadata')).toBeNull()
+})
+
+test('adopted metadata rides the geometry batch, and only when checked', async () => {
+  loadGeometry.mockResolvedValue({
+    title: 'The Coppergrave Warrens',
+    description: 'The smelters sank their spoil shaft the year the river turned green.',
+    levels: [importedLevel()],
+  })
+  await renderDialogWithGeometry(makeDocument())
+
+  fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+  await waitFor(() => expect(postOps).toHaveBeenCalled())
+  expect(postOps.mock.calls[0][2].some((op) => op.op === 'set_adventure_field')).toBe(false)
+
+  fireEvent.click(screen.getByRole('checkbox', { name: /Adopt the title/ }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /Adopt the description/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+  await waitFor(() => expect(postOps).toHaveBeenCalledTimes(2))
+  expect(postOps.mock.calls[1][2].slice(0, 2)).toEqual([
+    { op: 'set_adventure_field', field: 'name', value: 'The Coppergrave Warrens' },
+    {
+      op: 'set_adventure_field',
+      field: 'description',
+      value: 'The smelters sank their spoil shaft the year the river turned green.',
+    },
+  ])
+})
 
 test('the forge new-level mode is visible and opens the blocked-op dialog', async () => {
   await renderForgeDialogWithGeometry()

@@ -180,6 +180,47 @@ test('the forge variant emits no ResizeLevel — dimensions are derived state', 
   ])
 })
 
+test('adopted metadata leads the batch, and only the fields actually adopted', () => {
+  const ops = importOps(importedLevel(), makeDocument(), {
+    dungeonId: 'dungeon-1',
+    levelNumber: 2,
+    mode: 'new',
+    keepUnresolved: [],
+    adopt: { name: 'The Coppergrave Warrens' },
+  })
+  expect(ops.map((op) => op.op)).toEqual([
+    'set_adventure_field',
+    'add_level',
+    'set_edges',
+    'create_area',
+    'set_entrance',
+  ])
+  expect(ops[0]).toMatchObject({ field: 'name', value: 'The Coppergrave Warrens' })
+
+  const both = importOps(importedLevel(), makeDocument(), {
+    dungeonId: 'dungeon-1',
+    levelNumber: 2,
+    mode: 'new',
+    keepUnresolved: [],
+    adopt: { name: 'A title', description: 'A story' },
+  })
+  expect(both.slice(0, 2)).toEqual([
+    { op: 'set_adventure_field', field: 'name', value: 'A title' },
+    { op: 'set_adventure_field', field: 'description', value: 'A story' },
+  ])
+})
+
+test('adopting nothing adds no adventure-field ops', () => {
+  const ops = importOps(importedLevel(), makeDocument(), {
+    dungeonId: 'dungeon-1',
+    levelNumber: 2,
+    mode: 'new',
+    keepUnresolved: [],
+    adopt: {},
+  })
+  expect(ops.some((op) => op.op === 'set_adventure_field')).toBe(false)
+})
+
 test('the native replace still resizes', () => {
   const ops = importOps(importedLevel(), makeDocument(), {
     dungeonId: 'dungeon-1',
