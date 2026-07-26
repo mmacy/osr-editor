@@ -187,14 +187,18 @@ Graph paper and pencil — the drafting table these modules were born on:
 
 ## Configuration
 
-- App config via `platformdirs` (recents, osr-web checkout path, UI preferences). No secrets on disk; provider credentials come from the environment.
+- App config via `platformdirs` (recents, osr-web checkout path, per-field picker locations, UI preferences). No secrets on disk; provider credentials come from the environment.
 - CLI: `osr-editor [PATH] [--port 8630] [--no-browser]` — serve, open the browser to the home screen (recents, new adventure, open project or workdir, convert PDF), or straight into the project at `PATH`. Default port 8630 (osr-web convention-adjacent, non-colliding).
+- **Naming a path.** Every field that names a filesystem path — the project, workdir, PDF, import, export, and checkout fields alike — takes a typed path or a browse through the read-only directory listing, and `~` expands on all of them, the CLI's `PATH` included. Expansion happens once, in the request models, so no handler ever meets a tilde; the picker hands back the home-shortened form, which is a path those models accept verbatim. The picker never validates — a destination that does not exist yet is the normal case for half these fields — so refusals stay with the routes that consume the path.
+- **Pickers are sticky, per field.** Choosing records the directory the picker was standing in, keyed by the field's own id, so the export picker reopens where you keep exports and the project picker where you keep projects. The record lives in app config and survives a restart; it is a convenience cache, capped and shape-validated because the keys come from the client, and a location that has since vanished needs no special case — the browse walks up to its nearest existing ancestor. Precedence on open: the field's own value, then the remembered location, then home.
 
 ## API surface
 
 All under `/api`, JSON, localhost only. Representative, not exhaustive:
 
 ```text
+GET  /fs                              # browse a directory (the path pickers)
+POST /fs/location                     # remember where a field's picker last chose
 GET  /projects                        # recents + detected type
 POST /projects                        # create native project
 POST /projects/open                   # open by path (native or forge workdir)

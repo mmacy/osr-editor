@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { FileDownIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { PathField } from '@/components/path-field'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,7 +13,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api, ApiRequestError } from '@/lib/api'
 import { projectStore, useProjectStore } from '@/store/project-store'
@@ -61,12 +61,14 @@ export function ExportDialog() {
         </DialogHeader>
         <div className="flex flex-col gap-2">
           <Label htmlFor="export-path">Destination file</Label>
-          <Input
+          <PathField
             id="export-path"
-            className="font-mono"
+            kind="file"
+            suffixes={['.json']}
+            title="Choose an export destination"
             value={path}
-            onChange={(event) => setPath(event.target.value)}
-            placeholder="/absolute/path/to/adventure.json"
+            onChange={setPath}
+            placeholder="~/exports/adventure.json"
             onKeyDown={(event) => {
               if (event.key === 'Enter' && path) void submit()
             }}

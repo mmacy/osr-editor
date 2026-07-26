@@ -32,6 +32,7 @@ __all__ = [
     "OsrEditorError",
     "OsrWebCheckoutInvalidError",
     "OsrWebNotConfiguredError",
+    "PathNotReadableError",
     "ProjectExistsError",
     "ProjectNotForgeError",
     "ProjectNotFoundError",
@@ -88,6 +89,15 @@ class ProjectPathNotFoundError(OsrEditorError):
 
 class InvalidProjectError(OsrEditorError):
     """The directory exists but matches neither project shape."""
+
+
+class PathNotReadableError(OsrEditorError):
+    """A directory the path picker tried to browse exists but refuses to be listed.
+
+    The picker's only hard failure: a missing path resolves to its nearest
+    existing ancestor, but a permission wall is not something navigating can get
+    around, so it is said plainly.
+    """
 
 
 class ForgeWorkdirInvalidError(OsrEditorError):

@@ -12,6 +12,7 @@ import { BookUpIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { FindingRow } from '@/components/diagnostics-panel'
+import { PathField } from '@/components/path-field'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -181,12 +182,13 @@ export function PublishDialog({ onNavigate }: { onNavigate: (target: NavTarget) 
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="publish-checkout">osr-web checkout</Label>
-                <Input
+                <PathField
                   id="publish-checkout"
-                  className="font-mono"
+                  kind="directory"
+                  title="Choose your osr-web checkout"
                   value={checkoutPath}
-                  onChange={(event) => setCheckoutPath(event.target.value)}
-                  placeholder="/absolute/path/to/osr-web"
+                  onChange={setCheckoutPath}
+                  placeholder="~/repos/osr-web"
                 />
                 <p className="text-muted-foreground text-xs">
                   Saved after the first publish; leave empty to use the saved path.

@@ -1,13 +1,14 @@
 // The import dialog: source path → sniff (preselects the importer) → load →
 // pick a source level → choose the destination → one atomic op batch through
-// the ordinary ops route. The path is free text and takes a directory or a
-// file — sniff is what disambiguates, so no importer needs a picker of its
-// own. The payload's multi-level shape is the protocol's; the dialog imports
+// the ordinary ops route. The path takes a directory or a file and the picker
+// offers both — sniff is what disambiguates, so no importer needs a picker of
+// its own. The payload's multi-level shape is the protocol's; the dialog imports
 // one level per invocation. The body mounts only while open, so
 // per-invocation state initializes on mount.
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
+import { PathField } from '@/components/path-field'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -204,12 +205,14 @@ function ImportDialogBody({
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="import-path">Source path</Label>
           <div className="flex gap-2">
-            <Input
+            <PathField
               id="import-path"
-              className="font-mono"
+              className="flex-1"
+              kind="any"
+              title="Choose a geometry source"
               value={path}
-              placeholder="/absolute/path/to/source"
-              onChange={(event) => setPath(event.target.value)}
+              placeholder="~/maps/dungeon.json"
+              onChange={setPath}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') sniff()
               }}

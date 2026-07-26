@@ -4,6 +4,7 @@ import { FolderOpenIcon, MapPinOffIcon, PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { ConvertPdfDialog } from '@/components/convert-pdf-dialog'
+import { PathField } from '@/components/path-field'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -224,12 +225,13 @@ function NewAdventureDialog({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="new-adventure-path">Destination directory</Label>
-            <Input
+            <PathField
               id="new-adventure-path"
-              className="font-mono"
+              kind="directory"
+              title="Choose where the project goes"
               value={path}
-              onChange={(event) => setPath(event.target.value)}
-              placeholder="/absolute/path/to/adventure.osr"
+              onChange={setPath}
+              placeholder="~/adventures/mill-on-the-moor.osr"
             />
           </div>
         </div>
@@ -260,16 +262,17 @@ function OpenProjectDialog({ onOpen }: { onOpen: (path: string) => Promise<void>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Open project</DialogTitle>
-          <DialogDescription>Open a project directory by its absolute path.</DialogDescription>
+          <DialogDescription>Open a native project directory or a forge workdir.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2">
           <Label htmlFor="open-project-path">Project directory</Label>
-          <Input
+          <PathField
             id="open-project-path"
-            className="font-mono"
+            kind="directory"
+            title="Choose a project directory"
             value={path}
-            onChange={(event) => setPath(event.target.value)}
-            placeholder="/absolute/path/to/adventure.osr"
+            onChange={setPath}
+            placeholder="~/adventures/mill-on-the-moor.osr"
             onKeyDown={(event) => {
               if (event.key === 'Enter' && path) void submit()
             }}

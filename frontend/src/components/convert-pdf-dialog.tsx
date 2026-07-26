@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { FileTextIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { PathField } from '@/components/path-field'
 import { ProviderDialog, ProviderStrip } from '@/components/provider-dialog'
 import { Button } from '@/components/ui/button'
 import {
@@ -185,22 +186,25 @@ export function ConvertPdfDialog({ onConverted }: { onConverted?: () => void }) 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="convert-pdf-path">Module PDF</Label>
-            <Input
+            <PathField
               id="convert-pdf-path"
-              className="font-mono"
+              kind="file"
+              suffixes={['.pdf']}
+              title="Choose a module PDF"
               value={pdfPath}
-              placeholder="/absolute/path/to/module.pdf"
-              onChange={(event) => setPdf(event.target.value)}
+              placeholder="~/modules/module.pdf"
+              onChange={setPdf}
             />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="convert-workdir-path">Destination workdir</Label>
-            <Input
+            <PathField
               id="convert-workdir-path"
-              className="font-mono"
+              kind="directory"
+              title="Choose where the workdir goes"
               value={workdirPath}
-              placeholder="/absolute/path/to/module.forge"
-              onChange={(event) => setWorkdirPath(event.target.value)}
+              placeholder="~/modules/module.forge"
+              onChange={setWorkdirPath}
             />
           </div>
           <div className="flex flex-col gap-2">

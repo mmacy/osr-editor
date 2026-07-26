@@ -8,10 +8,10 @@ import { defineConfig, devices } from '@playwright/test'
 // capture harness takes 8632 and 8633 for the same reason.
 // The capture servers' scratch homes, owned here and published onto the
 // environment so the specs and the global setup read them back rather than
-// duplicating the literals. They sit outside the checkout deliberately: the
-// backend does no tilde expansion, so a dialog renders a path exactly as typed,
-// and a scratch root inside the tree would put this machine's username into every
-// shot of the import and convert dialogs.
+// duplicating the literals. They sit outside the checkout deliberately: a dialog
+// renders a path exactly as the spec typed it, and a scratch root inside the tree
+// would put this machine's username into every shot of the import and convert
+// dialogs.
 const SHOTS_HOME = '/tmp/osr-editor-shots'
 const PRISTINE_HOME = '/tmp/osr-editor-pristine'
 process.env.OSR_SHOTS_HOME = SHOTS_HOME

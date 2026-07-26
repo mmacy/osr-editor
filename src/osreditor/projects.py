@@ -11,6 +11,7 @@ store lists files, and directories are layout, not artifacts.
 """
 
 import json
+from collections.abc import Container
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
@@ -48,6 +49,7 @@ __all__ = [
     "SIDECAR_ARTIFACT",
     "EditorSidecar",
     "SidecarProvenance",
+    "classify_artifact_names",
     "create_native_project",
     "detach_project",
     "detect_project_type",
@@ -66,6 +68,33 @@ def utc_now_iso() -> str:
         The timestamp, e.g. `2026-07-18T17:03:21.123456+00:00`.
     """
     return datetime.now(UTC).isoformat()
+
+
+def classify_artifact_names(names: Container[str]) -> ProjectType | None:
+    """Classify a directory by which marker artifacts sit at its root.
+
+    The rule itself, factored out of
+    [`detect_project_type`][osreditor.projects.detect_project_type] so the path
+    picker's directory browser can share it: forge first, because a workdir also
+    holds an assembled `adventure.json` at its root and checking the native shape
+    first would misclassify every workdir.
+
+    The callers differ only in how they come by the names. Detection lists every
+    artifact through the store; the browser probes for these two names alone,
+    because listing each entry's artifacts would walk the whole tree under every
+    directory on screen.
+
+    Args:
+        names: The artifact names to test membership against.
+
+    Returns:
+        `"forge"`, `"native"`, or `None` when the names match no project shape.
+    """
+    if RUN_ARTIFACT in names:
+        return "forge"
+    if ADVENTURE_ARTIFACT in names:
+        return "native"
+    return None
 
 
 def detect_project_type(store: ProjectStore, project_id: str) -> ProjectType | None:
@@ -91,12 +120,7 @@ def detect_project_type(store: ProjectStore, project_id: str) -> ProjectType | N
     Returns:
         `"forge"`, `"native"`, or `None` when the directory is not a project.
     """
-    artifacts = store.list_artifacts(project_id)
-    if RUN_ARTIFACT in artifacts:
-        return "forge"
-    if ADVENTURE_ARTIFACT in artifacts:
-        return "native"
-    return None
+    return classify_artifact_names(store.list_artifacts(project_id))
 
 
 def starter_adventure(name: str) -> Adventure:

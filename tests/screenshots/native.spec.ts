@@ -9,7 +9,7 @@
 // Every dialog that renders a filesystem path is captured in its empty state, and
 // the one import fixture that must show its path is copied under the capture
 // server's own HOME first, so no committed image carries a real path.
-import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
@@ -32,6 +32,38 @@ async function freshProject(page: Page, projectDir: string, name: string): Promi
   mkdirSync(join(projectDir, '..'), { recursive: true })
   await createProject(page, projectDir, name)
 }
+
+test('the path picker', async ({ page }, testInfo) => {
+  // A staged directory of its own, under the capture server's HOME: the shot's
+  // whole subject is a listing, and every name in it has to be one this
+  // repository chose. The two project shapes are here because the badges that
+  // tell them apart are what the picker adds over typing a path.
+  const browsable = join(SHOTS_HOME, testInfo.project.name, 'modules')
+  rmSync(browsable, { recursive: true, force: true })
+  for (const name of ['sketches', 'the-mill-on-the-moor.osr', 'the-keep.forge']) {
+    mkdirSync(join(browsable, name), { recursive: true })
+  }
+  writeFileSync(join(browsable, 'the-mill-on-the-moor.osr', 'adventure.json'), '{}', 'utf-8')
+  writeFileSync(join(browsable, 'the-keep.forge', 'run.json'), '{}', 'utf-8')
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open project' }).click()
+  const openDialog = page.getByRole('dialog', { name: 'Open project' })
+  // Seeded in the tilde form the picker itself hands back, so the shot shows the
+  // path both ways a reader can write one.
+  await openDialog.getByLabel('Project directory').fill(`~/${testInfo.project.name}/modules`)
+  await openDialog.getByRole('button', { name: 'Browse' }).click()
+
+  const picker = page.getByRole('dialog', { name: 'Choose a project directory' })
+  // The location renders home-shortened, which under the capture server's
+  // redirected HOME is also why this shot carries no machine path at all.
+  await expect(picker.getByTestId('picker-location')).toHaveText(
+    `~/${testInfo.project.name}/modules`,
+  )
+  await expect(picker.getByRole('button', { name: 'the-mill-on-the-moor.osr native' })).toBeVisible()
+  await expect(picker.getByRole('button', { name: 'the-keep.forge forge' })).toBeVisible()
+  await shoot(picker, 'path-picker', testInfo)
+})
 
 test('the project chrome, the map editor, and the stocking surfaces', async ({ page }, testInfo) => {
   test.setTimeout(120_000)
