@@ -6,7 +6,7 @@
 osr-editor [PATH] [--port PORT] [--no-browser]
 ```
 
-- `PATH` — optional project directory to open straight away, skipping the home screen. Must exist and be a directory.
+- `PATH` — optional project directory to open straight away, skipping the home screen. Must exist and be a directory. A leading `~` expands, so a quoted `osr-editor "~/adventures/mill.osr"` works as well as the unquoted form your shell expands.
 - `--port PORT` — the port to serve on. Defaults to `8630`.
 - `--no-browser` — suppress the automatic browser launch. The editor still serves; open `http://127.0.0.1:PORT/` yourself.
 

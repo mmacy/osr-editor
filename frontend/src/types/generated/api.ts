@@ -30,6 +30,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse Filesystem
+         * @description List a directory for the path pickers.
+         *
+         *     The one route behind every browse button. It is a navigation aid, not a
+         *     validator: a file lists its parent, a path that does not exist yet lists its
+         *     nearest existing ancestor, and an absent `path` lists home — the routes that
+         *     consume a path keep their own typed refusals for what is actually wrong with
+         *     it.
+         *
+         *     Args:
+         *         user: The authenticated caller.
+         *         path: Where to browse; `~` is expanded, and `None` means home.
+         *         show_hidden: Whether to include dot-entries.
+         *
+         *     Returns:
+         *         The directory the browse landed in, its children, and the home and
+         *         parent directories the picker navigates by.
+         */
+        get: operations["browse_filesystem_api_fs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects": {
         parameters: {
             query?: never;
@@ -674,7 +709,8 @@ export interface paths {
          *
          *     Args:
          *         request: The current request (carries the app state).
-         *         workdir: The workdir path to look up.
+         *         workdir: The workdir path to look up; `~` is expanded, as on every other
+         *             path the API takes.
          *         user: The authenticated caller.
          *
          *     Returns:
@@ -1928,6 +1964,42 @@ export interface components {
          * @enum {string}
          */
         Direction: "north" | "east" | "south" | "west";
+        /**
+         * DirectoryEntry
+         * @description One child of a browsed directory.
+         */
+        DirectoryEntry: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Display Path */
+            display_path: string;
+            /** Is Directory */
+            is_directory: boolean;
+            /** Project Type */
+            project_type?: ("native" | "forge") | null;
+        };
+        /**
+         * DirectoryListing
+         * @description One directory's children, plus where the picker is and where it can go.
+         *
+         *     `path` is where the browse actually landed, which is not always what was
+         *     asked for: a file lists its parent, and a path that does not exist lists its
+         *     nearest existing ancestor.
+         */
+        DirectoryListing: {
+            /** Path */
+            path: string;
+            /** Display Path */
+            display_path: string;
+            /** Parent */
+            parent: string | null;
+            /** Home */
+            home: string;
+            /** Entries */
+            entries: components["schemas"]["DirectoryEntry"][];
+        };
         /**
          * DismissFlag
          * @description Dismiss one review flag: the `{address, flag}` mark grain (`""` for module scope).
@@ -4994,6 +5066,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+        };
+    };
+    browse_filesystem_api_fs_get: {
+        parameters: {
+            query?: {
+                path?: string | null;
+                show_hidden?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryListing"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

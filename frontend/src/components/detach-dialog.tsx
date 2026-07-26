@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { PathField } from '@/components/path-field'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -13,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { projectStore } from '@/store/project-store'
 
@@ -62,13 +62,14 @@ function DetachBody({ onOpenChange }: { onOpenChange: (open: boolean) => void })
         </DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="detach-path">New project directory (absolute path)</Label>
-        <Input
+        <Label htmlFor="detach-path">New project directory</Label>
+        <PathField
           id="detach-path"
-          className="font-mono"
-          placeholder="/adventures/my-module.osr"
+          kind="directory"
+          title="Choose where the native project goes"
+          placeholder="~/adventures/my-module.osr"
           value={path}
-          onChange={(event) => setPath(event.target.value)}
+          onChange={setPath}
         />
       </div>
       <DialogFooter>

@@ -103,6 +103,7 @@ from osreditor.errors import (
     OpUnsupportedForgeError,
     OsrWebCheckoutInvalidError,
     OsrWebNotConfiguredError,
+    PathNotReadableError,
     ProjectExistsError,
     ProjectNotForgeError,
     ProjectNotFoundError,
@@ -116,6 +117,7 @@ from osreditor.errors import (
     UndoStackEmptyError,
     WorkdirOpenAsProjectError,
 )
+from osreditor.filesystem import DirectoryListing, browse_directory, expand_user_path
 from osreditor.forge import build_provider, provider_status, render_workdir_previews
 from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
 from osreditor.ops import Diagnostics, ForgeState, OpBatch, OpBatchResult
@@ -218,8 +220,35 @@ class ApiError(BaseModel):
     error: ApiErrorDetail
 
 
+def _absolute_path(value: str, field: str = "path") -> str:
+    """Expand `~`, then require what is left to be absolute.
+
+    Expansion runs before the check so `~/adventures/mill.osr` is a legal way to
+    name a path on every route, and the expanded form is what the handler sees —
+    no code downstream of a request model ever meets a tilde.
+
+    Args:
+        value: The path as the request carried it.
+        field: The field name, for the rejection message.
+
+    Returns:
+        The expanded path.
+
+    Raises:
+        ValueError: If the expanded path is not absolute.
+    """
+    expanded = expand_user_path(value)
+    if not Path(expanded).is_absolute():
+        raise ValueError(f"{field} must be absolute, got {value!r}")
+    return expanded
+
+
 class _AbsolutePathRequest(BaseModel):
-    """Shared shape for requests naming a filesystem path: absolute, always."""
+    """Shared shape for requests naming a filesystem path: absolute, always.
+
+    Absolute *after* tilde expansion — the validator expands first, so the
+    dialogs and the CLI can speak `~/…` and the handlers never have to.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -228,9 +257,7 @@ class _AbsolutePathRequest(BaseModel):
     @field_validator("path")
     @classmethod
     def _path_must_be_absolute(cls, value: str) -> str:
-        if not Path(value).is_absolute():
-            raise ValueError(f"path must be absolute, got {value!r}")
-        return value
+        return _absolute_path(value)
 
 
 class CreateProjectRequest(_AbsolutePathRequest):
@@ -317,9 +344,7 @@ class PublishRequest(BaseModel):
     @field_validator("checkout_path")
     @classmethod
     def _checkout_path_must_be_absolute(cls, value: str | None) -> str | None:
-        if value is not None and not Path(value).is_absolute():
-            raise ValueError(f"checkout_path must be absolute, got {value!r}")
-        return value
+        return None if value is None else _absolute_path(value, "checkout_path")
 
 
 class ForgeOverridesRequest(BaseModel):
@@ -375,9 +400,7 @@ class CreateConversionRequest(BaseModel):
     @field_validator("workdir_path", "pdf_path")
     @classmethod
     def _paths_must_be_absolute(cls, value: str | None) -> str | None:
-        if value is not None and not Path(value).is_absolute():
-            raise ValueError(f"path must be absolute, got {value!r}")
-        return value
+        return None if value is None else _absolute_path(value)
 
     @model_validator(mode="after")
     def _pdf_kind_needs_a_source(self) -> CreateConversionRequest:
@@ -563,6 +586,28 @@ def get_status(user: CurrentUser) -> StatusResponse:
         engine_version=engine_version(),
         schema_version=SCHEMA_VERSION,
     )
+
+
+@router.get("/api/fs")
+def browse_filesystem(user: CurrentUser, path: str | None = None, show_hidden: bool = False) -> DirectoryListing:
+    """List a directory for the path pickers.
+
+    The one route behind every browse button. It is a navigation aid, not a
+    validator: a file lists its parent, a path that does not exist yet lists its
+    nearest existing ancestor, and an absent `path` lists home — the routes that
+    consume a path keep their own typed refusals for what is actually wrong with
+    it.
+
+    Args:
+        user: The authenticated caller.
+        path: Where to browse; `~` is expanded, and `None` means home.
+        show_hidden: Whether to include dot-entries.
+
+    Returns:
+        The directory the browse landed in, its children, and the home and
+        parent directories the picker navigates by.
+    """
+    return browse_directory(path, show_hidden=show_hidden)
 
 
 @router.get("/api/projects")
@@ -1172,13 +1217,14 @@ def find_conversion(request: Request, workdir: str, user: CurrentUser) -> Conver
 
     Args:
         request: The current request (carries the app state).
-        workdir: The workdir path to look up.
+        workdir: The workdir path to look up; `~` is expanded, as on every other
+            path the API takes.
         user: The authenticated caller.
 
     Returns:
         The session's state.
     """
-    session = _conversions(request).find(Path(workdir).resolve())
+    session = _conversions(request).find(Path(expand_user_path(workdir)).resolve())
     if session is None:
         raise ConversionNotFoundError(f"no conversion for workdir {workdir}")
     return session.snapshot()
@@ -1544,6 +1590,12 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
         _details_none,
     ),
     ProjectPathNotFoundError: (404, "project_path_not_found", None, _details_none),
+    PathNotReadableError: (
+        422,
+        "path_not_readable",
+        "Browse somewhere you have permission to read, or type the path directly.",
+        _details_none,
+    ),
     InvalidProjectError: (422, "not_a_project", None, _details_none),
     ProjectExistsError: (409, "project_dir_not_empty", "Choose a new or empty directory.", _details_none),
     ForgeWorkdirInvalidError: (
@@ -1740,15 +1792,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         argv: Command-line arguments; `None` reads `sys.argv`.
     """
     parser = argparse.ArgumentParser(prog="osr-editor", description="Author osrlib adventure modules in your browser.")
-    parser.add_argument("path", nargs="?", type=Path, default=None, metavar="PATH", help="project directory to open")
+    parser.add_argument("path", nargs="?", default=None, metavar="PATH", help="project directory to open")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port to serve on (default {DEFAULT_PORT})")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
     args = parser.parse_args(argv)
     open_at_launch: Path | None = None
     if args.path is not None:
-        if not args.path.is_dir():
+        # A shell expands `~` before argv, but a quoted `"~/mill.osr"` reaches
+        # here intact — and the API expands tildes everywhere else.
+        requested = Path(expand_user_path(args.path))
+        if not requested.is_dir():
             parser.error(f"no directory at {args.path}")
-        open_at_launch = args.path.resolve()
+        open_at_launch = requested.resolve()
     if not args.no_browser:
         timer = threading.Timer(0.5, webbrowser.open, args=(f"http://127.0.0.1:{args.port}/",))
         timer.daemon = True

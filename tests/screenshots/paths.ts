@@ -8,9 +8,9 @@
 // CommonJS and the config (an ES module) cannot import them at type-check time.
 //
 // They live at generic absolute locations outside the repository checkout for one
-// reason: the editor's backend does no tilde expansion, so any path a dialog
-// renders is shown exactly as typed. A scratch home inside the tree would put this
-// machine's username into every shot of the import and convert dialogs.
+// reason: a dialog renders a path exactly as the spec typed it, and these specs type
+// absolute paths. A scratch home inside the tree would put this machine's username
+// into every shot of the import and convert dialogs.
 import { join } from 'node:path'
 
 // Absent on a non-capture run (`--project=e2e`), where this module is still loaded

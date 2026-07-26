@@ -14,6 +14,7 @@ import type {
   ApiError,
   ApiErrorDetail,
   ConversionState,
+  DirectoryListing,
   EditorSidecar,
   EncounterTableCatalogResponse,
   EquipmentCatalogResponse,
@@ -91,6 +92,15 @@ function jsonPost(body?: unknown): RequestInit {
 
 export const api = {
   status: () => request<StatusResponse>('/api/status'),
+  // The path pickers' one call. An absent path means home, and the backend
+  // lands the browse on the nearest existing directory rather than erroring.
+  browse: (path: string | null, showHidden = false) => {
+    const query = new URLSearchParams()
+    if (path) query.set('path', path)
+    if (showHidden) query.set('show_hidden', 'true')
+    const suffix = query.size > 0 ? `?${query}` : ''
+    return request<DirectoryListing>(`/api/fs${suffix}`)
+  },
   listProjects: () => request<ProjectListResponse>('/api/projects'),
   createProject: (path: string, name: string) =>
     request<ProjectState>('/api/projects', jsonPost({ path, name })),

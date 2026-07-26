@@ -189,12 +189,14 @@ Graph paper and pencil — the drafting table these modules were born on:
 
 - App config via `platformdirs` (recents, osr-web checkout path, UI preferences). No secrets on disk; provider credentials come from the environment.
 - CLI: `osr-editor [PATH] [--port 8630] [--no-browser]` — serve, open the browser to the home screen (recents, new adventure, open project or workdir, convert PDF), or straight into the project at `PATH`. Default port 8630 (osr-web convention-adjacent, non-colliding).
+- **Naming a path.** Every field that names a filesystem path — the project, workdir, PDF, import, export, and checkout fields alike — takes a typed path or a browse through the read-only directory listing, and `~` expands on all of them, the CLI's `PATH` included. Expansion happens once, in the request models, so no handler ever meets a tilde; the picker hands back the home-shortened form, which is a path those models accept verbatim. The picker never validates — a destination that does not exist yet is the normal case for half these fields — so refusals stay with the routes that consume the path.
 
 ## API surface
 
 All under `/api`, JSON, localhost only. Representative, not exhaustive:
 
 ```text
+GET  /fs                              # browse a directory (the path pickers)
 GET  /projects                        # recents + detected type
 POST /projects                        # create native project
 POST /projects/open                   # open by path (native or forge workdir)
