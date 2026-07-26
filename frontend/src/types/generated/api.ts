@@ -43,13 +43,21 @@ export interface paths {
          *
          *     The one route behind every browse button. It is a navigation aid, not a
          *     validator: a file lists its parent, a path that does not exist yet lists its
-         *     nearest existing ancestor, and an absent `path` lists home — the routes that
-         *     consume a path keep their own typed refusals for what is actually wrong with
-         *     it.
+         *     nearest existing ancestor, and a browse with nothing to go on lists home —
+         *     the routes that consume a path keep their own typed refusals for what is
+         *     actually wrong with it.
+         *
+         *     An absent `path` is a picker opening on an empty field. That is where
+         *     `scope` earns its keep: the field's remembered location stands in, so each
+         *     field reopens where it was last used rather than at home. A remembered
+         *     directory that has since been deleted needs no special case — the browse
+         *     walks up to its nearest existing ancestor like any other path.
          *
          *     Args:
          *         user: The authenticated caller.
-         *         path: Where to browse; `~` is expanded, and `None` means home.
+         *         path: Where to browse; `~` is expanded, and `None` falls back to the
+         *             scope's remembered location, then home.
+         *         scope: The path field's scope (its field id), for that fallback.
          *         show_hidden: Whether to include dot-entries.
          *
          *     Returns:
@@ -59,6 +67,39 @@ export interface paths {
         get: operations["browse_filesystem_api_fs_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fs/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remember Picker Location
+         * @description Remember where a path field's picker was standing when the user chose.
+         *
+         *     The write half of the fallback above, and the only thing that makes a picker
+         *     sticky. It records a location the picker was actually showing, never a path
+         *     the user merely typed: the field keeps its own text, and a field with text
+         *     in it already governs where its picker opens.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         body: The field's scope and the directory it was browsing.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         What was remembered.
+         */
+        post: operations["remember_picker_location_api_fs_location_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3239,6 +3280,30 @@ export interface components {
             module?: components["schemas"]["ModuleOverride"] | null;
         };
         /**
+         * PickerLocation
+         * @description One remembered picker location.
+         */
+        PickerLocation: {
+            /** Scope */
+            scope: string;
+            /** Path */
+            path: string;
+        };
+        /**
+         * PickerLocationRequest
+         * @description Where a path field's picker was standing when the user chose from it.
+         *
+         *     The scope is a field id the client mints, so its shape is pinned here rather
+         *     than trusted: kebab-case and bounded, which is what every path field in the
+         *     frontend already calls itself.
+         */
+        PickerLocationRequest: {
+            /** Path */
+            path: string;
+            /** Scope */
+            scope: string;
+        };
+        /**
          * PreviewLevel
          * @description One regenerated preview's address.
          */
@@ -5074,6 +5139,7 @@ export interface operations {
         parameters: {
             query?: {
                 path?: string | null;
+                scope?: string | null;
                 show_hidden?: boolean;
             };
             header?: never;
@@ -5089,6 +5155,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DirectoryListing"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remember_picker_location_api_fs_location_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickerLocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickerLocation"];
                 };
             };
             /** @description Validation Error */

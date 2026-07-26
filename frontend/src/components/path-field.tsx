@@ -93,6 +93,9 @@ export function PathField({
           kind={kind}
           suffixes={suffixes}
           initialPath={value}
+          // The field id doubles as the sticky scope: it is already unique per
+          // surface, and a second name for the same thing would only drift.
+          scope={id}
           onChoose={onChange}
         />
       )}
@@ -108,6 +111,8 @@ export interface PathPickerDialogProps {
   suffixes?: string[]
   /** Where to open — the field's current value, which may not exist yet. */
   initialPath: string
+  /** The sticky scope: an empty field reopens where this scope last chose. */
+  scope: string
   onChoose: (path: string) => void
 }
 
@@ -118,6 +123,7 @@ export function PathPickerDialog({
   kind,
   suffixes,
   initialPath,
+  scope,
   onChoose,
 }: PathPickerDialogProps) {
   const [listing, setListing] = useState<DirectoryListing | null>(null)
@@ -149,8 +155,11 @@ export function PathPickerDialog({
 
   useEffect(() => {
     let cancelled = false
+    // The scope rides only the opening browse, and only matters when the field is
+    // empty: a field with text in it says where to open, and every browse after
+    // this one has a path of its own.
     api
-      .browse(initialPath.trim() || null, false)
+      .browse(initialPath.trim() || null, false, scope)
       .then((next) => {
         if (!cancelled) land(next, false)
       })
@@ -160,7 +169,7 @@ export function PathPickerDialog({
     return () => {
       cancelled = true
     }
-  }, [initialPath, land])
+  }, [initialPath, land, scope])
 
   const browse = (path: string | null, hidden: boolean, sync = false) => {
     api
@@ -179,6 +188,12 @@ export function PathPickerDialog({
   }
 
   const choose = () => {
+    // Remembering is a convenience, so it is fire-and-forget: a failed write
+    // costs the next open its starting directory and nothing else. The location
+    // is where the picker was standing, which is what the user was looking at
+    // when they decided — not the chosen path, whose parent may be somewhere
+    // else entirely once it has been hand-edited.
+    if (listing) void api.rememberPickerLocation(scope, listing.path).catch(() => {})
     onChoose(draft.trim())
     onOpenChange(false)
   }

@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from osreditor.app import create_app
+from osreditor.config import MAX_PICKER_LOCATIONS, load_config
 from osreditor.filesystem import browse_directory, display_path, expand_user_path
 from osreditor.projects import classify_artifact_names
 
@@ -220,6 +221,79 @@ def test_conversion_lookup_expands_a_tilde_workdir(client: TestClient, home: Pat
     response = client.get("/api/conversions", params={"workdir": "~/workdirs/cellar.forge"})
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "unknown_conversion"
+
+
+def test_a_picker_reopens_where_its_scope_last_chose(client: TestClient, home: Path) -> None:
+    (home / "adventures").mkdir()
+    remembered = client.post(
+        "/api/fs/location",
+        json={"scope": "open-project-path", "path": "~/adventures"},
+    )
+    assert remembered.status_code == 200, remembered.text
+    assert remembered.json() == {"scope": "open-project-path", "path": str(home / "adventures")}
+
+    # A browse with no path of its own falls back to that scope's location.
+    listing = client.get("/api/fs", params={"scope": "open-project-path"}).json()
+    assert listing["path"] == (home / "adventures").as_posix()
+
+
+def test_each_scope_remembers_its_own_location(client: TestClient, home: Path) -> None:
+    (home / "adventures").mkdir()
+    (home / "exports").mkdir()
+    client.post("/api/fs/location", json={"scope": "open-project-path", "path": "~/adventures"})
+    client.post("/api/fs/location", json={"scope": "export-path", "path": "~/exports"})
+    assert client.get("/api/fs", params={"scope": "open-project-path"}).json()["display_path"] == "~/adventures"
+    assert client.get("/api/fs", params={"scope": "export-path"}).json()["display_path"] == "~/exports"
+
+
+def test_an_explicit_path_beats_the_remembered_location(client: TestClient, home: Path) -> None:
+    (home / "adventures").mkdir()
+    (home / "elsewhere").mkdir()
+    client.post("/api/fs/location", json={"scope": "export-path", "path": "~/adventures"})
+    listing = client.get("/api/fs", params={"path": "~/elsewhere", "scope": "export-path"}).json()
+    assert listing["display_path"] == "~/elsewhere"
+
+
+def test_an_unknown_scope_falls_through_to_home(client: TestClient, home: Path) -> None:
+    assert client.get("/api/fs", params={"scope": "never-used"}).json()["path"] == home.as_posix()
+
+
+def test_a_remembered_location_that_has_since_vanished_walks_up(client: TestClient, home: Path) -> None:
+    gone = home / "adventures" / "archive"
+    gone.mkdir(parents=True)
+    client.post("/api/fs/location", json={"scope": "export-path", "path": str(gone)})
+    gone.rmdir()
+    listing = client.get("/api/fs", params={"scope": "export-path"}).json()
+    assert listing["path"] == (home / "adventures").as_posix()
+
+
+def test_re_recording_a_scope_updates_it_rather_than_growing_the_map(client: TestClient, home: Path) -> None:
+    for name in ("first", "second"):
+        (home / name).mkdir()
+        client.post("/api/fs/location", json={"scope": "export-path", "path": str(home / name)})
+    assert load_config().picker_locations == {"export-path": str(home / "second")}
+
+
+def test_the_location_map_is_capped_against_client_minted_scopes(client: TestClient, home: Path) -> None:
+    for index in range(MAX_PICKER_LOCATIONS + 5):
+        client.post("/api/fs/location", json={"scope": f"scope-{index}", "path": str(home)})
+    locations = load_config().picker_locations
+    assert len(locations) == MAX_PICKER_LOCATIONS
+    # The oldest went first, and the newest are all still there.
+    assert "scope-0" not in locations
+    assert f"scope-{MAX_PICKER_LOCATIONS + 4}" in locations
+
+
+def test_a_malformed_scope_is_refused(client: TestClient, home: Path) -> None:
+    response = client.post("/api/fs/location", json={"scope": "../../etc", "path": str(home)})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "request_invalid"
+
+
+def test_a_relative_location_is_refused(client: TestClient) -> None:
+    response = client.post("/api/fs/location", json={"scope": "export-path", "path": "adventures"})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "request_invalid"
 
 
 def test_a_relative_path_is_still_refused(client: TestClient) -> None:

@@ -24,12 +24,14 @@ __all__ = [
     "RecentEntry",
     "config_path",
     "load_config",
+    "record_picker_location",
     "record_recent",
     "save_config",
 ]
 
 CONFIG_SCHEMA_VERSION = 1
 MAX_RECENTS = 10
+MAX_PICKER_LOCATIONS = 20
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +48,19 @@ class RecentEntry(BaseModel):
 
 
 class AppConfig(BaseModel):
-    """The persisted app config: schema version, the recents list, and the publish target.
+    """The persisted app config: schema version, the recents list, the publish target, picker locations.
 
     `osr_web_checkout` is the osr-web checkout path publish writes into —
     additive schema, absent until the first publish collects it. There is no
     settings screen: the publish dialog collects the path when unconfigured,
     and the backend saves it once its shape test passes (the no-dead-keys
     rule — one route, no dead surface).
+
+    `picker_locations` maps a path field's scope to the directory its picker was
+    standing in when the user last chose from it, so each field reopens where it
+    left off. Keys come from the client, so the map is capped
+    ([`MAX_PICKER_LOCATIONS`][osreditor.config.MAX_PICKER_LOCATIONS]) and the
+    scope's shape is request-validated.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -60,6 +68,7 @@ class AppConfig(BaseModel):
     schema_version: int = CONFIG_SCHEMA_VERSION
     recents: tuple[RecentEntry, ...] = ()
     osr_web_checkout: str | None = None
+    picker_locations: dict[str, str] = {}
 
 
 def config_path() -> Path:
@@ -132,3 +141,27 @@ def record_recent(config: AppConfig, entry: RecentEntry) -> AppConfig:
     """
     kept = tuple(recent for recent in config.recents if recent.path != entry.path)
     return config.model_copy(update={"recents": (entry, *kept)[:MAX_RECENTS]})
+
+
+def record_picker_location(config: AppConfig, scope: str, directory: str) -> AppConfig:
+    """Return a config remembering where a path field's picker was last used.
+
+    Re-recording a known scope updates it in place, so a field the user reaches
+    for constantly cannot evict the others. A genuinely new scope past the cap
+    drops the oldest entry — the keys are client-supplied, and this map is a
+    convenience cache with no business growing without bound.
+
+    Args:
+        config: The current config.
+        scope: The path field's scope (its field id).
+        directory: The absolute directory to remember.
+
+    Returns:
+        The updated config; the caller persists it with
+        [`save_config`][osreditor.config.save_config].
+    """
+    locations = dict(config.picker_locations)
+    if scope not in locations and len(locations) >= MAX_PICKER_LOCATIONS:
+        del locations[next(iter(locations))]
+    locations[scope] = directory
+    return config.model_copy(update={"picker_locations": locations})

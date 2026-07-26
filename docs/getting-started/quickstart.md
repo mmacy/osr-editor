@@ -13,7 +13,7 @@ The browser opens to the home screen. Everything below happens in it.
 
 The home screen offers your recent projects, **New adventure**, **Open project**, and **Convert a PDF**. Pass a project directory on the command line — `osr-editor ~/adventures/mill.osr` — to skip the home screen and open it straight away.
 
-Every path field in the editor works the same two ways: type the path — `~` means your home directory — or press **Browse** and navigate to it. The picker marks which directories are already projects, so you can tell a native project from a forge workdir before you open one, and you can name a destination that does not exist yet by typing it in the picker's own path box.
+Every path field in the editor works the same two ways: type the path — `~` means your home directory — or press **Browse** and navigate to it. The picker marks which directories are already projects, so you can tell a native project from a forge workdir before you open one, and you can name a destination that does not exist yet by typing it in the picker's own path box. Each field remembers where it was last used and reopens there, so the export picker starts where you keep exports and the project picker where you keep projects.
 
 ![The path picker listing a directory, marking one entry as a native project and another as a forge workdir](../assets/screenshots/path-picker-light.png#only-light)
 ![The path picker listing a directory, marking one entry as a native project and another as a forge workdir](../assets/screenshots/path-picker-dark.png#only-dark)

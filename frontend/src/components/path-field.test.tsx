@@ -68,7 +68,7 @@ test('the field still takes a typed path, tilde and all', () => {
 test('browsing opens on the field value and lists the directory', async () => {
   const browse = vi.spyOn(api, 'browse').mockResolvedValue(listing())
   await openPicker({ value: '~/adventures/mill.osr' })
-  expect(browse).toHaveBeenCalledWith('~/adventures/mill.osr', false)
+  expect(browse).toHaveBeenCalledWith('~/adventures/mill.osr', false, 'test-path')
   expect(screen.getByText('mill.osr')).toBeInTheDocument()
   // Project shape is on the entry, so a workdir is recognizable before opening it.
   expect(screen.getByText('forge')).toBeInTheDocument()
@@ -159,6 +159,33 @@ test('choosing hands back whatever the path box holds, existing or not', async (
   })
   fireEvent.click(screen.getByRole('button', { name: 'Choose' }))
   expect(onChange).toHaveBeenCalledWith('~/adventures/brand-new.osr')
+})
+
+test('an empty field opens on the scope, so the backend can answer where it last chose', async () => {
+  const browse = vi.spyOn(api, 'browse').mockResolvedValue(listing())
+  await openPicker({ id: 'export-path' })
+  expect(browse).toHaveBeenCalledWith(null, false, 'export-path')
+})
+
+test('choosing remembers the directory the picker was standing in', async () => {
+  vi.spyOn(api, 'browse').mockResolvedValue(listing())
+  const remember = vi
+    .spyOn(api, 'rememberPickerLocation')
+    .mockResolvedValue({ scope: 'test-path', path: '/home/you/adventures' })
+  await openPicker()
+  // Hand-editing the box does not move what is remembered: the location is
+  // where the user was looking, not where the text happens to point.
+  fireEvent.change(screen.getByLabelText('Path'), { target: { value: '~/elsewhere/new.osr' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Choose' }))
+  expect(remember).toHaveBeenCalledWith('test-path', '/home/you/adventures')
+})
+
+test('a failed remember never costs the user their choice', async () => {
+  vi.spyOn(api, 'browse').mockResolvedValue(listing())
+  vi.spyOn(api, 'rememberPickerLocation').mockRejectedValue(new Error('config is read-only'))
+  const onChange = await openPicker({ value: '~/adventures' })
+  fireEvent.click(screen.getByRole('button', { name: 'Choose' }))
+  expect(onChange).toHaveBeenCalledWith('~/adventures')
 })
 
 test('an unreadable directory says so in place and leaves the picker usable', async () => {

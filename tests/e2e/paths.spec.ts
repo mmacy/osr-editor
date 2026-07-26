@@ -41,6 +41,35 @@ test('browse to a project and open it without typing a path', async ({ page }) =
   await expect(page.getByLabel('Name')).toHaveValue('Brambledeep')
 })
 
+test('a picker reopens where it last chose, across a reload', async ({ page }) => {
+  // The workspace holds the directory the picker will be sent back to; the whole
+  // point is that nothing but the config carries it there — the field is empty on
+  // the second visit, and the page has been reloaded in between.
+  const workspace = mkdtempSync(join(tmpdir(), 'osr-editor-e2e-sticky-'))
+  mkdirSync(join(workspace, 'brambledeep.osr'), { recursive: true })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open project' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Open project' })
+  await dialog.getByLabel('Project directory').fill(workspace)
+  await dialog.getByRole('button', { name: 'Browse' }).click()
+  const picker = page.getByRole('dialog', { name: 'Choose a project directory' })
+  await expect(picker.getByTestId('picker-location')).toHaveText(workspace)
+  const remembered = page.waitForResponse(
+    (response) => response.url().endsWith('/api/fs/location') && response.ok(),
+  )
+  await picker.getByRole('button', { name: 'Choose' }).click()
+  await remembered
+  await page.keyboard.press('Escape')
+
+  await page.reload()
+  await page.getByRole('button', { name: 'Open project' }).click()
+  await expect(dialog.getByLabel('Project directory')).toHaveValue('')
+  await dialog.getByRole('button', { name: 'Browse' }).click()
+  await expect(picker.getByTestId('picker-location')).toHaveText(workspace)
+  await expect(picker.getByRole('button', { name: 'brambledeep.osr' })).toBeVisible()
+})
+
 test('a tilde path names a new project, and the picker shortens home back to one', async ({
   page,
 }) => {

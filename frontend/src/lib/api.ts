@@ -24,6 +24,7 @@ import type {
   MonsterCatalogResponse,
   MonsterTemplate,
   OpBatchResult,
+  PickerLocation,
   PreviewResult,
   ProjectListResponse,
   ProjectState,
@@ -92,15 +93,21 @@ function jsonPost(body?: unknown): RequestInit {
 
 export const api = {
   status: () => request<StatusResponse>('/api/status'),
-  // The path pickers' one call. An absent path means home, and the backend
-  // lands the browse on the nearest existing directory rather than erroring.
-  browse: (path: string | null, showHidden = false) => {
+  // The path pickers' browse. With no path the backend falls back to the
+  // scope's remembered location and then home, and it lands the browse on the
+  // nearest existing directory rather than erroring.
+  browse: (path: string | null, showHidden = false, scope?: string) => {
     const query = new URLSearchParams()
     if (path) query.set('path', path)
+    if (!path && scope) query.set('scope', scope)
     if (showHidden) query.set('show_hidden', 'true')
     const suffix = query.size > 0 ? `?${query}` : ''
     return request<DirectoryListing>(`/api/fs${suffix}`)
   },
+  // What makes a picker sticky: the directory it was standing in when the user
+  // chose, remembered per field in the app config.
+  rememberPickerLocation: (scope: string, path: string) =>
+    request<PickerLocation>('/api/fs/location', jsonPost({ scope, path })),
   listProjects: () => request<ProjectListResponse>('/api/projects'),
   createProject: (path: string, name: string) =>
     request<ProjectState>('/api/projects', jsonPost({ path, name })),

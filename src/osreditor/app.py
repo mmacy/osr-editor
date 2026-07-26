@@ -55,7 +55,7 @@ from osreditor.catalogs import (
     monster_catalog,
     treasure_type_catalog,
 )
-from osreditor.config import RecentEntry, load_config, record_recent, save_config
+from osreditor.config import RecentEntry, load_config, record_picker_location, record_recent, save_config
 from osreditor.conversions import (
     ConversionKind,
     ConversionRegistry,
@@ -146,6 +146,8 @@ __all__ = [
     "ImporterListResponse",
     "ImporterPathRequest",
     "OpenProjectRequest",
+    "PickerLocation",
+    "PickerLocationRequest",
     "PreviewResult",
     "ProjectListResponse",
     "ProjectState",
@@ -284,6 +286,26 @@ class ExportResult(BaseModel):
 
 class ImporterPathRequest(_AbsolutePathRequest):
     """An importer source path: absolute, read-only, local — the same honestly-local posture as export."""
+
+
+class PickerLocationRequest(_AbsolutePathRequest):
+    """Where a path field's picker was standing when the user chose from it.
+
+    The scope is a field id the client mints, so its shape is pinned here rather
+    than trusted: kebab-case and bounded, which is what every path field in the
+    frontend already calls itself.
+    """
+
+    scope: str = Field(pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$", max_length=64)
+
+
+class PickerLocation(BaseModel):
+    """One remembered picker location."""
+
+    model_config = ConfigDict(frozen=True)
+
+    scope: str
+    path: str
 
 
 class ImporterInfo(BaseModel):
@@ -589,25 +611,62 @@ def get_status(user: CurrentUser) -> StatusResponse:
 
 
 @router.get("/api/fs")
-def browse_filesystem(user: CurrentUser, path: str | None = None, show_hidden: bool = False) -> DirectoryListing:
+def browse_filesystem(
+    user: CurrentUser, path: str | None = None, scope: str | None = None, show_hidden: bool = False
+) -> DirectoryListing:
     """List a directory for the path pickers.
 
     The one route behind every browse button. It is a navigation aid, not a
     validator: a file lists its parent, a path that does not exist yet lists its
-    nearest existing ancestor, and an absent `path` lists home — the routes that
-    consume a path keep their own typed refusals for what is actually wrong with
-    it.
+    nearest existing ancestor, and a browse with nothing to go on lists home —
+    the routes that consume a path keep their own typed refusals for what is
+    actually wrong with it.
+
+    An absent `path` is a picker opening on an empty field. That is where
+    `scope` earns its keep: the field's remembered location stands in, so each
+    field reopens where it was last used rather than at home. A remembered
+    directory that has since been deleted needs no special case — the browse
+    walks up to its nearest existing ancestor like any other path.
 
     Args:
         user: The authenticated caller.
-        path: Where to browse; `~` is expanded, and `None` means home.
+        path: Where to browse; `~` is expanded, and `None` falls back to the
+            scope's remembered location, then home.
+        scope: The path field's scope (its field id), for that fallback.
         show_hidden: Whether to include dot-entries.
 
     Returns:
         The directory the browse landed in, its children, and the home and
         parent directories the picker navigates by.
     """
-    return browse_directory(path, show_hidden=show_hidden)
+    remembered = load_config().picker_locations.get(scope) if scope else None
+    return browse_directory(path or remembered, show_hidden=show_hidden)
+
+
+@router.post("/api/fs/location")
+def remember_picker_location(request: Request, body: PickerLocationRequest, user: CurrentUser) -> PickerLocation:
+    """Remember where a path field's picker was standing when the user chose.
+
+    The write half of the fallback above, and the only thing that makes a picker
+    sticky. It records a location the picker was actually showing, never a path
+    the user merely typed: the field keeps its own text, and a field with text
+    in it already governs where its picker opens.
+
+    Args:
+        request: The current request (carries the app state).
+        body: The field's scope and the directory it was browsing.
+        user: The authenticated caller.
+
+    Returns:
+        What was remembered.
+    """
+    # Stored exactly as the browse reported it — expanded and absolute, but not
+    # symlink-resolved. Resolving would make the remembered path disagree with
+    # the location the picker just displayed, and on a machine whose home is a
+    # symlink it would cost every remembered directory its `~` shortening. This
+    # is a starting directory, not a project identity; nothing keys off it.
+    save_config(record_picker_location(load_config(), body.scope, body.path))
+    return PickerLocation(scope=body.scope, path=body.path)
 
 
 @router.get("/api/projects")
