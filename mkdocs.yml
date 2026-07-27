@@ -9,6 +9,10 @@ repo_name: mmacy/osr-editor
 
 theme:
   name: material
+  features:
+    # A nav section whose first child is a bare page uses that page as the
+    # section's own landing page — what the guides' stocking section needs.
+    - navigation.indexes
   palette:
     # Light/dark toggle: the button flips between the two schemes and the site
     # remembers the reader's choice.
@@ -78,11 +82,15 @@ nav:
   - Guides:
       - Projects: guides/projects.md
       - The map editor: guides/map-editor.md
-      - Stocking and keyed content: guides/stocking-and-keyed-content.md
-      - Encounters: guides/encounters.md
-      - Treasure: guides/treasure.md
-      - Traps: guides/traps.md
-      - Features: guides/features.md
+      # The four content-kind pages are children of the stocking page, which is
+      # itself the section's landing page (navigation.indexes) rather than a
+      # sibling named "Overview".
+      - Stocking and keyed content:
+          - guides/stocking-and-keyed-content.md
+          - Encounters: guides/encounters.md
+          - Treasure: guides/treasure.md
+          - Traps: guides/traps.md
+          - Features: guides/features.md
       - The monster editor: guides/monster-editor.md
       - Forge-backed review: guides/forge-backed-review.md
       - Converting a PDF: guides/converting-a-pdf.md

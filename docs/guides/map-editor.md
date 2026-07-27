@@ -20,11 +20,11 @@ Every level renders as graph paper, and the tool set works directly on it.
 
 Both tools produce keyed areas. The difference is what else they do.
 
-**Room** always mints a new one. A single drag emits two things in one undo step: the area over the rectangle's cells, keyed with the next free number, and the interior edges opened so the floor inside is walkable. It is the carve-a-chamber-out-of-rock gesture, and it never extends a room you already drew.
+**Room** always mints a new one. A single drag emits one batch: the area over the rectangle's cells, keyed with the next free number, and every interior edge opened so the floor inside is walkable. It is the carve-a-chamber-out-of-rock gesture, and it never extends a room you already drew.
 
 **Area** paints cells and touches nothing else — no edges, ever. With an area selected it adds the painted cells to that area; with nothing selected it creates a new one. That makes it the tool for shapes a rectangle can't express: an L-shaped hall, a cavern, an alcove hung off a chamber you drew with **Room**, or keying floor that already exists.
 
-Two consequences are worth knowing up front. Because **Area** never opens edges, painting cells into a room does not make them reachable — the wall between the chamber and its new alcove stays a wall until you open it with **Wall/door** or run a **Corridor** through. And because **Area** unions into the *selected* area, select the room first: paint with nothing selected and you get a second key instead.
+Because **Area** never opens edges, painting cells into a room does not make them reachable — the wall between the chamber and its new alcove stays a wall until you open it with **Wall/door** or run a **Corridor** through. And because **Area** unions into the *selected* area, select the room first: paint with nothing selected and you get a second key instead.
 
 Neither tool takes cells away from another area, so painting over a neighbour's floor leaves both areas claiming it. That is legal while editing, and the lint flags it as `area_overlap`.
 
@@ -39,6 +39,8 @@ A mouse wheel and a trackpad two-finger drag reach the browser as the same event
 ## Levels and dungeons
 
 An adventure holds any number of dungeons, each with any number of levels. The map chrome manages both: create, rename, and renumber (renames cascade through every reference in one undo step), and resize a level — with the offenders listed first when a shrink would strand geometry. **Remove level** discards the level from the row itself; a dungeon's last level can't go, and hovering the dimmed control says why.
+
+Level properties also holds two authoring surfaces the map itself doesn't show: the level's [wandering monster table](encounters.md#wandering-monsters), and its [level-scope features](features.md#level-features) for the tricks and caches that belong to a corridor rather than to any keyed room.
 
 **Clear content** strips a level back to its geometry in one undo step, which is what you want after importing a map whose rooms arrive already described. The grid, the walls and doors, the cells they enclose, the entrance, the transitions, and the wandering monsters all stay; area names and descriptions, encounters, traps, treasure, and features go. The dialog counts exactly what it will remove before you commit.
 
