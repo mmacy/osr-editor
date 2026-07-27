@@ -79,6 +79,10 @@ nav:
       - Projects: guides/projects.md
       - The map editor: guides/map-editor.md
       - Stocking and keyed content: guides/stocking-and-keyed-content.md
+      - Encounters: guides/encounters.md
+      - Treasure: guides/treasure.md
+      - Traps: guides/traps.md
+      - Features: guides/features.md
       - The monster editor: guides/monster-editor.md
       - Forge-backed review: guides/forge-backed-review.md
       - Converting a PDF: guides/converting-a-pdf.md

@@ -36,6 +36,8 @@ The **Adventure** and **Town** sections hold the module's prose — description,
 
 On the map, press `R` for the room tool and drag a rectangle. That one gesture creates a keyed area with its interior edges opened — a room, ready for content. Press `V` to switch back to select and click the room to inspect it.
 
+Rooms are rectangles. For an L-shaped hall, a cavern, or an alcove hung off a room you already drew, the area tool (`A`) paints cells into whatever shape you want — see [room or area?](../guides/map-editor.md#room-or-area) for how the two differ.
+
 ![A single room drawn on the blank graph-paper grid with the room tool](../assets/screenshots/first-room-light.png#only-light)
 ![A single room drawn on the blank graph-paper grid with the room tool](../assets/screenshots/first-room-dark.png#only-dark)
 

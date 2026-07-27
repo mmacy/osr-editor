@@ -21,6 +21,16 @@ Previews show what a declaration will produce without committing anything — pu
 - An encounter's sampled counts, resolved stat table, and per-sample XP.
 - Derive-from-HD in the monster editor: XP, the THAC0/attack-bonus pair, and the save band filled from the hit dice.
 
+### Reading a treasure preview
+
+**Preview sample hoards** rolls the card's declaration three times and lists what each roll produced. The three lines are three independent hoards, not one hoard broken into parts — they show you the spread a declaration covers, which is the point of previewing before you commit to a letter or [the unguarded band](treasure.md#treasure-types-or-the-unguarded-band).
+
+Each line reads `coins · valuables · magic · total`, and the trailing figure is the **whole hoard's value in gold**, not a gold-coin count. A line reading `200 sp · 0 valuable(s) · 0 magic · 20 gp` is 200 silver and nothing else — worth 20 gp at ten silver to the gold. The total counts coins and valuables; magic items carry no gp value in it.
+
+**Expert tier** switches which magic-item tables a roll draws from, Basic or Expert. Coins, gems, and jewellery are unaffected, so on a hoard that rolls no magic the toggle changes nothing. It's a control on the preview alone — the card stores letters or the unguarded flag, and the tier the hoard is finally rolled at is the game's.
+
+Nothing here commits. Previewing rolls fresh dice each time and touches neither the document nor the stocking seeds.
+
 ## The prose assistant
 
 The prose assistant drafts read-aloud area descriptions and adventure hooks. **Draft with assistant** appears only when a model provider is configured — the same `OSRFORGE_FOUNDRY_*` environment [conversion](converting-a-pdf.md) reads — and is otherwise absent, not disabled.
