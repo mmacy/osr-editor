@@ -7,7 +7,10 @@ import type { AnyEditOp, Adventure, Edge, LevelSpec, Position, TransitionSpec } 
 import { edgeKey, nextFreeAreaKey } from '@/map/edge-key'
 import type { HitTarget } from '@/map/hit-test'
 
-export type Tool = 'select' | 'room' | 'corridor' | 'wall' | 'area' | 'entrance' | 'transition'
+// `pan` and `select` author nothing — they have no `Gesture` arm, and
+// `beginGesture` answers null for both.
+export type Tool =
+  'select' | 'pan' | 'room' | 'corridor' | 'wall' | 'area' | 'entrance' | 'transition'
 
 // null assignment = delete the entry (an absent edge is a wall).
 export type EdgeAssignment = Edge | null

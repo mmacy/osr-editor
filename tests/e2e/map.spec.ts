@@ -236,6 +236,108 @@ test('import a One Page Dungeon export, adopting its title and story', async ({ 
   await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
 })
 
+// The two level-row actions issue 31 asked for, against the surface that
+// motivated the first: a One Page Dungeon export lands a description on every
+// keyed room, and an author who wants the rooms and not the prose clears them
+// in one step rather than one card at a time.
+test('clear content strips an imported level to its geometry, and the row removes it', async ({
+  page,
+}) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'osr-editor-e2e-clear-'))
+  const projectDir = join(workspace, 'stripped.osr')
+
+  await createProject(page, projectDir, 'Clear target')
+  await openMap(page)
+
+  // The row control, named exactly: the dialog's confirm button is "Clear
+  // content" without the ellipsis, so a prefix match would find both.
+  const clear = page.getByRole('button', { name: 'Clear content…' })
+  const confirm = page.getByRole('dialog').getByRole('button', { name: 'Clear content' })
+  const alsoRemove = page.getByRole('checkbox', { name: 'Also remove the emptied areas' })
+  // Level 1 is blank — no content and no keyed areas — so there is nothing to
+  // clear and the control says so.
+  await expect(clear).toBeDisabled()
+
+  await page.getByRole('button', { name: 'Import geometry' }).click()
+  await page.getByLabel('Source path').fill(join(ASSETS, 'opd', 'torture.json'))
+  await page.getByRole('button', { name: 'Sniff' }).click()
+  await page.getByRole('button', { name: 'Load' }).click()
+  await expect(page.getByLabel('Source level')).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: 'Import' }).click()
+  await expect(page.getByTestId('map-editor').getByRole('button', { name: 'Level 2' })).toBeVisible()
+
+  // The import's prose is what the control now offers to remove. Both the
+  // tally and the whole finding list are captured: the findings encode the
+  // geometry — one area_unreachable per keyed room, one orphan_cell per unkeyed
+  // door cell, one per transition — so holding them identical across the clear
+  // is the assertion that no cell, edge, entrance, or transition moved.
+  await expect(clear).toBeEnabled()
+  const findings = page.getByRole('region', { name: 'Diagnostics' }).getByRole('listitem')
+  // Polled, not read once: a commit is in flight after every confirm and undo,
+  // and `allInnerTexts` does not retry — it would catch the panel mid-render.
+  const expectFindings = (expected: string[]) =>
+    expect.poll(() => findings.allInnerTexts()).toEqual(expected)
+  const imported = await findings.allInnerTexts()
+  expect(imported.length).toBeGreaterThan(0)
+  await clear.click()
+  const tally = await page.getByLabel('Content to clear').innerText()
+  expect(tally).toContain('area descriptions')
+  // The rooms stay keyed by default, so the box starts clear.
+  await expect(alsoRemove).not.toBeChecked()
+  await confirm.click()
+  await expectFindings(imported)
+
+  // One undo step, whatever the batch's op count: a single undo restores the
+  // whole tally, not merely enough of it to make the control offer something.
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expectFindings(imported)
+  await clear.click()
+  expect(await page.getByLabel('Content to clear').innerText()).toBe(tally)
+  await confirm.click()
+
+  // Emptied but still keyed, the level has no content left to clear — and the
+  // dialog says so, with the confirm refusing until the box offers it the one
+  // thing left to do.
+  await expect(clear).toBeEnabled()
+  await clear.click()
+  await expect(page.getByText('This level carries no content')).toBeVisible()
+  await expect(confirm).toBeDisabled()
+
+  // The opt-in second half: unkey the emptied rooms. Their key numbers go, and
+  // their cells stay floor — which the lint proves by reporting *more* orphan
+  // cells than before, every unkeyed room cell now reading as corridor.
+  const orphans = imported.filter((finding) => finding.startsWith('orphan_cell'))
+  expect(orphans.length).toBeGreaterThan(0)
+  await alsoRemove.check()
+  await expect(page.getByLabel('Content to clear')).toContainText('keyed areas')
+  await expect(confirm).toBeEnabled()
+  await confirm.click()
+  await expect(clear).toBeDisabled()
+  const stripped = await findings.allInnerTexts()
+  expect(stripped.filter((finding) => finding.startsWith('area_unreachable'))).toEqual([])
+  expect(stripped.filter((finding) => finding.startsWith('orphan_cell')).length).toBeGreaterThan(
+    orphans.length,
+  )
+  // Still one undo step, and the box is remembered for the next level.
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expectFindings(imported)
+  await clear.click()
+  await expect(alsoRemove).toBeChecked()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Redo' }).click()
+  await page.getByRole('button', { name: 'Undo' }).click()
+
+  // Remove the level from the row, without opening level properties.
+  page.on('dialog', (confirm) => void confirm.accept())
+  await page.getByRole('button', { name: 'Remove level' }).click()
+  await expect(
+    page.getByTestId('map-editor').getByRole('button', { name: 'Level 2' }),
+  ).not.toBeVisible()
+  await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
+  // Level 1 is the last one standing, so the control disables itself.
+  await expect(page.getByRole('button', { name: 'Remove level' })).toBeDisabled()
+})
+
 test('view state resumes a session where it left off', async ({ page }) => {
   const workspace = mkdtempSync(join(tmpdir(), 'osr-editor-e2e-'))
   const projectDir = join(workspace, 'resume.osr')

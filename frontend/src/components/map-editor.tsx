@@ -7,6 +7,7 @@ import {
   ArrowUpDownIcon,
   DoorOpenIcon,
   EyeOffIcon,
+  HandIcon,
   LogInIcon,
   MaximizeIcon,
   MousePointer2Icon,
@@ -26,6 +27,7 @@ import { SourcePagesPane } from '@/components/source-pages-pane'
 import {
   AddDungeonDialog,
   AddLevelDialog,
+  ClearLevelContentDialog,
   LevelPropertiesDialog,
   RenameDungeonDialog,
   RenumberLevelDialog,
@@ -45,6 +47,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { levelAddress, type LevelFocus, type NavTarget } from '@/lib/address'
 import { effectiveMonsterCatalog, loadMonsterCatalog, useCatalog } from '@/lib/catalogs'
 import { areaTrapOps, encounterOps, treasureOps } from '@/lib/content-builders'
+import { hasClearable } from '@/lib/level-content'
 import { formatAreaContents } from '@/lib/notation'
 import { cn } from '@/lib/utils'
 import { parseEdgeKey } from '@/map/edge-key'
@@ -112,6 +115,7 @@ function flushViewState(dungeonId: string, levelNumber: number, view: ViewTransf
 
 const TOOLS: Array<{ tool: Tool; label: string; shortcut: string; icon: React.ReactNode }> = [
   { tool: 'select', label: 'Select tool', shortcut: 'V', icon: <MousePointer2Icon /> },
+  { tool: 'pan', label: 'Pan tool', shortcut: 'H', icon: <HandIcon /> },
   { tool: 'room', label: 'Room tool', shortcut: 'R', icon: <SquareIcon /> },
   { tool: 'corridor', label: 'Corridor tool', shortcut: 'C', icon: <RouteIcon /> },
   { tool: 'wall', label: 'Wall and door tool', shortcut: 'W', icon: <DoorOpenIcon /> },
@@ -123,6 +127,24 @@ const TOOLS: Array<{ tool: Tool; label: string; shortcut: string; icon: React.Re
 const SHORTCUTS = new Map<string, Tool>(
   TOOLS.map(({ tool, shortcut }) => [shortcut.toLowerCase(), tool]),
 )
+
+// A control that has to explain why it is unavailable. The reason cannot ride
+// the button: `disabled` takes it out of the tab order, and the button variants
+// add `disabled:pointer-events-none`, which takes it out of hit testing too —
+// so a `title` on the button itself is unreachable by hover and by focus at
+// exactly the moment it has something to say. The wrapper still receives
+// pointer events, so the tooltip appears where the user is already pointing.
+function ReasonedButton({
+  reason,
+  disabled,
+  ...props
+}: React.ComponentProps<typeof Button> & { reason: string }) {
+  return (
+    <span title={disabled ? reason : undefined}>
+      <Button {...props} disabled={disabled} />
+    </span>
+  )
+}
 
 function findLevel(document: Adventure, dungeonId: string, levelNumber: number): LevelSpec | null {
   return (
@@ -189,6 +211,7 @@ export function MapEditor({
     | 'renumber'
     | 'resize'
     | 'properties'
+    | 'clear-content'
     | 'import'
     | 'forge-preview'
     | null
@@ -245,9 +268,19 @@ export function MapEditor({
   // Fit-level-on-open, derived: user interactions set the view state; until
   // the first one (or after a level switch), the fitted transform is computed
   // from the viewport.
-  const effectiveView =
-    view ??
-    (viewport && level ? fitView(level.width, level.height, viewport.width, viewport.height) : null)
+  const fittedView =
+    viewport && level ? fitView(level.width, level.height, viewport.width, viewport.height) : null
+  const effectiveView = view ?? fittedView
+
+  // The canvas hands back an updater rather than a view, so a burst of wheel or
+  // pointer frames composes instead of the last one winning. The fitted
+  // transform is the base until the first interaction sets state.
+  const updateView = (update: (current: ViewTransform) => ViewTransform) => {
+    setView((current) => {
+      const base = current ?? fittedView
+      return base ? update(base) : current
+    })
+  }
 
   const ensureVisible = (cell: Position) => {
     setView(() => {
@@ -565,6 +598,24 @@ export function MapEditor({
   )
   const sortedLevels = [...dungeon.levels].sort((a, b) => a.number - b.number)
   const lastDungeon = document.dungeons.length === 1
+  const lastLevel = dungeon.levels.length === 1
+
+  const removeLevel = () => {
+    if (
+      !window.confirm(`Remove level ${levelNumber} of ${dungeonId}? Its geometry is discarded.`)
+    ) {
+      return
+    }
+    const fallback = dungeon.levels.find((candidate) => candidate.number !== levelNumber)
+    void projectStore
+      .getState()
+      .commit([{ op: 'remove_level', dungeon_id: dungeonId, level_number: levelNumber }])
+      .then((committed) => {
+        if (committed && fallback) {
+          onNavigate({ kind: 'level', dungeonId, levelNumber: fallback.number })
+        }
+      })
+  }
 
   const removeDungeon = () => {
     if (!window.confirm(`Remove dungeon ${dungeonId}? Its levels are discarded.`)) return
@@ -612,15 +663,15 @@ export function MapEditor({
         <Button variant="outline" size="sm" onClick={() => setDialog('rename-dungeon')}>
           Rename dungeon
         </Button>
-        <Button
+        <ReasonedButton
           variant="outline"
           size="sm"
           onClick={removeDungeon}
           disabled={lastDungeon}
-          title={lastDungeon ? 'An adventure needs at least one dungeon.' : undefined}
+          reason="An adventure needs at least one dungeon."
         >
           Remove dungeon
-        </Button>
+        </ReasonedButton>
         <Button variant="outline" size="sm" onClick={() => setDialog('import')}>
           Import geometry
         </Button>
@@ -643,6 +694,24 @@ export function MapEditor({
         <Button variant="ghost" size="sm" onClick={() => setDialog('add-level')}>
           Add level
         </Button>
+        <ReasonedButton
+          variant="ghost"
+          size="sm"
+          onClick={removeLevel}
+          disabled={lastLevel}
+          reason="A dungeon needs at least one level."
+        >
+          Remove level
+        </ReasonedButton>
+        <ReasonedButton
+          variant="ghost"
+          size="sm"
+          onClick={() => setDialog('clear-content')}
+          disabled={!hasClearable(level)}
+          reason="This level has no keyed areas and no content — there is nothing to clear."
+        >
+          Clear content…
+        </ReasonedButton>
         <div className="ml-auto">
           <Button variant="ghost" size="sm" onClick={() => setDialog('properties')}>
             Level properties
@@ -675,9 +744,10 @@ export function MapEditor({
           size="icon-sm"
           aria-label="Zoom in"
           onClick={() =>
-            effectiveView &&
             viewport &&
-            setView(zoomAt(effectiveView, { x: viewport.width / 2, y: viewport.height / 2 }, 1.25))
+            updateView((current) =>
+              zoomAt(current, { x: viewport.width / 2, y: viewport.height / 2 }, 1.25),
+            )
           }
         >
           <ZoomInIcon />
@@ -687,10 +757,9 @@ export function MapEditor({
           size="icon-sm"
           aria-label="Zoom out"
           onClick={() =>
-            effectiveView &&
             viewport &&
-            setView(
-              zoomAt(effectiveView, { x: viewport.width / 2, y: viewport.height / 2 }, 1 / 1.25),
+            updateView((current) =>
+              zoomAt(current, { x: viewport.width / 2, y: viewport.height / 2 }, 1 / 1.25),
             )
           }
         >
@@ -721,14 +790,19 @@ export function MapEditor({
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={unstockedCount === 0}
-              onClick={() => void rollStocking(null)}
-            >
-              Roll stocking
-            </Button>
+            {/* The span is the trigger, not the button: a disabled button is no
+                hit target, so the tooltip explaining *why* it is disabled is
+                the one it could never show. */}
+            <span>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={unstockedCount === 0}
+                onClick={() => void rollStocking(null)}
+              >
+                Roll stocking
+              </Button>
+            </span>
           </TooltipTrigger>
           <TooltipContent>
             {unstockedCount === 0
@@ -775,7 +849,7 @@ export function MapEditor({
               <MapCanvas
                 level={level}
                 view={effectiveView}
-                onViewChange={setView}
+                onViewChange={updateView}
                 onViewportSize={setViewport}
                 tool={tool}
                 gesture={gesture}
@@ -879,7 +953,13 @@ export function MapEditor({
         levelNumber={levelNumber}
         onOpenResize={() => setDialog('resize')}
         onOpenRenumber={() => setDialog('renumber')}
-        onNavigate={onNavigate}
+      />
+      <ClearLevelContentDialog
+        open={dialog === 'clear-content'}
+        onOpenChange={(open) => setDialog(open ? 'clear-content' : null)}
+        document={document}
+        dungeonId={dungeonId}
+        levelNumber={levelNumber}
       />
       <ImportDialog
         open={dialog === 'import'}
