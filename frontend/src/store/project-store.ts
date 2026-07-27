@@ -56,6 +56,13 @@ export interface ProjectStoreState {
   // the backend's config is the durable copy; this is only the echo of the
   // last path this session typed or used.
   lastCheckoutPath: string | null
+  // The clear-content dialog's remembered choice: whether clearing also unkeys
+  // the emptied areas. Sticky for the session, because stripping an imported
+  // module is a per-level act repeated across every level of it, and re-checking
+  // the box on each is the kind of friction that makes a author stop using the
+  // control. Session-scoped rather than persisted, like the remembered paths
+  // above — it is a habit within one sitting, not a project setting.
+  clearRemovesAreas: boolean
   // The blocked forge-mode gesture awaiting the detach-or-cancel choice.
   blockedOp: BlockedOp | null
   // A cross-surface navigation request (the monster picker's create shortcut
@@ -70,6 +77,7 @@ export interface ProjectStoreState {
   acknowledgeFidelity: () => void
   setLastExportPath: (path: string) => void
   setLastCheckoutPath: (path: string) => void
+  setClearRemovesAreas: (removes: boolean) => void
   // Client-side flow-entry blocking: a forge-mode gesture whose whole flow is
   // blocked (create/clone/remove a bundled template, the picker's create
   // shortcut, import's new-level mode) opens the dialog before any dialog is
@@ -192,6 +200,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       gone: false,
       lastExportPath: null,
       lastCheckoutPath: null,
+      clearRemovesAreas: false,
       blockedOp: null,
       navigationIntent: null,
       conversion: null,
@@ -202,6 +211,7 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
       acknowledgeFidelity: () => set({ fidelityAcknowledged: true }),
       setLastExportPath: (path) => set({ lastExportPath: path }),
       setLastCheckoutPath: (path) => set({ lastCheckoutPath: path }),
+      setClearRemovesAreas: (removes) => set({ clearRemovesAreas: removes }),
       setBlockedOp: (blocked) => set({ blockedOp: blocked }),
       clearBlockedOp: () => set({ blockedOp: null }),
       requestNavigation: (target) => set({ navigationIntent: target }),

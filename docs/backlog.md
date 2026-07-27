@@ -15,3 +15,15 @@ Features cut from `docs/spec.md` and deferred indefinitely. Nothing here is comm
 **Why the deferral is cheap.** Nothing shipped depends on it. The rules are osrlib's — `GameSession` and its event listeners exist and are exercised by osr-web, so no seam in this repo was carrying walk mode's weight and none needs to be kept warm for it. Playtesting stays available the way every phase milestone has used it: publish to an osr-web checkout and play the module there.
 
 **If it comes back.** Restore the spec bullet under validation and publishing, the `walk.py` line in the architecture tree, and the API-surface route, then write the phase plan against whatever the roadmap's tail looks like then. The osrlib version pinned at that time is the authority on the `GameSession` surface — verify against it rather than against the description above, which is a record of the design as of the deferral, not of osrlib's current API.
+
+## Unavailable controls announced to assistive technology
+
+**Status:** deferred (2026-07-26), noted while fixing issue 31. Never in `docs/spec.md` — this entry records a known limitation and the shape of its fix, so the omission is a decision rather than an oversight.
+
+**What ships.** Every dimmed control in the map chrome explains itself on hover: the reason rides a wrapper element, because `disabled` plus the button variants' `disabled:pointer-events-none` makes the button itself neither a hover target nor focusable, and a `title` on it reaches nobody at the one moment it has something to say.
+
+**What does not.** A disabled button stays out of the tab order, so a keyboard or screen-reader user still cannot reach the reason — only the dimming. Four controls are affected today: **Remove level**, **Clear content**, **Remove dungeon**, and **Roll stocking**.
+
+**What the fix would be.** `aria-disabled` in place of `disabled`, which keeps the control focusable and announced as unavailable, plus a `data-` or class hook carrying the dimmed styling `disabled:` currently provides, plus a guard in every handler so an activated-but-unavailable control declines instead of acting. That is a change to `components/ui/button.tsx` and therefore to every button in the app, which is why it did not ride along with a map-controls issue.
+
+**Why the deferral is cheap.** The hover path is a strict improvement on what preceded it — two of the four controls previously explained themselves to nobody at all — and nothing about the wrapper approach blocks the `aria-disabled` change later; the wrapper simply becomes unnecessary. The shipped documentation claims only what the code does ("hovering the dimmed control says why"), so no promise has to be walked back.

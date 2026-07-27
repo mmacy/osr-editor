@@ -11,6 +11,8 @@ The three ways an adventure crosses the project boundary — in from another sou
 
 The import dialog renders every converter note before anything commits, and the whole import — geometry, keyed areas, adopted metadata — lands as one undo step.
 
+An import that brings prose you didn't want — a One Page Dungeon export describes every keyed room — comes back to blank rooms in one more step: **Clear content** on the level row strips the level to its geometry, keeping the map and discarding the keys' contents. See [the map editor](map-editor.md#levels-and-dungeons).
+
 ![The import dialog: the converter's notes, the metadata offered for adoption, and the destination controls](../assets/screenshots/import-dialog-light.png#only-light)
 ![The import dialog: the converter's notes, the metadata offered for adoption, and the destination controls](../assets/screenshots/import-dialog-dark.png#only-dark)
 

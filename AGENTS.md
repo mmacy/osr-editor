@@ -46,6 +46,20 @@ These are contracts, not suggestions — see the corresponding spec sections bef
 
 - Run `pytest` before committing. The backbone suites are op application/rejection, undo/redo, canonical-serialization byte-stability, lint findings, and op→override translation goldens.
 - Frontend logic under vitest; core loops under Playwright, headless in CI. `npx playwright test` takes `--project=e2e` everywhere it is invoked — the capture projects share the config, and an unpinned invocation would start screenshotting.
+- **The full local gate is the list below, not just the three suites.** Passing tests prove less than they look like they do: Playwright transpiles specs without type-checking them, so a spec that fails `tsc` still runs green locally while the `e2e` CI job and the release gate both fail on it. Every command CI runs that can run locally:
+
+    | Command | From | Covers |
+    | --- | --- | --- |
+    | `uv run ruff format --check` / `ruff check` / `pyright` / `pytest` | repo root | the backend |
+    | `npx prettier --check .` / `npx eslint .` | `frontend/` | `frontend/` only — `tests/` is outside both, since the configs live in `frontend/` |
+    | `npx tsc -b --force` | `frontend/` | the app, through its project references |
+    | `npx tsc -p ../tests/e2e` / `npx tsc -p ../tests/screenshots` | `frontend/` | the specs, which nothing else type-checks |
+    | `npx vitest run` / `npx playwright test --project=e2e` | `frontend/` | the suites |
+    | `uv run scripts/generate_types.py` then `git diff --exit-code` | repo root | generated-type drift |
+    | `uv run mkdocs build --strict` | repo root | every doc page and cross-reference anchor |
+    | `uv run python scripts/check_screenshots.py --produced frontend/test-results/produced-shots.txt` | repo root | the screenshot set, after `npm run shots` |
+
+    The spec type-check projects are deliberately Node-only (`lib: ["ESNext"]`, `types: ["node"]`), so a spec needing browser globals inside a `page.evaluate` body declares `/// <reference lib="dom" />` at file scope rather than widening the tsconfig.
 - Golden `adventure.json` fixtures load against the pinned osrlib in CI, so an upstream change in document semantics fails loudly here first. Test fixtures use freely licensed or original material only — no retail module content enters the repository.
 
 ## Documentation screenshots

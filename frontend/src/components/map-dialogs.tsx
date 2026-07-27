@@ -9,6 +9,7 @@ import { AuthorNotesCard } from '@/components/author-notes-card'
 import { LevelFeaturesSection } from '@/components/level-features'
 import { MiniLevelPicker } from '@/components/mini-level-picker'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { WanderingTableEditor } from '@/components/wandering-table-editor'
 import {
   Dialog,
@@ -22,8 +23,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
 import { levelAddress, navTargetFor, type NavTarget } from '@/lib/address'
+import { clearLevelContentOps, contentTally, hasContent } from '@/lib/level-content'
 import { transitionOps } from '@/map/gestures'
-import { projectStore } from '@/store/project-store'
+import { projectStore, useProjectStore } from '@/store/project-store'
 import type {
   Adventure,
   DungeonSpec,
@@ -503,7 +505,6 @@ export function LevelPropertiesDialog({
   levelNumber,
   onOpenResize,
   onOpenRenumber,
-  onNavigate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -512,35 +513,16 @@ export function LevelPropertiesDialog({
   levelNumber: number
   onOpenResize: () => void
   onOpenRenumber: () => void
-  onNavigate: (target: NavTarget) => void
 }) {
   const dungeon = document.dungeons.find((candidate) => candidate.id === dungeonId)
   const level = dungeon?.levels.find((candidate) => candidate.number === levelNumber)
   if (!dungeon || !level) return null
-  const lastLevel = dungeon.levels.length === 1
   const clearEntrance = () => {
     void projectStore
       .getState()
       .commit([
         { op: 'set_entrance', dungeon_id: dungeonId, level_number: levelNumber, entrance: null },
       ])
-  }
-  const removeLevel = () => {
-    if (
-      !window.confirm(`Remove level ${levelNumber} of ${dungeonId}? Its geometry is discarded.`)
-    ) {
-      return
-    }
-    const fallback = dungeon.levels.find((candidate) => candidate.number !== levelNumber)
-    void projectStore
-      .getState()
-      .commit([{ op: 'remove_level', dungeon_id: dungeonId, level_number: levelNumber }])
-      .then((committed) => {
-        if (committed && fallback) {
-          onOpenChange(false)
-          onNavigate({ kind: 'level', dungeonId, levelNumber: fallback.number })
-        }
-      })
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -597,25 +579,122 @@ export function LevelPropertiesDialog({
             levelNumber={levelNumber}
           />
           <AuthorNotesCard address={levelAddress(dungeonId, levelNumber)} />
-          <div>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={removeLevel}
-              disabled={lastLevel}
-              title={lastLevel ? 'A dungeon needs at least one level.' : undefined}
-            >
-              Remove level
-            </Button>
-            {lastLevel && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                A dungeon needs at least one level.
-              </p>
-            )}
-          </div>
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+interface ClearLevelContentProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  document: Adventure
+  dungeonId: string
+  levelNumber: number
+}
+
+export function ClearLevelContentDialog(props: ClearLevelContentProps) {
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      {props.open && <ClearLevelContentBody {...props} />}
+    </Dialog>
+  )
+}
+
+// The counted lines, in the order the ops are emitted. A zero line is dropped
+// rather than rendered as "0" — the list is what will happen, not a schema.
+const TALLY_LINES: Array<[keyof ReturnType<typeof contentTally>, string, string]> = [
+  ['names', 'area name', 'area names'],
+  ['descriptions', 'area description', 'area descriptions'],
+  ['encounters', 'encounter', 'encounters'],
+  ['traps', 'trap', 'traps'],
+  ['treasures', 'treasure', 'treasures'],
+  ['features', 'feature', 'features'],
+]
+
+function ClearLevelContentBody({
+  onOpenChange,
+  document,
+  dungeonId,
+  levelNumber,
+}: ClearLevelContentProps) {
+  // Sticky for the session, so stripping level after level of an imported module
+  // does not mean re-checking the box each time.
+  const removeAreas = useProjectStore((state) => state.clearRemovesAreas)
+  const setRemoveAreas = useProjectStore((state) => state.setClearRemovesAreas)
+  const level = findLevel(document, dungeonId, levelNumber)
+  if (!level) return null
+  const tally = contentTally(level)
+  const lines = TALLY_LINES.filter(([key]) => key !== 'areas' && tally[key] > 0).map(
+    ([key, singular, plural]) => `${tally[key]} ${tally[key] === 1 ? singular : plural}`,
+  )
+  if (removeAreas && tally.areas > 0) {
+    lines.push(`${tally.areas} keyed ${tally.areas === 1 ? 'area' : 'areas'}`)
+  }
+  const submit = () => {
+    void projectStore
+      .getState()
+      .commit((current) => {
+        const target = findLevel(current, dungeonId, levelNumber)
+        return target ? clearLevelContentOps(target, dungeonId, levelNumber, removeAreas) : []
+      })
+      .then((committed) => {
+        if (committed) onOpenChange(false)
+      })
+  }
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Clear content</DialogTitle>
+        <DialogDescription>
+          Strips level {levelNumber} of <span className="font-mono">{dungeonId}</span> back to its
+          geometry, in one undo step. The grid, the walls and doors, the cells they enclose, the
+          entrance, the transitions, and the wandering monsters all stay.
+        </DialogDescription>
+      </DialogHeader>
+      {lines.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium">This clears:</p>
+          <ul className="flex flex-col gap-0.5" aria-label="Content to clear">
+            {lines.map((line) => (
+              <li key={line} className="text-sm text-muted-foreground">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          This level carries no content — there is nothing to clear.
+        </p>
+      )}
+      {tally.areas > 0 && (
+        <label className="flex items-start gap-2 text-sm">
+          <Checkbox
+            className="mt-0.5"
+            checked={removeAreas}
+            onCheckedChange={(next) => setRemoveAreas(next === true)}
+            aria-label="Also remove the emptied areas"
+          />
+          <span>
+            Also remove the emptied areas
+            <span className="block text-xs text-muted-foreground">
+              Their key numbers go and their cells become corridor. The walls and doors that draw
+              the rooms are edges, so the map still reads the same.
+            </span>
+          </span>
+        </label>
+      )}
+      <DialogFooter>
+        <Button
+          variant="destructive"
+          onClick={submit}
+          disabled={!hasContent(level) && !(removeAreas && tally.areas > 0)}
+        >
+          Clear content
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   )
 }
 

@@ -108,12 +108,6 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   await expect(toolbar.getByRole('button', { name: 'Transition tool' })).toBeVisible()
   await shoot(toolbar, 'map-toolbar', testInfo)
 
-  // The level and dungeon chrome sits in the row above the tools.
-  const levelChrome = page.getByRole('button', { name: 'Add level' }).locator('xpath=..')
-  await expect(levelChrome.getByRole('button', { name: 'Level 1', exact: true })).toBeVisible()
-  await expect(levelChrome.getByRole('button', { name: 'Level properties' })).toBeVisible()
-  await shoot(levelChrome, 'level-chrome', testInfo)
-
   // A second room, joined by a corridor, so the level has somewhere to go.
   await page.getByRole('button', { name: 'Room tool' }).click()
   await drag(page, await cellCenter(page, 5, 0), await cellCenter(page, 7, 2))
@@ -180,6 +174,35 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   )
   await shoot(page.getByTestId('map-canvas'), 'map-key-glyphs', testInfo)
   await page.getByRole('button', { name: 'Unstocked filter' }).click()
+
+  // The level and dungeon chrome sits in the row above the tools. Captured
+  // here rather than beside the toolbar because both destructive controls
+  // qualify themselves: remove level disables on a dungeon's last level and
+  // clear content on a level carrying none, so the earlier one-blank-level
+  // state would publish a row of greyed-out buttons under a caption naming
+  // them. A second level and a stocked one make the row say what it does.
+  const mapEditor = page.getByTestId('map-editor')
+  await page.getByRole('button', { name: 'Add level' }).click()
+  await expect(page.getByLabel('Level number')).toHaveValue('2')
+  await page.getByRole('dialog').getByRole('button', { name: 'Add level' }).click()
+  await expect(mapEditor.getByRole('button', { name: 'Level 2' })).toBeVisible()
+  await mapEditor.getByRole('button', { name: 'Level 1', exact: true }).click()
+
+  const levelChrome = page.getByRole('button', { name: 'Add level' }).locator('xpath=..')
+  await expect(levelChrome.getByRole('button', { name: 'Level properties' })).toBeVisible()
+  await expect(levelChrome.getByRole('button', { name: 'Remove level' })).toBeEnabled()
+  await expect(levelChrome.getByRole('button', { name: /^Clear content/ })).toBeEnabled()
+  await shoot(levelChrome, 'level-chrome', testInfo)
+
+  // Put the scripted project back to one level: the hero shot below is of this
+  // same project, and a stray blank level 2 would ride into it.
+  page.on('dialog', (confirm) => void confirm.accept())
+  await mapEditor.getByRole('button', { name: 'Level 2' }).click()
+  await page.getByRole('button', { name: 'Remove level' }).click()
+  await expect(mapEditor.getByRole('button', { name: 'Level 2' })).toBeHidden()
+  // Cell coordinates are meaningless until the view is pinned again, and the
+  // level round trip left it wherever the fit landed.
+  await page.getByRole('button', { name: 'Reset zoom' }).click()
 
   // The wandering table lives in level properties.
   await page.getByRole('button', { name: 'Level properties' }).click()
