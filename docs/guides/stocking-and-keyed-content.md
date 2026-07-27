@@ -18,19 +18,16 @@ Key numbers render hollow until an area is stocked (a description or any content
 
 ## The content cards
 
-The area panel's cards commit through type-ahead pickers over osrlib's shipped catalogs — monsters (bundled templates first, then this session's recent picks), equipment, and treasure-type letters — so the editor never authors a dangling reference. Foreign documents' danglers stay legal, diagnosed, and navigable.
+The area panel reads like a printed keyed entry rather than a form of forms: the description up top, then one card per content kind. A card that holds nothing is a single-click add; a card that holds something summarizes itself in module notation and expands in place to edit. Removal is the card's own action, and every change commits as an ordinary undoable batch the moment you make it.
+
+The cards commit through type-ahead pickers over osrlib's shipped catalogs — monsters (bundled templates first, then this session's recent picks), equipment, and treasure-type letters — so the editor never authors a dangling reference. Foreign documents' danglers stay legal, diagnosed, and navigable.
 
 ![The area panel's encounter card, collapsed to its module notation, above an expanded treasure card](../assets/screenshots/area-content-cards-light.png#only-light)
 ![The area panel's encounter card, collapsed to its module notation, above an expanded treasure card](../assets/screenshots/area-content-cards-dark.png#only-dark)
 
-- **Encounters** name a monster, a count, and the lair-hoard toggle — a monster room's treasure is the encounter's own lair hoard, and the toggle expresses the treasure-absent monster room the SRD rolls.
-- **Treasure** references a treasure type letter or the unguarded band.
-- **Traps** build from composable parts, with the trap's kind pinned by where it lives — a room trap and a treasure trap offer different menus.
-- **Features** are freeform keyed details, at area scope or level scope.
+One page per kind:
 
-## Wandering monsters
-
-Level properties hold the inline d20 wandering-table editor, seeded from osrlib's compiled level-band table — start from the book's table and bend it to the level. Each row names a monster and a count expression through the same pickers the cards use.
-
-![The level properties dialog with the inline d20 wandering-monster table](../assets/screenshots/wandering-table-light.png#only-light)
-![The level properties dialog with the inline d20 wandering-monster table](../assets/screenshots/wandering-table-dark.png#only-dark)
+- [Encounters](encounters.md) — monster lines and counts, the reaction and awareness pins, the lair hoard, and the level's wandering table.
+- [Treasure](treasure.md) — treasure type letters or the unguarded band roll, and which one a room wants.
+- [Traps](traps.md) — the composable trap builder, for room traps and for trapped caches.
+- [Features](features.md) — keyed details, caches, and tricks, at area scope or level scope.

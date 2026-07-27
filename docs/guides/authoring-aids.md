@@ -8,7 +8,7 @@ Three aids fill a blank module faster. Each applies its results as ordinary, und
 
 Every roll is reproducible from a seed recorded in the project's sidecar: re-roll a room and only that room changes, and undo restores the rooms while the dice stay advanced — so a re-roll always yields fresh content, and the same project replayed from its seeds yields the same rooms. The stream keys follow your areas through every re-keying, key for key.
 
-The stocking report says what landed and what the dice left you, with honest follow-up badges for the hand-work the SRD leaves to the referee: a special to describe, an NPC party to place (with its rolled kind and count), a trap to design, a monster whose type carries no lair treasure. A monster room's treasure is the encounter's own lair hoard; the encounter card's lair-hoard toggle expresses the treasure-absent rooms the SRD rolls.
+The stocking report says what landed and what the dice left you, with honest follow-up badges for the hand-work the SRD leaves to the referee: a special to describe, an NPC party to place (with its rolled kind and count), a trap to design, a monster whose type carries no lair treasure. A monster room's treasure is the encounter's own lair hoard — see [where a monster's treasure comes from](encounters.md#where-a-monsters-treasure-comes-from) for what the roll does and doesn't write.
 
 ![The stocking report listing what the dice rolled into each swept room](../assets/screenshots/stocking-report-light.png#only-light)
 ![The stocking report listing what the dice rolled into each swept room](../assets/screenshots/stocking-report-dark.png#only-dark)
@@ -17,9 +17,19 @@ The stocking report says what landed and what the dice left you, with honest fol
 
 Previews show what a declaration will produce without committing anything — pure reads over osrlib's generators and tables:
 
-- Sample treasure hoards for a treasure card: letters or the unguarded band, basic or expert tier, with resolved magic-item names.
+- Sample treasure hoards for a treasure card: letters or the unguarded band, basic or expert tier.
 - An encounter's sampled counts, resolved stat table, and per-sample XP.
 - Derive-from-HD in the monster editor: XP, the THAC0/attack-bonus pair, and the save band filled from the hit dice.
+
+### Reading a treasure preview
+
+**Preview sample hoards** rolls the card's declaration three times and lists what each roll produced. The three lines are three independent hoards, not one hoard broken into parts — they show the spread a letter or [the unguarded band](treasure.md#treasure-types-or-the-unguarded-band) covers, which is what you want to know before building a room around it. The declaration itself is already committed by the time you can preview it; changing it is one more undoable batch.
+
+Each line reads `coins · valuables · magic · total`, and the trailing figure is the **whole hoard's value in gold**, not a gold-coin count. A line reading `200 sp · 0 valuable(s) · 0 magic · 20 gp` is 200 silver and nothing else — worth 20 gp at ten silver to the gold. The total counts coins and valuables; magic items carry no gp value in it.
+
+**Expert tier** switches which magic-item tables a roll draws from, Basic or Expert. Coins, gems, and jewellery are unaffected, so on a hoard that rolls no magic the toggle changes nothing. It's a control on the preview alone — the card stores letters or the unguarded flag, and the tier the hoard is finally rolled at is the game's.
+
+Previewing rolls fresh dice each time and touches neither the document nor the stocking seeds, so a preview never costs you a re-roll.
 
 ## The prose assistant
 
