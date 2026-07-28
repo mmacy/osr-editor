@@ -24,7 +24,8 @@ import { Label } from '@/components/ui/label'
 import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
 import { levelAddress, navTargetFor, type NavTarget } from '@/lib/address'
 import { clearLevelContentOps, contentTally, hasContent } from '@/lib/level-content'
-import { transitionOps } from '@/map/gestures'
+import { defaultKind, defaultTargetLevel, FACING_LABELS, KIND_LABELS } from '@/lib/transitions'
+import { replaceTransitionOps, transitionOps } from '@/map/gestures'
 import { projectStore, useProjectStore } from '@/store/project-store'
 import type {
   Adventure,
@@ -782,9 +783,6 @@ function WanderingNumberField({
   )
 }
 
-const KINDS: Array<TransitionSpec['kind']> = ['stairs_down', 'stairs_up', 'trapdoor', 'chute']
-const FACINGS: Array<TransitionSpec['to_facing']> = ['north', 'east', 'south', 'west']
-
 interface TransitionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -792,6 +790,10 @@ interface TransitionDialogProps {
   dungeonId: string
   levelNumber: number
   sourceCell: Position
+  // An existing transition on the source cell puts the dialog in edit mode:
+  // fields prefill, submit replaces in one batch, and no reciprocal is
+  // offered — the other flight already exists or is the author's business.
+  existing?: TransitionSpec | null
 }
 
 export function TransitionDialog(props: TransitionDialogProps) {
@@ -808,20 +810,81 @@ function TransitionBody({
   dungeonId,
   levelNumber,
   sourceCell,
+  existing = null,
 }: TransitionDialogProps) {
-  const [kind, setKind] = useState<TransitionSpec['kind']>('stairs_down')
-  const [targetDungeon, setTargetDungeon] = useState(dungeonId)
-  const [targetLevel, setTargetLevel] = useState<number | null>(() => {
-    const home = document.dungeons.find((candidate) => candidate.id === dungeonId)
-    const other = home?.levels.find((level) => level.number !== levelNumber)
-    return other?.number ?? home?.levels[0]?.number ?? null
-  })
-  const [targetCell, setTargetCell] = useState<Position | null>(null)
-  const [facing, setFacing] = useState<TransitionSpec['to_facing']>('north')
+  const editing = existing !== null
+  const [kind, setKind] = useState<TransitionSpec['kind']>(
+    () =>
+      existing?.kind ??
+      defaultKind(levelNumber, defaultTargetLevel(document, dungeonId, levelNumber), true),
+  )
+  // Until the author touches the kind, it follows the target: retargeting to a
+  // deeper level suggests stairs down, to a shallower one stairs up.
+  const [kindTouched, setKindTouched] = useState(editing)
+  const [targetDungeon, setTargetDungeon] = useState(existing?.to_dungeon_id ?? dungeonId)
+  const [targetLevel, setTargetLevel] = useState<number | null>(
+    () => existing?.to_level_number ?? defaultTargetLevel(document, dungeonId, levelNumber),
+  )
+  const [targetCell, setTargetCell] = useState<Position | null>(existing?.to_position ?? null)
+  const [hoverCell, setHoverCell] = useState<Position | null>(null)
+  const [facing, setFacing] = useState<TransitionSpec['to_facing']>(existing?.to_facing ?? 'north')
   const [reciprocal, setReciprocal] = useState(true)
   const dungeon = document.dungeons.find((candidate) => candidate.id === targetDungeon)
   const level = dungeon?.levels.find((candidate) => candidate.number === targetLevel)
   const stairs = kind === 'stairs_up' || kind === 'stairs_down'
+  const landingOccupied =
+    targetCell !== null &&
+    (level?.transitions.some(
+      (candidate) =>
+        candidate.position[0] === targetCell[0] && candidate.position[1] === targetCell[1],
+    ) ??
+      false)
+  // The landing that is the departing cell itself: legal to author (a self
+  // loop is a diagnostic, not an error), but the auto-reciprocal skips it —
+  // the first op occupies the cell — so the warning below has to say so.
+  const landsOnSource =
+    targetCell !== null &&
+    targetDungeon === dungeonId &&
+    targetLevel === levelNumber &&
+    targetCell[0] === sourceCell[0] &&
+    targetCell[1] === sourceCell[1]
+  const sourceInTargetBounds =
+    level !== undefined && sourceCell[0] < level.width && sourceCell[1] < level.height
+  // An edit whose transition vanished underneath (another tab, an undo) has
+  // nothing to replace: the builder would skip the batch silently, so the
+  // dialog says so and disables saving instead.
+  const editTargetGone =
+    editing &&
+    !document.dungeons
+      .find((candidate) => candidate.id === dungeonId)
+      ?.levels.find((candidate) => candidate.number === levelNumber)
+      ?.transitions.some(
+        (candidate) =>
+          candidate.position[0] === sourceCell[0] && candidate.position[1] === sourceCell[1],
+      )
+  const retarget = (nextDungeon: string, nextLevel: number | null) => {
+    setTargetLevel(nextLevel)
+    setTargetCell(null)
+    if (!kindTouched) setKind(defaultKind(levelNumber, nextLevel, nextDungeon === dungeonId))
+  }
+  const commitAxis = (axis: 0 | 1, value: number) => {
+    const base: Position = targetCell ?? [0, 0]
+    setTargetCell(axis === 0 ? [value, base[1]] : [base[0], value])
+  }
+  // The committed-field gesture with an empty-draft guard: integerInRange
+  // alone would read '' as 0 and commit a cell on a mere focus-and-leave.
+  const axisNormalizer = (limit: number) => (draft: string) =>
+    draft.trim() === '' ? null : integerInRange(0, limit - 1)(draft)
+  const xField = useCommittedField(
+    targetCell === null ? '' : String(targetCell[0]),
+    (value) => commitAxis(0, Number(value)),
+    axisNormalizer(level?.width ?? 1),
+  )
+  const yField = useCommittedField(
+    targetCell === null ? '' : String(targetCell[1]),
+    (value) => commitAxis(1, Number(value)),
+    axisNormalizer(level?.height ?? 1),
+  )
   const submit = () => {
     if (targetLevel === null || !targetCell) return
     const spec: TransitionSpec = {
@@ -835,16 +898,18 @@ function TransitionBody({
     void projectStore
       .getState()
       .commit((current) =>
-        transitionOps(spec, dungeonId, levelNumber, reciprocal && stairs, current),
+        editing
+          ? replaceTransitionOps(spec, dungeonId, levelNumber, current)
+          : transitionOps(spec, dungeonId, levelNumber, reciprocal && stairs, current),
       )
       .then((committed) => {
         if (committed) onOpenChange(false)
       })
   }
   return (
-    <DialogContent>
+    <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
       <DialogHeader>
-        <DialogTitle>Add transition</DialogTitle>
+        <DialogTitle>{editing ? 'Edit transition' : 'Add transition'}</DialogTitle>
         <DialogDescription>
           From{' '}
           <span className="font-mono">
@@ -862,11 +927,14 @@ function TransitionBody({
               id="transition-kind"
               className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
               value={kind}
-              onChange={(event) => setKind(event.target.value as TransitionSpec['kind'])}
+              onChange={(event) => {
+                setKind(event.target.value as TransitionSpec['kind'])
+                setKindTouched(true)
+              }}
             >
-              {KINDS.map((candidate) => (
+              {(Object.keys(KIND_LABELS) as Array<TransitionSpec['kind']>).map((candidate) => (
                 <option key={candidate} value={candidate}>
-                  {candidate}
+                  {KIND_LABELS[candidate]}
                 </option>
               ))}
             </select>
@@ -879,11 +947,13 @@ function TransitionBody({
               value={facing}
               onChange={(event) => setFacing(event.target.value as TransitionSpec['to_facing'])}
             >
-              {FACINGS.map((candidate) => (
-                <option key={candidate} value={candidate}>
-                  {candidate}
-                </option>
-              ))}
+              {(Object.keys(FACING_LABELS) as Array<TransitionSpec['to_facing']>).map(
+                (candidate) => (
+                  <option key={candidate} value={candidate}>
+                    {FACING_LABELS[candidate]}
+                  </option>
+                ),
+              )}
             </select>
           </div>
         </div>
@@ -899,8 +969,8 @@ function TransitionBody({
                 const next = document.dungeons.find(
                   (candidate) => candidate.id === event.target.value,
                 )
-                setTargetLevel(next?.levels[0]?.number ?? null)
-                setTargetCell(null)
+                const numbers = (next?.levels ?? []).map((candidate) => candidate.number)
+                retarget(event.target.value, numbers.length ? Math.min(...numbers) : null)
               }}
             >
               {document.dungeons.map((candidate) => (
@@ -916,10 +986,7 @@ function TransitionBody({
               id="transition-level"
               className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
               value={targetLevel ?? ''}
-              onChange={(event) => {
-                setTargetLevel(Number(event.target.value))
-                setTargetCell(null)
-              }}
+              onChange={(event) => retarget(targetDungeon, Number(event.target.value))}
             >
               {[...(dungeon?.levels ?? [])]
                 .sort((a, b) => a.number - b.number)
@@ -934,26 +1001,88 @@ function TransitionBody({
         {level && (
           <div className="flex flex-col gap-1.5">
             <Label>Target cell</Label>
-            <MiniLevelPicker level={level} selected={targetCell} onPick={setTargetCell} />
-            <p className="font-mono text-xs text-muted-foreground">
-              {targetCell ? `(${targetCell[0]}, ${targetCell[1]})` : 'Click a cell'}
-            </p>
+            <MiniLevelPicker
+              level={level}
+              selected={targetCell}
+              onPick={setTargetCell}
+              sourceCell={sourceCell}
+              onHover={setHoverCell}
+            />
+            <div className="flex items-end gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="transition-x">X</Label>
+                <Input
+                  id="transition-x"
+                  className="w-20 font-mono"
+                  type="number"
+                  min={0}
+                  max={level.width - 1}
+                  {...xField}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="transition-y">Y</Label>
+                <Input
+                  id="transition-y"
+                  className="w-20 font-mono"
+                  type="number"
+                  min={0}
+                  max={level.height - 1}
+                  {...yField}
+                />
+              </div>
+              <span
+                title={sourceInTargetBounds ? undefined : 'The source cell is outside this level'}
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!sourceInTargetBounds}
+                  onClick={() => setTargetCell([sourceCell[0], sourceCell[1]])}
+                >
+                  Use the source cell
+                </Button>
+              </span>
+              <p className="pb-2 font-mono text-xs text-muted-foreground">
+                {hoverCell
+                  ? `(${hoverCell[0]}, ${hoverCell[1]})`
+                  : targetCell
+                    ? `(${targetCell[0]}, ${targetCell[1]})`
+                    : 'Click a cell'}
+              </p>
+            </div>
+            {!editing && (landingOccupied || landsOnSource) && targetCell && (
+              <p className="text-sm text-destructive">
+                ({targetCell[0]}, {targetCell[1]}){' '}
+                {landsOnSource ? 'is the departing cell itself.' : 'already carries a transition.'}
+                {stairs && reciprocal && ' The reciprocal stairs will not be created there.'}
+              </p>
+            )}
           </div>
         )}
-        {stairs && (
+        {stairs && !editing && (
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={reciprocal}
-              onChange={(event) => setReciprocal(event.target.checked)}
+              onCheckedChange={(next) => setReciprocal(next === true)}
             />
             Create the reciprocal stairs on the target level
           </label>
         )}
+        {!stairs && (
+          <p className="text-sm text-muted-foreground">
+            Trapdoors and chutes are one-way — no return transition is created.
+          </p>
+        )}
+        {editTargetGone && (
+          <p className="text-sm text-destructive">
+            This transition no longer exists — it was removed while the dialog was open.
+          </p>
+        )}
       </div>
       <DialogFooter>
-        <Button onClick={submit} disabled={targetLevel === null || !targetCell}>
-          Add transition
+        <Button onClick={submit} disabled={targetLevel === null || !targetCell || editTargetGone}>
+          {editing ? 'Save transition' : 'Add transition'}
         </Button>
       </DialogFooter>
     </DialogContent>

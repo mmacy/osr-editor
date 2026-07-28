@@ -75,6 +75,11 @@ export interface RenderInput {
 
 const DIMMED_ALPHA = 0.3
 
+// The cell size below which key numbers stop drawing (the 9 px minimum font
+// overflows smaller cells). The main map only reaches this zoomed far out; the
+// mini picker lives here for large levels.
+const KEY_NUMBER_MIN_CELL_PX = 8
+
 // Findings addressed to the rendered level become markers; addresses that
 // parse to no geometry segment render nothing here (the panel still lists
 // them).
@@ -155,11 +160,13 @@ export function drawLevel(ctx: CanvasRenderingContext2D, input: RenderInput): vo
 
   // Key numbers over the tint and walls, centered on each area's first cell:
   // filled for stocked areas, hollow for unstocked — the at-a-glance stocking
-  // state — with the content glyphs beside them.
+  // state — with the content glyphs beside them. Below key-number size the
+  // text would outgrow its cell and the numbers smear into noise, so they
+  // skip — the same judgment the content glyphs already make.
   ctx.font = `${Math.max(9, size * 0.42)}px ui-monospace, Menlo, monospace`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  for (const area of level.areas) {
+  for (const area of size < KEY_NUMBER_MIN_CELL_PX ? [] : level.areas) {
     const stocked = isAreaStocked(area)
     const center = cellCenter(view, area.cells[0])
     ctx.save()

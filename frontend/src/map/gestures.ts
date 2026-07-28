@@ -236,6 +236,35 @@ export function areaPaintOps(
   ]
 }
 
+// Editing a transition is remove + add in one batch — one undo step, and the
+// removal is computed against the committed document (the builder-returns-
+// no-ops rule), so an original that vanished under a queued edit skips the
+// batch instead of posting a remove the op would reject.
+export function replaceTransitionOps(
+  spec: TransitionSpec,
+  dungeonId: string,
+  levelNumber: number,
+  document: Adventure,
+): AnyEditOp[] {
+  const level = document.dungeons
+    .find((dungeon) => dungeon.id === dungeonId)
+    ?.levels.find((candidate) => candidate.number === levelNumber)
+  const present = level?.transitions.some(
+    (candidate) =>
+      candidate.position[0] === spec.position[0] && candidate.position[1] === spec.position[1],
+  )
+  if (!present) return []
+  return [
+    {
+      op: 'remove_transition',
+      dungeon_id: dungeonId,
+      level_number: levelNumber,
+      position: spec.position,
+    },
+    { op: 'add_transition', dungeon_id: dungeonId, level_number: levelNumber, transition: spec },
+  ]
+}
+
 const OPPOSITE: Record<TransitionSpec['to_facing'], TransitionSpec['to_facing']> = {
   north: 'south',
   south: 'north',
@@ -250,8 +279,10 @@ const RECIPROCAL_KIND: Partial<Record<TransitionSpec['kind'], TransitionSpec['ki
 
 // Transition placement, with the stairs auto-reciprocal: both AddTransitions
 // land in one batch when the reciprocal is wanted and feasible — the target
-// level exists, the landing cell is in its bounds and unoccupied. Trapdoors
-// and chutes never reciprocate (one-way by osrlib's design).
+// level exists, the landing cell is in its bounds and unoccupied, and the
+// landing is not the departing cell itself (the first op occupies it, so the
+// second would be rejected and take the whole batch down). Trapdoors and
+// chutes never reciprocate (one-way by osrlib's design).
 export function transitionOps(
   spec: TransitionSpec,
   dungeonId: string,
@@ -273,7 +304,12 @@ export function transitionOps(
   const occupied = targetLevel.transitions.some(
     (existing) => existing.position[0] === tx && existing.position[1] === ty,
   )
-  if (!landingInBounds || occupied) return ops
+  const landsOnSelf =
+    spec.to_dungeon_id === dungeonId &&
+    spec.to_level_number === levelNumber &&
+    tx === spec.position[0] &&
+    ty === spec.position[1]
+  if (!landingInBounds || occupied || landsOnSelf) return ops
   ops.push({
     op: 'add_transition',
     dungeon_id: spec.to_dungeon_id,

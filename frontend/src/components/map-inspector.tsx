@@ -14,10 +14,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
 import { ProseAssistant } from '@/components/prose-assistant'
 import { areaAddress } from '@/lib/address'
+import { FACING_LABELS, KIND_LABELS } from '@/lib/transitions'
 import type { MapSelection } from '@/map/render'
 import { isAreaStocked } from '@/map/stocking'
 import { projectStore, useProjectStore } from '@/store/project-store'
-import type { Adventure, AreaSpec, DoorSpec, Edge, LevelSpec, Position } from '@/types'
+import type {
+  Adventure,
+  AreaSpec,
+  DoorSpec,
+  Edge,
+  LevelSpec,
+  Position,
+  TransitionSpec,
+} from '@/types'
 
 function findLevel(document: Adventure, dungeonId: string, levelNumber: number): LevelSpec | null {
   return (
@@ -33,6 +42,7 @@ export function MapInspector({
   levelNumber,
   selection,
   onSelectionChange,
+  onEditTransition,
   cardIntent = null,
   onCardIntentConsumed,
 }: {
@@ -41,6 +51,7 @@ export function MapInspector({
   levelNumber: number
   selection: MapSelection | null
   onSelectionChange: (selection: MapSelection | null) => void
+  onEditTransition?: (cell: Position, transition: TransitionSpec) => void
   cardIntent?: CardIntent | null
   onCardIntentConsumed?: () => void
 }) {
@@ -88,6 +99,7 @@ export function MapInspector({
       dungeonId={dungeonId}
       levelNumber={levelNumber}
       onSelectionChange={onSelectionChange}
+      onEditTransition={onEditTransition}
     />
   )
 }
@@ -343,12 +355,14 @@ function CellInspector({
   dungeonId,
   levelNumber,
   onSelectionChange,
+  onEditTransition,
 }: {
   cell: Position
   level: LevelSpec
   dungeonId: string
   levelNumber: number
   onSelectionChange: (selection: MapSelection | null) => void
+  onEditTransition?: (cell: Position, transition: TransitionSpec) => void
 }) {
   const transition = level.transitions.find(
     (candidate) => candidate.position[0] === cell[0] && candidate.position[1] === cell[1],
@@ -386,16 +400,27 @@ function CellInspector({
       {transition ? (
         <div className="flex flex-col gap-2 text-sm">
           <p>
-            <span className="font-mono">{transition.kind}</span> to{' '}
+            {KIND_LABELS[transition.kind]} to{' '}
             <span className="font-mono">
               {transition.to_dungeon_id}/{transition.to_level_number} ({transition.to_position[0]},{' '}
               {transition.to_position[1]})
-            </span>{' '}
-            facing <span className="font-mono">{transition.to_facing}</span>
+            </span>
+            , arriving facing {FACING_LABELS[transition.to_facing].toLowerCase()}
           </p>
-          <Button variant="destructive" size="sm" onClick={removeTransition}>
-            Remove transition
-          </Button>
+          <div className="flex gap-2">
+            {onEditTransition && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEditTransition(cell, transition)}
+              >
+                Edit transition…
+              </Button>
+            )}
+            <Button variant="destructive" size="sm" onClick={removeTransition}>
+              Remove transition
+            </Button>
+          </div>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">No transition on this cell.</p>

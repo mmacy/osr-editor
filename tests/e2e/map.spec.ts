@@ -23,7 +23,7 @@ interface StampedLevel {
   number: number
   edges: Record<string, { kind: string }>
   areas: { id: string }[]
-  transitions: { kind: string }[]
+  transitions: { kind: string; to_facing: string }[]
   entrance: [number, number] | null
 }
 
@@ -98,10 +98,26 @@ test('author a two-level dungeon from the blank grid, lint clean, export', async
   await expect(page.getByLabel('Target level', { exact: true })).toHaveValue('2')
   const picker = await page.getByTestId('mini-level-picker').boundingBox()
   if (!picker) throw new Error('the mini level picker has no bounding box')
-  // Level 2 is 30x30, so the picker draws 6 px cells; land on cell (1, 1).
-  await page.mouse.click(picker.x + 9, picker.y + 9)
-  await expect(page.getByText('(1, 1)')).toBeVisible()
+  // Level 2 is 30x30; the click maps through the rendered rectangle, so the
+  // cell math derives from the box rather than assuming a cell size.
+  const pickerCell = picker.width / 30
+  await page.mouse.click(picker.x + pickerCell * 1.5, picker.y + pickerCell * 1.5)
+  await expect(page.getByLabel('X', { exact: true })).toHaveValue('1')
+  await expect(page.getByLabel('Y', { exact: true })).toHaveValue('1')
   await page.getByRole('dialog').getByRole('button', { name: 'Add transition' }).click()
+  await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
+
+  // Edit the flight in place: the inspector's edit path reopens the dialog
+  // prefilled, and changing the arrival facing replaces the transition in one
+  // undo step without disturbing the pairing.
+  await page.getByRole('button', { name: 'Select tool' }).click()
+  await page.mouse.click(stairs.x, stairs.y)
+  await inspector.getByRole('button', { name: 'Edit transition…' }).click()
+  await expect(page.getByRole('heading', { name: 'Edit transition' })).toBeVisible()
+  await expect(page.getByLabel('X', { exact: true })).toHaveValue('1')
+  await expect(page.getByLabel('Y', { exact: true })).toHaveValue('1')
+  await page.getByLabel('Arrival facing').selectOption('east')
+  await page.getByRole('dialog').getByRole('button', { name: 'Save transition' }).click()
   await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
 
   // Export and assert the stamped document holds everything just drawn.
@@ -117,6 +133,7 @@ test('author a two-level dungeon from the blank grid, lint clean, export', async
   expect(levels[0].edges['2,1:north'].kind).toBe('door')
   expect(levels[0].entrance).toEqual([3, 2])
   expect(levels[0].transitions.map((transition) => transition.kind)).toEqual(['stairs_down'])
+  expect(levels[0].transitions[0].to_facing).toBe('east')
   expect(levels[1].transitions.map((transition) => transition.kind)).toEqual(['stairs_up'])
   expect(levels[0].areas.map((area) => area.id)).toEqual(['1'])
 })
