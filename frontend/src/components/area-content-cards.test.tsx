@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 import { AreaContentCards, type CardIntent } from '@/components/area-content-cards'
 import { api } from '@/lib/api'
+import { emptyFeature, emptyTrap } from '@/lib/content-builders'
 import { projectStore } from '@/store/project-store'
 import { makeDocument, makeProjectState } from '@/test/fixtures'
-import type { AreaSpec, OpBatchResult } from '@/types'
+import type { AreaSpec, FeatureSpec, OpBatchResult } from '@/types'
 
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
@@ -40,9 +41,28 @@ function area(id: string): AreaSpec {
   }
 }
 
-function renderCards(areaId: string, intent: CardIntent | null) {
+// A stocked cache: one of everything only a cache can hold.
+function stockedCache(overrides: Partial<FeatureSpec> = {}): FeatureSpec {
+  return {
+    ...emptyFeature('feature-1', null),
+    kind: 'treasure_cache',
+    item_ids: ['longsword'],
+    coins: { pp: 0, gp: 500, ep: 0, sp: 0, cp: 0 },
+    valuables: [{ kind: 'gem', name: 'Star sapphire', value_gp: 1000, weight_coins: 1 }],
+    ...overrides,
+  }
+}
+
+// The feature editor's own disclosure — the features card holds many.
+function expandFeature(featureId: string): HTMLElement {
+  const card = screen.getByTestId(`feature-${featureId}`)
+  fireEvent.click(within(card).getAllByRole('button')[0])
+  return card
+}
+
+function renderCards(areaId: string, intent: CardIntent | null, overrides: Partial<AreaSpec> = {}) {
   const target = { dungeonId: 'dungeon-1', levelNumber: 1, areaId }
-  const spec = area(areaId)
+  const spec = { ...area(areaId), ...overrides }
   const document = makeDocument()
   document.dungeons[0].levels[0].areas = [spec]
   projectStore.getState().setProject(makeProjectState({ document }))
@@ -131,4 +151,140 @@ test('consumption nulls the parent copy, so a same-area deselect/reselect never 
   fireEvent.click(screen.getByRole('button', { name: 'toggle selection' }))
   await new Promise((resolve) => setTimeout(resolve, 20))
   expect(postOps).toHaveBeenCalledTimes(1)
+})
+
+const FEATURES_INTENT: CardIntent = { areaId: '1', card: 'features', action: 'edit', token: 1 }
+
+test('a cache offers the contents editors — the kinds osrlib cannot open offer none', () => {
+  renderCards('1', FEATURES_INTENT, { features: [stockedCache()] })
+  const cache = expandFeature('feature-1')
+  for (const label of ['Items', 'Coins', 'Valuables', 'Treasure trap']) {
+    expect(within(cache).getByText(label)).toBeInTheDocument()
+  }
+})
+
+test('a trick hides them: contents it carries would be unreachable in play', () => {
+  renderCards('1', FEATURES_INTENT, {
+    features: [stockedCache({ kind: 'construction_trick' })],
+  })
+  const trick = expandFeature('feature-1')
+  for (const label of ['Items', 'Coins', 'Valuables', 'Treasure trap']) {
+    expect(within(trick).queryByText(label)).not.toBeInTheDocument()
+  }
+})
+
+test('the kind options read as sentence case over the unchanged enum values', () => {
+  renderCards('1', FEATURES_INTENT, { features: [stockedCache()] })
+  const cache = expandFeature('feature-1')
+  const options = within(within(cache).getByLabelText('Kind')).getAllByRole<HTMLOptionElement>(
+    'option',
+  )
+  expect(options.map((option) => option.textContent)).toEqual([
+    'Treasure cache',
+    'Construction trick',
+    'Custom',
+  ])
+  expect(options.map((option) => option.value)).toEqual([
+    'treasure_cache',
+    'construction_trick',
+    'custom',
+  ])
+})
+
+test('leaving the cache kind clears the contents with the trap — one batch, one undo step', async () => {
+  renderCards('1', FEATURES_INTENT, {
+    features: [stockedCache({ trap: emptyTrap('treasure') })],
+  })
+  const cache = expandFeature('feature-1')
+  fireEvent.change(within(cache).getByLabelText('Kind'), { target: { value: 'custom' } })
+  await waitFor(() => expect(postOps).toHaveBeenCalledTimes(1))
+  const [, , ops] = postOps.mock.calls[0]
+  expect(ops).toEqual([
+    expect.objectContaining({
+      op: 'set_feature',
+      feature_id: 'feature-1',
+      feature: expect.objectContaining({
+        kind: 'custom',
+        trap: null,
+        item_ids: [],
+        coins: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
+        valuables: [],
+      }),
+    }),
+  ])
+})
+
+test('a room trap states its trigger and never offers one — only enter fires', () => {
+  renderCards(
+    '1',
+    { areaId: '1', card: 'trap', action: 'edit', token: 1 },
+    { trap: emptyTrap('room') },
+  )
+  const builder = screen.getByLabelText('Trap')
+  expect(within(builder).getByText('Trigger')).toBeInTheDocument()
+  expect(within(builder).getByText('enter')).toBeInTheDocument()
+  // The dead value is gone with the select: an area has nothing to open.
+  expect(within(builder).queryByRole('option', { name: 'open' })).not.toBeInTheDocument()
+})
+
+test("a cache trap shows no trigger at all — the cache's own open springs it", () => {
+  renderCards('1', FEATURES_INTENT, {
+    features: [stockedCache({ trap: emptyTrap('treasure') })],
+  })
+  const cache = expandFeature('feature-1')
+  expect(within(cache).getByLabelText('Trap')).toBeInTheDocument()
+  expect(within(cache).queryByText('Trigger')).not.toBeInTheDocument()
+})
+
+const TRAP_INTENT: CardIntent = { areaId: '1', card: 'trap', action: 'edit', token: 1 }
+
+test('a room trap already carrying a dead trigger says so and repairs in one patch', async () => {
+  // The population earlier releases created: the select offered `open`, and
+  // removing it would strand every room trap an author set that way.
+  renderCards('1', TRAP_INTENT, { trap: { ...emptyTrap('room'), trigger: 'open' } })
+  const warning = screen.getByLabelText('Dead trigger')
+  expect(warning).toHaveTextContent(
+    'This trap never springs. A room trap fires only on enter, because an area has nothing to open.',
+  )
+  fireEvent.click(within(warning).getByRole('button', { name: 'Set the trigger to enter' }))
+  await waitFor(() => expect(postOps).toHaveBeenCalledTimes(1))
+  const [, , ops] = postOps.mock.calls[0]
+  expect(ops).toEqual([
+    expect.objectContaining({
+      op: 'set_trap',
+      area_id: '1',
+      trap: expect.objectContaining({ kind: 'room', trigger: 'enter' }),
+    }),
+  ])
+})
+
+test('a room trap triggered the way it fires stays quiet', () => {
+  renderCards('1', TRAP_INTENT, { trap: emptyTrap('room') })
+  expect(screen.getByLabelText('Trap')).toBeInTheDocument()
+  expect(screen.queryByLabelText('Dead trigger')).not.toBeInTheDocument()
+})
+
+test('a non-cache carrying contents names them and points at the way back', () => {
+  renderCards('1', FEATURES_INTENT, {
+    features: [stockedCache({ kind: 'construction_trick', trap: emptyTrap('treasure') })],
+  })
+  const trick = expandFeature('feature-1')
+  expect(within(trick).getByTestId('stranded-contents')).toHaveTextContent(
+    'Carries 500 gp, 1 gem, 1 item, a trap, which the party can never reach — only a treasure ' +
+      'cache can be opened. Set the kind back to Treasure cache to edit or remove them.',
+  )
+})
+
+test('an empty non-cache warns about nothing — the ordinary case', () => {
+  renderCards('1', FEATURES_INTENT, {
+    features: [{ ...emptyFeature('feature-1', null), kind: 'construction_trick' }],
+  })
+  const trick = expandFeature('feature-1')
+  expect(within(trick).queryByTestId('stranded-contents')).not.toBeInTheDocument()
+})
+
+test('a stocked cache warns about nothing — its contents are exactly where they work', () => {
+  renderCards('1', FEATURES_INTENT, { features: [stockedCache()] })
+  const cache = expandFeature('feature-1')
+  expect(within(cache).queryByTestId('stranded-contents')).not.toBeInTheDocument()
 })

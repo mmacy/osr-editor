@@ -23,11 +23,13 @@ import { useCommittedField } from '@/hooks/use-committed-field'
 import { effectiveMonsterCatalog, loadMonsterCatalog, useCatalog } from '@/lib/catalogs'
 import {
   FEATURE_KINDS,
+  FEATURE_KIND_LABELS,
   REACTION_RESULTS,
   alignmentIntersection,
   areaTrapEffectPatchOps,
   areaTrapOps,
   areaTrapPatchOps,
+  clearCacheContentsPatch,
   emptyFeature,
   emptyTrap,
   encounterAddLineOps,
@@ -53,6 +55,7 @@ import {
   formatCount,
   formatEncounter,
   formatFeature,
+  formatStrandedContents,
   formatTrap,
   formatTreasure,
 } from '@/lib/notation'
@@ -707,6 +710,7 @@ export function FeatureEditor({
   const description = useCommittedField(feature.description, (value) =>
     patch({ description: value }),
   )
+  const strandedContents = formatStrandedContents(feature)
   return (
     <div className="rounded-md border" data-testid={`feature-${feature.id}`}>
       <button
@@ -739,16 +743,15 @@ export function FeatureEditor({
                 className={SELECT_CLASS}
                 value={feature.kind}
                 onChange={(event) => {
-                  const kind = event.target.value as FeatureSpec['kind']
-                  // The spec pins treasure traps to caches, so leaving the
-                  // cache kind drops the trap with the kind change — one
-                  // batch, one undo step.
-                  patch(kind === 'treasure_cache' ? { kind } : { kind, trap: null })
+                  // Leaving the cache kind drops the trap and the contents with
+                  // the kind change — one batch, one undo step, and undo is the
+                  // way back.
+                  patch(clearCacheContentsPatch(event.target.value as FeatureSpec['kind']))
                 }}
               >
                 {FEATURE_KINDS.map((kind) => (
                   <option key={kind} value={kind}>
-                    {kind}
+                    {FEATURE_KIND_LABELS[kind]}
                   </option>
                 ))}
               </select>
@@ -801,105 +804,122 @@ export function FeatureEditor({
               />
             )}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Items</Label>
-            {feature.item_ids.length > 0 && (
-              <ul className="flex flex-wrap gap-1.5" aria-label="Cache items">
-                {feature.item_ids.map((itemId, index) => (
-                  <li
-                    key={`${itemId}-${index}`}
-                    className="bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs"
-                  >
-                    {itemId}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${itemId}`}
-                      onClick={() =>
-                        update((committed) => {
-                          const at = committed.item_ids.indexOf(itemId)
-                          if (at === -1) return null
-                          return {
-                            item_ids: committed.item_ids.filter((_, index) => index !== at),
-                          }
-                        })
-                      }
-                    >
-                      <XIcon className="size-3" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <EquipmentPicker
-              onPick={(itemId) =>
-                update((committed) => ({ item_ids: [...committed.item_ids, itemId] }))
-              }
-            />
-          </div>
-          <CoinsEditor
-            idPrefix={`feature-${feature.id}`}
-            coins={feature.coins}
-            onCommitDenomination={(denomination, value) =>
-              update((committed) => ({ coins: { ...committed.coins, [denomination]: value } }))
-            }
-          />
-          <ValuablesEditor
-            valuables={feature.valuables}
-            onUpdate={(build) =>
-              update((committed) => {
-                const next = build(committed.valuables)
-                return next === null ? null : { valuables: next }
-              })
-            }
-          />
+          {/* Contents this kind can never surrender. Hiding the editors would
+              otherwise hide the contents themselves — they still serialize and
+              still publish — so a feature that carries any says so and names
+              them. The kind select is the recovery: switching back to a cache
+              reveals them, since nothing here was cleared. */}
+          {strandedContents && (
+            <p className="text-destructive text-xs" data-testid="stranded-contents">
+              Carries {strandedContents}, which the party can never reach — only a treasure cache
+              can be opened. Set the kind back to Treasure cache to edit or remove them.
+            </p>
+          )}
+          {/* The cache surface. osrlib's take and inspect handlers reject any
+              feature whose kind isn't a treasure cache, so contents authored on
+              a trick or a custom feature are unreachable in play — the editor
+              offers them where they mean something and nowhere else. */}
           {feature.kind === 'treasure_cache' && (
-            <div className="flex flex-col gap-2">
-              <Label>Treasure trap</Label>
-              {feature.trap ? (
-                <>
-                  <TrapBuilder
-                    trap={feature.trap}
-                    document={document}
-                    sourceCell={feature.cell ?? cellHint ?? [0, 0]}
-                    idPrefix={`feature-${feature.id}-trap`}
-                    onPatch={(trapPatch) =>
-                      update((committed) =>
-                        committed.trap ? { trap: { ...committed.trap, ...trapPatch } } : null,
-                      )
-                    }
-                    onEffectPatch={(effectPatch) =>
-                      update((committed) =>
-                        committed.trap
-                          ? {
-                              trap: {
-                                ...committed.trap,
-                                effect: patchTrapEffect(committed.trap.effect, effectPatch),
-                              },
-                            }
-                          : null,
-                      )
-                    }
-                  />
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label>Items</Label>
+                {feature.item_ids.length > 0 && (
+                  <ul className="flex flex-wrap gap-1.5" aria-label="Cache items">
+                    {feature.item_ids.map((itemId, index) => (
+                      <li
+                        key={`${itemId}-${index}`}
+                        className="bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs"
+                      >
+                        {itemId}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${itemId}`}
+                          onClick={() =>
+                            update((committed) => {
+                              const at = committed.item_ids.indexOf(itemId)
+                              if (at === -1) return null
+                              return {
+                                item_ids: committed.item_ids.filter((_, index) => index !== at),
+                              }
+                            })
+                          }
+                        >
+                          <XIcon className="size-3" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <EquipmentPicker
+                  onPick={(itemId) =>
+                    update((committed) => ({ item_ids: [...committed.item_ids, itemId] }))
+                  }
+                />
+              </div>
+              <CoinsEditor
+                idPrefix={`feature-${feature.id}`}
+                coins={feature.coins}
+                onCommitDenomination={(denomination, value) =>
+                  update((committed) => ({ coins: { ...committed.coins, [denomination]: value } }))
+                }
+              />
+              <ValuablesEditor
+                valuables={feature.valuables}
+                onUpdate={(build) =>
+                  update((committed) => {
+                    const next = build(committed.valuables)
+                    return next === null ? null : { valuables: next }
+                  })
+                }
+              />
+              <div className="flex flex-col gap-2">
+                <Label>Treasure trap</Label>
+                {feature.trap ? (
+                  <>
+                    <TrapBuilder
+                      trap={feature.trap}
+                      document={document}
+                      sourceCell={feature.cell ?? cellHint ?? [0, 0]}
+                      idPrefix={`feature-${feature.id}-trap`}
+                      onPatch={(trapPatch) =>
+                        update((committed) =>
+                          committed.trap ? { trap: { ...committed.trap, ...trapPatch } } : null,
+                        )
+                      }
+                      onEffectPatch={(effectPatch) =>
+                        update((committed) =>
+                          committed.trap
+                            ? {
+                                trap: {
+                                  ...committed.trap,
+                                  effect: patchTrapEffect(committed.trap.effect, effectPatch),
+                                },
+                              }
+                            : null,
+                        )
+                      }
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="self-start"
+                      onClick={() => patch({ trap: null })}
+                    >
+                      Remove the trap
+                    </Button>
+                  </>
+                ) : (
                   <Button
                     variant="outline"
                     size="sm"
                     className="self-start"
-                    onClick={() => patch({ trap: null })}
+                    onClick={() => patch({ trap: emptyTrap('treasure') })}
                   >
-                    Remove the trap
+                    Trap this cache
                   </Button>
-                </>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="self-start"
-                  onClick={() => patch({ trap: emptyTrap('treasure') })}
-                >
-                  Trap this cache
-                </Button>
-              )}
-            </div>
+                )}
+              </div>
+            </>
           )}
           <Button
             variant="destructive"

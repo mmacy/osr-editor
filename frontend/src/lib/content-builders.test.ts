@@ -4,6 +4,7 @@ import {
   alignmentIntersection,
   areaTrapEffectPatchOps,
   areaTrapPatchOps,
+  clearCacheContentsPatch,
   emptyFeature,
   emptyTrap,
   encounterAddLineOps,
@@ -272,6 +273,29 @@ describe('feature builders', () => {
       { description: 'New.' },
     )
     expect(ops).toEqual([])
+  })
+
+  test('leaving the cache kind clears the trap and every contents field in one patch', () => {
+    expect(clearCacheContentsPatch('construction_trick')).toEqual({
+      kind: 'construction_trick',
+      trap: null,
+      item_ids: [],
+      coins: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
+      valuables: [],
+    })
+    expect(clearCacheContentsPatch('custom')).toMatchObject({ kind: 'custom', trap: null })
+  })
+
+  test('staying a cache touches nothing but the kind', () => {
+    expect(clearCacheContentsPatch('treasure_cache')).toEqual({ kind: 'treasure_cache' })
+  })
+
+  test('coins come fresh per caller — no two features can alias one object', () => {
+    const first = emptyFeature('feature-1', null)
+    const second = emptyFeature('feature-2', null)
+    expect(first.coins).toEqual(second.coins)
+    expect(first.coins).not.toBe(second.coins)
+    expect(clearCacheContentsPatch('custom').coins).not.toBe(first.coins)
   })
 })
 

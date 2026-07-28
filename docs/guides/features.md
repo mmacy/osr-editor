@@ -8,11 +8,13 @@ Every feature carries an **id**, a **kind**, and a **description**. The id is yo
 
 The three kinds say what the feature is for, and the kind is load-bearing rather than a label:
 
-- `treasure_cache` — a specific stash: named items, counted coins, valuables, and optionally [a trap guarding it](traps.md). This is the only kind the party can open and take from at the table.
-- `construction_trick` — the dungeon doing something: the sliding wall, the rotating room, the sinking floor.
-- `custom` — everything else worth keying.
+- **Treasure cache** — a specific stash: named items, counted coins, valuables, and optionally [a trap guarding it](traps.md). This is the only kind the party can open and take from at the table.
+- **Construction trick** — the dungeon doing something: the sliding wall, the rotating room, the sinking floor.
+- **Custom** — everything else worth keying.
 
-Set the kind first, because the contents fields below show on every feature while only a cache can be opened. Items and coins on a trick or a custom feature are prose describing the room, not loot anyone can pick up. Changing a cache to another kind also drops its trap, in the same undo step.
+Set the kind first, because the contents below belong to the cache and appear on one only. A trick or a custom feature has no way for the party to open it, so items and coins on one would be unreachable at the table; the editor doesn't offer fields that could only disappoint. Changing a cache to another kind takes its contents and its trap with it, in the same undo step — and undo puts them back.
+
+A feature that arrived already carrying contents on a kind that can't hold them — from an earlier version of this editor, which showed the fields on every kind, or from a converted module — says so and names what's there. Hiding the fields would otherwise hide the contents themselves, which stay in the document and still publish. Set the kind back to **Treasure cache** and they're all there to edit or remove; nothing was cleared behind your back.
 
 ## Where a feature sits
 
