@@ -61,6 +61,7 @@ test('the surface renders the chrome: switcher, tabs, toolbar, canvas, inspector
     'Zoom in',
     'Zoom out',
     'Reset zoom',
+    'Fit level',
   ]) {
     expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
   }

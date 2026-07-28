@@ -19,7 +19,7 @@ import { join } from 'node:path'
 
 import { expect, test, type Page } from '@playwright/test'
 
-import { CELL_SIZE, RESET_MARGIN } from '../../frontend/src/map/view'
+import { CELL_SIZE, RESET_MARGIN, fitView } from '../../frontend/src/map/view'
 import { cellCenter, createProject, openMap, type Point } from './helpers'
 
 // A synthetic wheel frame on the canvas. Synthesized rather than driven through
@@ -234,6 +234,45 @@ test('the pan tool and a middle-click-and-hold drag both pan', async ({ page }) 
   expect(await cellUnder(page, probe)).toBe('(4, 4)')
   // The middle-drag drew nothing — the room tool never saw a gesture.
   await expect(page.getByTestId('revision')).toHaveText('r1')
+})
+
+// Issue 26's second half: fit-the-level used to be reachable exactly once, as
+// the view a level opens with, and never again once the reader had panned or
+// zoomed. The control puts it back on the toolbar — beside the zoom buttons and
+// beside, not instead of, **Reset zoom**, whose 100%-at-the-margin transform
+// every other map spec computes its cell coordinates from.
+test('fit level reframes the whole level, and reset zoom still pins 100%', async ({ page }) => {
+  await freshMap(page, 'fit-level')
+  const canvas = await page.getByTestId('map-canvas').boundingBox()
+  if (!canvas) throw new Error('the map canvas has no bounding box')
+
+  // Zoom in about the viewport centre until the level's northwest corner is off
+  // frame — the state the issue describes, where nothing short of fit gets the
+  // whole level back.
+  const northwest = await gridPoint(page, 0, 0)
+  for (let step = 0; step < 3; step += 1) {
+    await page.getByRole('button', { name: 'Zoom in' }).click()
+  }
+  expect(await cellUnder(page, northwest)).not.toBe('(0, 0)')
+
+  await page.getByRole('button', { name: 'Fit level' }).click()
+
+  // The fitted transform, computed the way the unit test computes it and read
+  // back through the hover readout: the default 30x30 level is centred, with
+  // both far corners in frame.
+  const fitted = fitView(30, 30, canvas.width, canvas.height)
+  const at = (x: number, y: number): Point => ({
+    x: canvas.x + fitted.offsetX + (x + 0.5) * CELL_SIZE * fitted.scale,
+    y: canvas.y + fitted.offsetY + (y + 0.5) * CELL_SIZE * fitted.scale,
+  })
+  expect(await cellUnder(page, at(0, 0))).toBe('(0, 0)')
+  expect(await cellUnder(page, at(15, 15))).toBe('(15, 15)')
+  expect(await cellUnder(page, at(29, 29))).toBe('(29, 29)')
+
+  // And the control it sits beside is untouched: still a hard 100% at the
+  // pinned margin, from a fitted view as from any other.
+  await page.getByRole('button', { name: 'Reset zoom' }).click()
+  expect(await cellUnder(page, await gridPoint(page, 6, 6))).toBe('(6, 6)')
 })
 
 test('reset zoom pins the transform the coordinate helpers assume', async ({ page }) => {
