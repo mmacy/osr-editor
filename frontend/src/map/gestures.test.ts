@@ -8,6 +8,7 @@ import {
   edgePaintOps,
   extendPath,
   rectFrom,
+  replaceTransitionOps,
   roomOps,
   transitionOps,
   updateGesture,
@@ -275,10 +276,28 @@ test('the reciprocal is skipped when infeasible and never offered for one-way dr
   const document = documentWithLevelTwo()
   document.dungeons[0].levels[1].transitions.push({ ...STAIRS, position: [0, 0] })
   expect(transitionOps(STAIRS, 'dungeon-1', 1, true, document)).toHaveLength(1)
+  // Landing on the departing cell itself: the first op occupies it, so a
+  // reciprocal there would take the whole batch down.
+  const selfLoop: TransitionSpec = { ...STAIRS, to_level_number: 1, to_position: [7, 0] }
+  expect(transitionOps(selfLoop, 'dungeon-1', 1, true, documentWithLevelTwo())).toHaveLength(1)
   // Chutes are one-way by osrlib's design.
   expect(
     transitionOps({ ...STAIRS, kind: 'chute' }, 'dungeon-1', 1, true, documentWithLevelTwo()),
   ).toHaveLength(1)
+})
+
+test('editing a transition is remove then add in one batch', () => {
+  const document = documentWithLevelTwo()
+  document.dungeons[0].levels[0].transitions.push(STAIRS)
+  const edited: TransitionSpec = { ...STAIRS, to_facing: 'east' }
+  expect(replaceTransitionOps(edited, 'dungeon-1', 1, document)).toEqual([
+    { op: 'remove_transition', dungeon_id: 'dungeon-1', level_number: 1, position: [7, 0] },
+    { op: 'add_transition', dungeon_id: 'dungeon-1', level_number: 1, transition: edited },
+  ])
+})
+
+test('editing a transition that vanished under a queued commit skips the batch', () => {
+  expect(replaceTransitionOps(STAIRS, 'dungeon-1', 1, documentWithLevelTwo())).toEqual([])
 })
 
 test('gesture begin and update track each tool shape', () => {

@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { api, ApiRequestError } from '@/lib/api'
 import type { NavTarget } from '@/lib/address'
 import { importOps, unresolvedTransitionIndices } from '@/lib/import-mapping'
+import { KIND_LABELS } from '@/lib/transitions'
 import { projectStore } from '@/store/project-store'
 import type { Adventure, ImportedGeometry, ImporterInfo } from '@/types'
 
@@ -419,9 +420,12 @@ function ImportDialogBody({
                               )
                             }
                           />
-                          <span className="font-mono text-xs">
-                            {transition.kind} at ({transition.position[0]}, {transition.position[1]}
-                            ) → {transition.to_dungeon_id}/{transition.to_level_number}
+                          <span className="text-xs">
+                            {KIND_LABELS[transition.kind]} at{' '}
+                            <span className="font-mono">
+                              ({transition.position[0]}, {transition.position[1]}) →{' '}
+                              {transition.to_dungeon_id}/{transition.to_level_number}
+                            </span>
                           </span>
                         </label>
                       </li>

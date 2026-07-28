@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
 import { CONDITIONS, SAVE_CATEGORIES, TIME_UNITS } from '@/lib/content-builders'
 import { parseDice } from '@/lib/notation'
+import { FACING_LABELS } from '@/lib/transitions'
 import type {
   Adventure,
   Condition,
@@ -424,9 +425,9 @@ function SlideEditor({
               if (transition) onCommit({ ...transition, to_facing: next })
             }}
           >
-            {(['north', 'east', 'south', 'west'] as const).map((candidate) => (
+            {(Object.keys(FACING_LABELS) as Array<TransitionSpec['to_facing']>).map((candidate) => (
               <option key={candidate} value={candidate}>
-                {candidate}
+                {FACING_LABELS[candidate]}
               </option>
             ))}
           </select>

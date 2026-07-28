@@ -71,8 +71,16 @@ import {
   type StockingMenuEntry,
 } from '@/map/stocking'
 import { cellSizePx, fitView, resetView, zoomAt, type ViewTransform } from '@/map/view'
+import { usePrefersDark } from '@/hooks/use-prefers-dark'
 import { projectStore, useProjectStore } from '@/store/project-store'
-import type { Adventure, Diagnostics, LevelSpec, Position, StockRoll } from '@/types'
+import type {
+  Adventure,
+  Diagnostics,
+  LevelSpec,
+  Position,
+  StockRoll,
+  TransitionSpec,
+} from '@/types'
 
 // The persisted camera, restored: the sidecar's view state keyed by level
 // address, read once per level entry (not reactive — the map owns the live
@@ -154,22 +162,6 @@ function findLevel(document: Adventure, dungeonId: string, levelNumber: number):
   )
 }
 
-function usePrefersDark(): boolean {
-  const [dark, setDark] = useState(
-    () =>
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches,
-  )
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const query = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = () => setDark(query.matches)
-    query.addEventListener('change', onChange)
-    return () => query.removeEventListener('change', onChange)
-  }, [])
-  return dark
-}
-
 export function MapEditor({
   document,
   diagnostics,
@@ -196,7 +188,10 @@ export function MapEditor({
   const [selection, setSelection] = useState<MapSelection | null>(null)
   const [hover, setHover] = useState<HitTarget | null>(null)
   const [gesture, setGesture] = useState<Gesture | null>(null)
-  const [transitionCell, setTransitionCell] = useState<Position | null>(null)
+  const [transitionDialog, setTransitionDialog] = useState<{
+    cell: Position
+    existing: TransitionSpec | null
+  } | null>(null)
   const [unstockedFilter, setUnstockedFilter] = useState(false)
   const [cardIntent, setCardIntent] = useState<CardIntent | null>(null)
   const [menuAreaId, setMenuAreaId] = useState<string | null>(null)
@@ -417,7 +412,7 @@ export function MapEditor({
       ) {
         return
       }
-      if (dialog !== null || transitionCell !== null) return
+      if (dialog !== null || transitionDialog !== null) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'Escape') {
         if (gesture) setGesture(null)
@@ -547,7 +542,7 @@ export function MapEditor({
       setSelection({ kind: 'cell', cell })
       return
     }
-    setTransitionCell(cell)
+    setTransitionDialog({ cell, existing: null })
   }
 
   // The stocking context menu: right-click on an area cell offers exactly
@@ -895,6 +890,9 @@ export function MapEditor({
             levelNumber={levelNumber}
             selection={selection}
             onSelectionChange={setSelection}
+            onEditTransition={(cell, transition) =>
+              setTransitionDialog({ cell, existing: transition })
+            }
             cardIntent={cardIntent}
             onCardIntentConsumed={() => setCardIntent(null)}
           />
@@ -978,16 +976,17 @@ export function MapEditor({
           levelNumber={levelNumber}
         />
       )}
-      {transitionCell && (
+      {transitionDialog && (
         <TransitionDialog
           open
           onOpenChange={(open) => {
-            if (!open) setTransitionCell(null)
+            if (!open) setTransitionDialog(null)
           }}
           document={document}
           dungeonId={dungeonId}
           levelNumber={levelNumber}
-          sourceCell={transitionCell}
+          sourceCell={transitionDialog.cell}
+          existing={transitionDialog.existing}
         />
       )}
       <StockingReportDialog rolls={stockingRolls} onClose={() => setStockingRolls(null)} />
