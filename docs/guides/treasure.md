@@ -26,7 +26,10 @@ SRD stocking uses this mode too: an empty or trapped room whose treasure die com
 
 **Preview sample hoards** rolls the declaration three times and lists what each roll produced, so you can judge a letter and change it before you build the room around it. The card commits as soon as you pick, so previewing always follows the pick — and changing your mind is one more undoable batch. Nothing about the preview is written down and no seed advances.
 
-[Reading a treasure preview](authoring-aids.md#reading-a-treasure-preview) covers how to read the lines — in particular that the trailing figure is the hoard's total worth in gold, not a count of gold coins.
+![The expanded treasure card with treasure types selected over unguarded band roll, the letter C picked, and three previewed sample hoards: 7000 cp worth 70 gp, then 4000 sp with four valuables worth 710 gp naming a Shield +1 and 10 × Arrows +1 beneath it, then 2000 ep worth 1000 gp](../assets/screenshots/treasure-card-light.png#only-light)
+![The expanded treasure card with treasure types selected over unguarded band roll, the letter C picked, and three previewed sample hoards: 7000 cp worth 70 gp, then 4000 sp with four valuables worth 710 gp naming a Shield +1 and 10 × Arrows +1 beneath it, then 2000 ep worth 1000 gp](../assets/screenshots/treasure-card-dark.png#only-dark)
+
+[Reading a treasure preview](authoring-aids.md#reading-a-treasure-preview) covers how to read the lines — in particular that the trailing figure is the hoard's total worth in gold, not a count of gold coins. The first sample above is the clearest case of it: 7000 copper pieces and no gold at all, worth 70 gp.
 
 ## Treasure that isn't a table roll
 

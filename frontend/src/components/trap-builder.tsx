@@ -260,11 +260,16 @@ export function TrapBuilder({
         Save or die
       </label>
       <div className="flex items-end gap-3">
-        <div className="flex flex-col gap-1.5">
+        {/* The one field in the builder that must yield: a select sizes itself
+            to its widest *option*, and `lycanthropy_incubation` made this one
+            188px — enough to push Unit off the 384px inspector entirely (#45).
+            It takes what the row's fixed fields leave and truncates the longest
+            condition's readout rather than the panel truncating a control. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <Label htmlFor={`${idPrefix}-condition`}>Condition</Label>
           <select
             id={`${idPrefix}-condition`}
-            className={SELECT_CLASS}
+            className={`${SELECT_CLASS} w-full truncate`}
             value={effect.condition ?? ''}
             onChange={(event) =>
               patchEffect({

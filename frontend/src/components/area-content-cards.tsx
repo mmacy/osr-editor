@@ -1057,28 +1057,59 @@ function ValuableRow({
     (draft) => onPatch({ weight_coins: Number(draft) }),
     nonNegativeInteger,
   )
+  // Two lines, not one (#45). Five controls in the 384px inspector left the
+  // name — the row's only free-text field — 44 pixels, about three characters,
+  // and constraining the other four could not buy it more than about nine: a
+  // select sized to `jewellery` and two number inputs already at four and five
+  // digits have nothing to give. The name takes a line of its own and the three
+  // attributes sit under it, captioned, so the pair of numbers stops being two
+  // anonymous boxes. The captions are decorative — each field's accessible name
+  // is its aria-label, which is what says which gp this is.
   return (
-    <div className="flex items-center gap-2">
-      <select
-        className={SELECT_CLASS}
-        aria-label="Valuable kind"
-        value={valuable.kind}
-        onChange={(event) => onPatch({ kind: event.target.value as ValuableSpec['kind'] })}
-      >
-        <option value="gem">gem</option>
-        <option value="jewellery">jewellery</option>
-      </select>
-      <Input
-        className="h-7 flex-1 text-xs"
-        placeholder="Name"
-        aria-label="Valuable name"
-        {...name}
-      />
-      <Input className="h-7 w-16 font-mono text-xs" aria-label="Value (gp)" {...value} />
-      <Input className="h-7 w-14 font-mono text-xs" aria-label="Weight (coins)" {...weight} />
-      <Button variant="ghost" size="icon-sm" aria-label="Remove valuable" onClick={onRemove}>
-        <XIcon />
-      </Button>
+    <div className="flex flex-col gap-1.5 rounded-md border p-2">
+      <div className="flex items-center gap-2">
+        <Input
+          className="h-7 flex-1 text-xs"
+          placeholder="Name"
+          aria-label="Valuable name"
+          {...name}
+        />
+        <Button variant="ghost" size="icon-sm" aria-label="Remove valuable" onClick={onRemove}>
+          <XIcon />
+        </Button>
+      </div>
+      <div className="flex items-end gap-2">
+        <select
+          className={SELECT_CLASS}
+          aria-label="Valuable kind"
+          value={valuable.kind}
+          onChange={(event) => onPatch({ kind: event.target.value as ValuableSpec['kind'] })}
+        >
+          <option value="gem">gem</option>
+          <option value="jewellery">jewellery</option>
+        </select>
+        <CaptionedField caption="gp" label="Value (gp)" field={value} />
+        <CaptionedField caption="coins" label="Weight (coins)" field={weight} />
+      </div>
+    </div>
+  )
+}
+
+function CaptionedField({
+  caption,
+  label,
+  field,
+}: {
+  caption: string
+  label: string
+  field: ReturnType<typeof useCommittedField>
+}) {
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <Input className="h-7 w-16 font-mono text-xs" aria-label={label} {...field} />
+      <span aria-hidden className="text-muted-foreground font-mono text-[10px]">
+        {caption}
+      </span>
     </div>
   )
 }
