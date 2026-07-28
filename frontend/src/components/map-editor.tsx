@@ -7,6 +7,7 @@ import {
   ArrowUpDownIcon,
   DoorOpenIcon,
   EyeOffIcon,
+  FullscreenIcon,
   HandIcon,
   LogInIcon,
   MaximizeIcon,
@@ -767,6 +768,23 @@ export function MapEditor({
           onClick={() => setView(resetView())}
         >
           <MaximizeIcon />
+        </Button>
+        {/* Fit-the-level, on demand. The same transform the editor opens a
+            level with, which until now was reachable exactly once — before the
+            first pan or zoom — and never again. Reset zoom stays a hard 100% at
+            the pinned margin: it is the deterministic anchor the e2e coordinate
+            math is computed from, so the two controls are separate. */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Fit level"
+          onClick={() =>
+            viewport &&
+            level &&
+            setView(fitView(level.width, level.height, viewport.width, viewport.height))
+          }
+        >
+          <FullscreenIcon />
         </Button>
         <Separator orientation="vertical" className="mx-1 h-5" />
         <Tooltip>

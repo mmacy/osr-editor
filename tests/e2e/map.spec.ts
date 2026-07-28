@@ -202,6 +202,22 @@ test('import a One Page Dungeon export, adopting its title and story', async ({ 
   )
   await expect(page.getByLabel('Importer notes')).toContainText('unrecognized type 12')
 
+  // On screen means *readable*, not merely present: issue 26 measured this
+  // dialog at clientWidth 510 against scrollWidth 953, because each direct
+  // child of `DialogContent`'s grid took its min-content width as a floor and
+  // the longest note therefore sized the dialog. The notes are the point of
+  // the import flow, so the fit is asserted rather than eyeballed — the notes
+  // list stays inside the dialog's own box, and the dialog has nothing to
+  // scroll sideways to.
+  const dialogWidths = await page
+    .getByRole('dialog')
+    .evaluate((node) => [node.clientWidth, node.scrollWidth])
+  expect(dialogWidths[1]).toBe(dialogWidths[0])
+  const dialogBox = await page.getByRole('dialog').boundingBox()
+  const notesBox = await page.getByLabel('Importer notes').boundingBox()
+  if (!dialogBox || !notesBox) throw new Error('the import dialog has no bounding box')
+  expect(notesBox.x + notesBox.width).toBeLessThanOrEqual(dialogBox.x + dialogBox.width)
+
   await page.getByRole('checkbox', { name: /Adopt the title/ }).check()
   await page.getByRole('checkbox', { name: /Adopt the description/ }).check()
   // The stair's destination is fabricated, so it never resolves — the dialog

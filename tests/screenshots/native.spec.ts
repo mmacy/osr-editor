@@ -106,6 +106,10 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   const toolbar = page.getByRole('button', { name: 'Room tool' }).locator('xpath=..')
   await expect(toolbar.getByRole('button', { name: 'Select tool' })).toBeVisible()
   await expect(toolbar.getByRole('button', { name: 'Transition tool' })).toBeVisible()
+  // The view controls share the row and the caption names them, so the shot
+  // asserts on them too — a rename or a removal must fail here.
+  await expect(toolbar.getByRole('button', { name: 'Reset zoom' })).toBeVisible()
+  await expect(toolbar.getByRole('button', { name: 'Fit level' })).toBeVisible()
   await shoot(toolbar, 'map-toolbar', testInfo)
 
   // A second room, joined by a corridor, so the level has somewhere to go.
@@ -239,9 +243,11 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   await expect(page.getByTestId('map-canvas')).toBeVisible()
   // Deliberately left at reset zoom. Zooming in was tried and is worse: `zoomAt`
   // scales about the viewport centre, not the geometry, so two steps pushed the
-  // module off the top-left corner and left one room in frame. There is no
-  // fit-to-content control, so the honest framing of a small module on a 30x30
-  // level is the whole level, empty paper included.
+  // module off the top-left corner and left one room in frame. Issue 26 added a
+  // **Fit level** control since, and it was tried here too — but it fits the
+  // level, not the drawn geometry, so on a small module in the corner of a 30x30
+  // grid it only scales the rooms down to make room for more empty paper. Reset
+  // zoom, which frames the northwest corner at 100%, is still the better shot.
   await shoot(page, 'map-editor-hero', testInfo)
 })
 

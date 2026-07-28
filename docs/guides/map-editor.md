@@ -13,8 +13,8 @@ Every level renders as graph paper, and the tool set works directly on it.
 - **Entrance** (`E`) places the level entrance.
 - **Transition** (`T`) places stairs, trapdoors, and chutes with a target-level picker — stairs offer reciprocal creation in the same undo step.
 
-![The map editor tool palette: select, pan, room, corridor, wall and door, area, entrance, and transition](../assets/screenshots/map-toolbar-light.png#only-light)
-![The map editor tool palette: select, pan, room, corridor, wall and door, area, entrance, and transition](../assets/screenshots/map-toolbar-dark.png#only-dark)
+![The map editor toolbar: the select, pan, room, corridor, wall and door, area, entrance, and transition tools, then the zoom in, zoom out, reset zoom, and fit level view controls](../assets/screenshots/map-toolbar-light.png#only-light)
+![The map editor toolbar: the select, pan, room, corridor, wall and door, area, entrance, and transition tools, then the zoom in, zoom out, reset zoom, and fit level view controls](../assets/screenshots/map-toolbar-dark.png#only-dark)
 
 ### Room or area?
 
@@ -31,6 +31,8 @@ Neither tool takes cells away from another area, so painting over a neighbour's 
 ## Moving around the map
 
 The map moves the way a web map does. Zoom with the wheel or a trackpad pinch, always about the pointer; pan with a two-finger drag, a middle-click-and-hold drag, a space-drag, or a plain left-drag under the select or pan tool. Reset to 100% with `0` or the reset control. `Delete` removes the selection; `Esc` cancels a gesture.
+
+Two view controls sit beside the zoom buttons and do different things. **Reset zoom** snaps to 100% with the level's northwest corner at the top left — the fixed frame to come back to when you want the map at its drawn size. **Fit level** scales the whole level to the viewport and centres it, which is the view a level opens with; use it after panning or zooming has taken the map somewhere you can't see it. Because the zoom buttons scale about the centre of the view, a level whose geometry sits in one corner walks further off screen as you zoom in, and **Fit level** is the one click back.
 
 Zoom is proportional to the gesture and **accelerates as you push it**: the first moments of a pinch or a wheel spin stay fine-grained for framing a room, and holding the gesture on ramps the rate up to cross scales quickly. Pause and it returns to fine-grained, so precision is always a fraction of a second away. Nothing coasts after you stop.
 

@@ -193,6 +193,11 @@ function ImportDialogBody({
       })
   }
 
+  // This dialog is the one that found the grid-child `min-width: auto` trap
+  // `DialogContent` now zeroes for every dialog — see the comment there. What
+  // stays local is what that fix alone does not cover: a `<select>` is sized by
+  // its widest option and needs `max-w-full` to be capped, and the long strings
+  // need somewhere to break.
   return (
     <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
       <DialogHeader>
@@ -230,11 +235,11 @@ function ImportDialogBody({
         )}
         {matches !== null && matches.length > 0 && (
           <div className="flex items-end gap-2">
-            <div className="flex flex-col gap-1.5">
+            <div className="flex min-w-0 flex-col gap-1.5">
               <Label htmlFor="import-format">Importer</Label>
               <select
                 id="import-format"
-                className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+                className="h-8 max-w-full rounded-md border border-input bg-transparent px-2 text-sm"
                 value={formatId ?? ''}
                 onChange={(event) => setFormatId(event.target.value)}
               >
@@ -256,7 +261,7 @@ function ImportDialogBody({
               <Label htmlFor="import-source-level">Source level</Label>
               <select
                 id="import-source-level"
-                className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+                className="h-8 max-w-full rounded-md border border-input bg-transparent px-2 text-sm"
                 value={sourceIndex}
                 onChange={(event) => {
                   setSourceIndex(Number(event.target.value))
@@ -305,11 +310,19 @@ function ImportDialogBody({
               </div>
             )}
             {source && source.notes.length > 0 && (
-              <div className="flex flex-col gap-0.5" aria-label="Importer notes">
+              <div className="flex min-w-0 flex-col gap-0.5" aria-label="Importer notes">
                 <p className="text-sm font-medium">The importer flagged:</p>
-                <ul className="max-h-28 overflow-y-auto text-xs text-muted-foreground">
+                {/* A note wraps onto two or three lines now that it is allowed
+                    to, so the box is taller than the one-line-per-note version
+                    it replaces — same handful of notes visible before scrolling.
+                    `break-words` is for the ones that name a cell or an id: an
+                    unbreakable token is the one string wrapping alone cannot
+                    fit. */}
+                <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto text-xs text-muted-foreground">
                   {source.notes.map((note, index) => (
-                    <li key={index}>{note}</li>
+                    <li key={index} className="break-words">
+                      {note}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -318,7 +331,7 @@ function ImportDialogBody({
               <Label htmlFor="import-target-dungeon">Destination dungeon</Label>
               <select
                 id="import-target-dungeon"
-                className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+                className="h-8 max-w-full rounded-md border border-input bg-transparent px-2 text-sm"
                 value={targetDungeon}
                 onChange={(event) => changeTargetDungeon(event.target.value)}
               >
@@ -408,8 +421,9 @@ function ImportDialogBody({
                     const transition = source.transitions[index]
                     return (
                       <li key={index}>
-                        <label className="flex items-center gap-2">
+                        <label className="flex items-start gap-2">
                           <input
+                            className="mt-0.5 shrink-0"
                             type="checkbox"
                             checked={keepUnresolved.includes(index)}
                             onChange={(event) =>
@@ -420,7 +434,7 @@ function ImportDialogBody({
                               )
                             }
                           />
-                          <span className="text-xs">
+                          <span className="min-w-0 break-words text-xs">
                             {KIND_LABELS[transition.kind]} at{' '}
                             <span className="font-mono">
                               ({transition.position[0]}, {transition.position[1]}) →{' '}
