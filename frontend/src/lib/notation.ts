@@ -10,6 +10,7 @@ import type {
   FeatureSpec,
   KeyedEncounter,
   KeyedMonster,
+  MagicItemView,
   MonsterHitDice,
   TrapEffect,
   TrapSpec,
@@ -101,6 +102,17 @@ export function formatValuables(valuables: readonly ValuableSpec[]): string {
   if (gems > 0) parts.push(gems === 1 ? '1 gem' : `${gems} gems`)
   if (jewellery > 0) parts.push(`${jewellery} jewellery`)
   return parts.join(', ')
+}
+
+// One sampled magic item, as the treasure preview names it under its summary
+// line: the catalog name the backend already resolved, the multiplication form
+// only when the roll produced more than one, and the charges only for an item
+// that carries a charge count.
+export function formatMagicItem(item: MagicItemView): string {
+  const named = item.quantity === 1 ? item.name : `${item.quantity} × ${item.name}`
+  if (item.charges_remaining == null) return named
+  const charges = item.charges_remaining === 1 ? '1 charge' : `${item.charges_remaining} charges`
+  return `${named} (${charges})`
 }
 
 function formatSave(effect: TrapEffect): string {

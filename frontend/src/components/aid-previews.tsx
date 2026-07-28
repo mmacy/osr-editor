@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { treasurePreviewFor } from '@/lib/aids'
 import { api, ApiRequestError } from '@/lib/api'
-import { formatCoins } from '@/lib/notation'
+import { formatCoins, formatMagicItem } from '@/lib/notation'
 import { projectStore } from '@/store/project-store'
 import type {
   AreaTreasureSpec,
@@ -63,6 +63,16 @@ export function TreasurePreviewPanel({
             <li key={index} className="font-mono">
               {formatCoins(sample.coins)} · {sample.valuables.length} valuable(s) ·{' '}
               {sample.magic_items.length} magic · {sample.total_gp} gp
+              {/* The count is the summary; the items are the detail that decides
+                  whether the hoard suits the room. Subordinate, not a second
+                  summary — and absent entirely when the roll produced none. */}
+              {sample.magic_items.length > 0 && (
+                <ul className="text-muted-foreground pl-4">
+                  {sample.magic_items.map((item, itemIndex) => (
+                    <li key={itemIndex}>{formatMagicItem(item)}</li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>
