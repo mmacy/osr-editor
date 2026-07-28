@@ -7,6 +7,7 @@ import {
   formatEncounter,
   formatFeature,
   formatHitDice,
+  formatMagicItem,
   formatMonsterLine,
   formatStrandedContents,
   formatTrap,
@@ -155,6 +156,33 @@ describe('treasure, coins, valuables', () => {
     ).toBe('2 gems, 1 jewellery')
     expect(formatValuables([{ kind: 'gem', name: '', value_gp: 50, weight_coins: 1 }])).toBe(
       '1 gem',
+    )
+  })
+
+  // Real catalog ids and names (osrlib's magic_items.json), Title Case as that
+  // data carries them — the formatter passes the resolved name through verbatim.
+  test('a magic item names itself, counting only above one and charging only when charged', () => {
+    const item = { template_id: 'potion_of_healing', name: 'Potion of Healing' }
+    expect(formatMagicItem({ ...item, quantity: 1, charges_remaining: null })).toBe(
+      'Potion of Healing',
+    )
+    expect(formatMagicItem({ ...item, quantity: 3, charges_remaining: null })).toBe(
+      '3 × Potion of Healing',
+    )
+    expect(
+      formatMagicItem({
+        template_id: 'wand_of_fire_balls',
+        name: 'Wand of Fire Balls',
+        quantity: 1,
+        charges_remaining: 7,
+      }),
+    ).toBe('Wand of Fire Balls (7 charges)')
+    // A spent wand still says so; only a null charge count is silent.
+    expect(formatMagicItem({ ...item, quantity: 1, charges_remaining: 1 })).toBe(
+      'Potion of Healing (1 charge)',
+    )
+    expect(formatMagicItem({ ...item, quantity: 2, charges_remaining: 0 })).toBe(
+      '2 × Potion of Healing (0 charges)',
     )
   })
 })
