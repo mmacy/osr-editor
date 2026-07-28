@@ -32,6 +32,11 @@ A cache's contents are authored explicitly rather than rolled:
 
 **Trap this cache** adds a treasure trap, built with the same [trap builder](traps.md) as a room trap and pinned to the treasure kind because of where it lives. It appears on treasure caches only. **Remove the trap** takes it off again.
 
+![The strongbox feature expanded as a treasure cache: its id and kind, a description of an iron-bound chest, a cell binding of (9, 0), three item chips for silver_dagger, holy_water and stakes_and_mallet, coins of 250 gp and 400 sp, an Amber bead gem worth 120 gp weighing 1 coin, and the treasure trap's builder starting below them with affects, 1d3 damage, and a death save that negates — the builder running on past the bottom of the frame](../assets/screenshots/feature-editor-light.png#only-light)
+![The strongbox feature expanded as a treasure cache: its id and kind, a description of an iron-bound chest, a cell binding of (9, 0), three item chips for silver_dagger, holy_water and stakes_and_mallet, coins of 250 gp and 400 sp, an Amber bead gem worth 120 gp weighing 1 coin, and the treasure trap's builder starting below them with affects, 1d3 damage, and a death save that negates — the builder running on past the bottom of the frame](../assets/screenshots/feature-editor-dark.png#only-dark)
+
+The cache's trap opens with **Affects** rather than a trigger, which is the treasure kind showing: the engine springs a cache's trap when the cache is opened and never reads a trigger for it, so there is no trigger field to show. The rest of the builder continues below the bottom of that frame — [traps](traps.md) has the whole of it.
+
 That explicitness is the difference from the [treasure card](treasure.md): a treasure declaration hands the room to the tables, while a cache feature is you saying exactly what's there.
 
 ## Level features

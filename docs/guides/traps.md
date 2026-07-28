@@ -36,6 +36,11 @@ Every field below is optional, and a trap is the sum of the ones you set. Nothin
 
 The builder holds those dependencies by construction rather than validating after the fact, so the trap you're editing is a legal trap at every keystroke — which is why the dependent fields disable instead of complaining.
 
+![The expanded trap card for a poisoned dart volley: the trigger reading enter as plain text beside the affects select, 1d4 damage with a 1d3 volley, a death save at modifier 2 that negates, save or die unticked, the poisoned condition with a duration of 2d6 turns, an empty fall field, and a manual-effect note about the dart holes being in the door frame](../assets/screenshots/trap-builder-light.png#only-light)
+![The expanded trap card for a poisoned dart volley: the trigger reading enter as plain text beside the affects select, 1d4 damage with a 1d3 volley, a death save at modifier 2 that negates, save or die unticked, the poisoned condition with a duration of 2d6 turns, an empty fall field, and a manual-effect note about the dart holes being in the door frame](../assets/screenshots/trap-builder-dark.png#only-dark)
+
+Damage, the save, and the condition are each set here, so the volley, the modifier and on-save pair, and the duration and unit are all live. Fall and the slide are the parts this trap doesn't have, and they stay empty.
+
 ## Removing one
 
 **Remove trap** on the card takes the room trap away; a cache's trap has its own **Remove the trap** inside the feature. Either is one undo step, like every other edit.

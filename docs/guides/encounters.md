@@ -16,6 +16,11 @@ Three of the controls under the lines are pins — each one a choice to override
 
 **Preview counts and XP** samples the encounter — rolled counts, the resolved stat table, and per-sample XP — without committing anything. See [authoring aids](authoring-aids.md).
 
+![The expanded encounter card: two monster lines reading 3 × Acolyte and 2d4 × Skeleton, an Add monster button, the alignment select pinned to chaotic beside the stance select pinned to hostile, and the aware and lair hoard checkboxes both ticked](../assets/screenshots/encounter-card-light.png#only-light)
+![The expanded encounter card: two monster lines reading 3 × Acolyte and 2d4 × Skeleton, an Add monster button, the alignment select pinned to chaotic beside the stance select pinned to hostile, and the aware and lair hoard checkboxes both ticked](../assets/screenshots/encounter-card-dark.png#only-dark)
+
+An acolyte takes any alignment and a skeleton only chaotic, so `chaotic` is the whole of what that pair's alignment select offers.
+
 ## Where a monster's treasure comes from
 
 **Lair hoard** is on by default, and it means the engine generates the keyed monsters' own treasure the first time the encounter spawns. Key four orcs and you have keyed their type D hoard with them — you do not add a treasure card for it.
