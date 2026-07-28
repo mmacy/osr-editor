@@ -10,6 +10,7 @@ import type {
   AnyEditOp,
   AreaSpec,
   AreaTreasureSpec,
+  Coins,
   Condition,
   EncounterTable,
   EncounterTableRow,
@@ -76,6 +77,12 @@ export const FEATURE_KINDS = [
   'construction_trick',
   'custom',
 ] as const satisfies readonly FeatureSpec['kind'][]
+
+export const FEATURE_KIND_LABELS: Record<FeatureSpec['kind'], string> = {
+  treasure_cache: 'Treasure cache',
+  construction_trick: 'Construction trick',
+  custom: 'Custom',
+}
 
 export interface AreaTarget {
   dungeonId: string
@@ -339,6 +346,12 @@ export function nextFreeFeatureKey(level: LevelSpec): string {
   return `feature-${candidate}`
 }
 
+// A factory, not a shared constant: every caller owns its coins outright, so
+// no two features can ever alias one object.
+export function emptyCoins(): Coins {
+  return { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 }
+}
+
 export function emptyFeature(id: string, cell: Position | null): FeatureSpec {
   return {
     id,
@@ -346,10 +359,19 @@ export function emptyFeature(id: string, cell: Position | null): FeatureSpec {
     description: '',
     cell,
     item_ids: [],
-    coins: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
+    coins: emptyCoins(),
     valuables: [],
     trap: null,
   }
+}
+
+// Leaving the treasure-cache kind takes the cache's contents with it: osrlib's
+// take and inspect handlers reject any feature whose kind isn't a cache, so
+// items, coins, valuables, and the trap on a trick or a custom feature are
+// unreachable in play. One patch, so the whole change is one undo step.
+export function clearCacheContentsPatch(kind: FeatureSpec['kind']): Partial<FeatureSpec> {
+  if (kind === 'treasure_cache') return { kind }
+  return { kind, trap: null, item_ids: [], coins: emptyCoins(), valuables: [] }
 }
 
 function scopeFeatures(document: Adventure, scope: FeatureScope): readonly FeatureSpec[] | null {

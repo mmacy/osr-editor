@@ -8,6 +8,7 @@ import {
   formatFeature,
   formatHitDice,
   formatMonsterLine,
+  formatStrandedContents,
   formatTrap,
   formatTreasure,
   formatValuables,
@@ -255,6 +256,31 @@ describe('features and wandering', () => {
   test('payloadless kinds render the bare label', () => {
     expect(formatFeature(feature({ kind: 'construction_trick' }))).toBe('trick')
     expect(formatFeature(feature())).toBe('custom')
+  })
+
+  test('a non-cache names everything it carries that the party can never reach', () => {
+    expect(
+      formatStrandedContents(
+        feature({
+          kind: 'construction_trick',
+          coins: coins({ gp: 120 }),
+          valuables: [{ kind: 'gem', name: '', value_gp: 50, weight_coins: 1 }],
+          item_ids: ['sword'],
+          trap: trap({ damage_dice: '1d4' }),
+        }),
+      ),
+    ).toBe('120 gp, 1 gem, 1 item, a trap')
+    // A trap alone still strands: the gate hides its builder too.
+    expect(formatStrandedContents(feature({ kind: 'custom', trap: trap({}) }))).toBe('a trap')
+  })
+
+  test('nothing is stranded on a cache, or on an empty kind — the ordinary cases stay silent', () => {
+    expect(
+      formatStrandedContents(
+        feature({ kind: 'treasure_cache', coins: coins({ gp: 120 }), item_ids: ['sword'] }),
+      ),
+    ).toBe('')
+    expect(formatStrandedContents(feature({ kind: 'construction_trick' }))).toBe('')
   })
 
   test('wandering renders chance, interval, and the custom-table flag', () => {

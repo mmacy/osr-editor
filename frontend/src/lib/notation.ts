@@ -152,15 +152,17 @@ export function formatTrap(trap: TrapSpec): string {
   return effect ? `${trap.trigger}: ${effect}` : trap.trigger
 }
 
-const FEATURE_KIND_LABELS = {
+// The notation abbreviations, distinct from the sentence-case option labels
+// the kind select renders (`FEATURE_KIND_LABELS` in content-builders).
+const FEATURE_KIND_NOTATION = {
   treasure_cache: 'cache',
   construction_trick: 'trick',
   custom: 'custom',
 } as const
 
-// Kind label plus payload summary: `cache: 120 gp, 2 gems, 1 item — trapped`.
-export function formatFeature(feature: FeatureSpec): string {
-  const label = FEATURE_KIND_LABELS[feature.kind]
+// What a feature holds, in the cards' own order: `120 gp, 2 gems, 1 item`.
+// Empty when it holds nothing.
+export function formatFeatureContents(feature: FeatureSpec): string {
   const parts: string[] = []
   const coins = formatCoins(feature.coins)
   if (coins) parts.push(coins)
@@ -169,7 +171,29 @@ export function formatFeature(feature: FeatureSpec): string {
   if (feature.item_ids.length > 0) {
     parts.push(feature.item_ids.length === 1 ? '1 item' : `${feature.item_ids.length} items`)
   }
-  let summary = parts.length > 0 ? `${label}: ${parts.join(', ')}` : label
+  return parts.join(', ')
+}
+
+// What a feature carries that its own kind can never surrender — the contents
+// plus the guarding trap — for the card's warning. Only a treasure cache can
+// be opened, so anything held by another kind is unreachable in play; a
+// document can carry that from a foreign converter or from the editor's own
+// pre-fix releases, which offered these fields on every kind. Empty when
+// nothing is stranded, which is the ordinary case.
+export function formatStrandedContents(feature: FeatureSpec): string {
+  if (feature.kind === 'treasure_cache') return ''
+  const parts: string[] = []
+  const contents = formatFeatureContents(feature)
+  if (contents) parts.push(contents)
+  if (feature.trap) parts.push('a trap')
+  return parts.join(', ')
+}
+
+// Kind label plus payload summary: `cache: 120 gp, 2 gems, 1 item — trapped`.
+export function formatFeature(feature: FeatureSpec): string {
+  const label = FEATURE_KIND_NOTATION[feature.kind]
+  const contents = formatFeatureContents(feature)
+  let summary = contents ? `${label}: ${contents}` : label
   if (feature.trap) summary += ' — trapped'
   return summary
 }

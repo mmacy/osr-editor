@@ -1,13 +1,23 @@
 // The composable TrapSpec builder, shared by the area trap card (kind pinned
 // "room") and the treasure-cache trap (kind pinned "treasure") — the kind is
-// never asked for; where the trap lives decides it. Every field change emits
-// a patch through onPatch/onEffectPatch; the owner merges it against the
-// committed trap inside the store's queue (patchTrapEffect holding the
-// validators' implications: volley only with damage, duration only with a
-// condition), so a queued edit never reverts an in-flight one.
+// never asked for; where the trap lives decides it. The trigger follows the
+// kind for the same reason and is not offered either: osrlib springs a room
+// trap only on "enter" (`_room_trap_check` returns early otherwise, so "open"
+// on an area would never fire) and never reads a cache trap's trigger at all
+// (the cache-open path springs it unconditionally). So a room trap reads its
+// trigger back as text and a cache trap shows no trigger field. The readout is
+// the document's own value rather than a comfortable fiction, so a room trap
+// already carrying "open" — which earlier releases of this editor offered, and
+// which no diagnostic reports — says the trap is dead and repairs it in one
+// patch, instead of being stranded by the select's removal. Every other
+// field change emits a patch through onPatch/onEffectPatch; the owner merges
+// it against the committed trap inside the store's queue (patchTrapEffect
+// holding the validators' implications: volley only with damage, duration only
+// with a condition), so a queued edit never reverts an in-flight one.
 import { useState } from 'react'
 
 import { MiniLevelPicker } from '@/components/mini-level-picker'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -127,18 +137,14 @@ export function TrapBuilder({
   return (
     <div className="flex flex-col gap-3" aria-label="Trap">
       <div className="flex gap-3">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`${idPrefix}-trigger`}>Trigger</Label>
-          <select
-            id={`${idPrefix}-trigger`}
-            className={SELECT_CLASS}
-            value={trap.trigger}
-            onChange={(event) => onPatch({ trigger: event.target.value as TrapSpec['trigger'] })}
-          >
-            <option value="enter">enter</option>
-            <option value="open">open</option>
-          </select>
-        </div>
+        {trap.kind === 'room' && (
+          <div className="flex flex-col gap-1.5">
+            <Label>Trigger</Label>
+            {/* Read-only: the value the document carries, which the engine
+                honours only when it is "enter". */}
+            <span className="flex h-8 items-center font-mono text-sm">{trap.trigger}</span>
+          </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${idPrefix}-affects`}>Affects</Label>
           <select
@@ -152,6 +158,17 @@ export function TrapBuilder({
           </select>
         </div>
       </div>
+      {trap.kind === 'room' && trap.trigger !== 'enter' && (
+        <div className="flex flex-col items-start gap-1.5" aria-label="Dead trigger">
+          <p className="text-destructive text-xs">
+            This trap never springs. A room trap fires only on{' '}
+            <span className="font-mono">enter</span>, because an area has nothing to open.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => onPatch({ trigger: 'enter' })}>
+            Set the trigger to enter
+          </Button>
+        </div>
+      )}
       <div className="flex items-end gap-3">
         <DiceField
           id={`${idPrefix}-damage`}

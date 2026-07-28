@@ -95,9 +95,18 @@ test('stock a secret-door module from the map and publish it', async ({ page }) 
   await page.mouse.click(treasureCell.x, treasureCell.y, { button: 'right' })
   await page.getByRole('menuitem', { name: 'Add feature' }).click()
   await inspector.getByTestId('feature-feature-1').getByRole('button').first().click()
-  await inspector.getByLabel('Kind', { exact: true }).selectOption('treasure_cache')
+  // The kind options read as sentence case over the unchanged enum values.
+  await inspector.getByLabel('Kind', { exact: true }).selectOption({ label: 'Treasure cache' })
+  await expect(inspector.getByLabel('Kind', { exact: true })).toHaveValue('treasure_cache')
   await inspector.getByRole('button', { name: 'Trap this cache' }).click()
   await expect(inspector.getByTestId('feature-feature-1')).toContainText('trapped')
+  // A cache's own open springs its trap, so the builder offers no trigger.
+  // `exact` is load-bearing: getByText matches case-insensitive substrings by
+  // default, so a loose 'Trigger' also catches the Affects select's `triggerer`
+  // option sitting beside it and the assertion fails against correct markup.
+  await expect(
+    inspector.getByTestId('feature-feature-1').getByText('Trigger', { exact: true }),
+  ).toHaveCount(0)
 
   // Set wandering in level properties.
   await page.getByRole('button', { name: 'Level properties' }).click()
