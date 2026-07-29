@@ -74,6 +74,9 @@ export function makeProjectState(overrides: Partial<ProjectState> = {}): Project
       review: [],
       auto_reasons: [],
       stocking: { master_seed: null, streams: {} },
+      stash: [],
+      stash_counter: 0,
+      copies: {},
     },
     ...overrides,
   }

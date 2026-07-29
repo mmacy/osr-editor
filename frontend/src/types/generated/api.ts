@@ -506,6 +506,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sources/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Source Open
+         * @description Open a content-library source read-only: the derived habitat's one route.
+         *
+         *     Stateless: each open returns the pack, the panel holds it client-side, and
+         *     re-opening refreshes. Nothing registers and nothing the editor owns is
+         *     written to the source; a workdir source assembles current-first, and a
+         *     workdir with any active conversion refuses — bound or not, an assembly (or
+         *     even a memory read mid-adoption) has no business near a running chain.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         body: The absolute source path.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The source state: identity, label, habitat, pack, findings.
+         */
+        post: operations["post_source_open_api_sources_open_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/library/stash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Library Stash
+         * @description Bank one level's rooms and wandering table in the stash, at a named revision.
+         *
+         *     The compound act the two destructive confirms call before their batch: the
+         *     capture is computed against the verified revision inside one critical
+         *     section, so a stash always records what the batch is about to destroy. The
+         *     destructive batch itself follows as its ordinary guarded self.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The level to capture and the revision it was computed against.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The updated sidecar, stash pack appended.
+         */
+        post: operations["post_library_stash_api_projects__project_id__library_stash_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/library/stash/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Library Stash Open
+         * @description Open one stash pack into the same source shape as any derived open.
+         *
+         *     Args:
+         *         request: The current request (carries the app state).
+         *         project_id: The server-minted project id.
+         *         body: The stash pack id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The source state, `habitat="stash"`, findings included.
+         */
+        post: operations["post_library_stash_open_api_projects__project_id__library_stash_open_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/aids/stock": {
         parameters: {
             query?: never;
@@ -1628,6 +1725,80 @@ export interface components {
          */
         Condition: "paralysed" | "asleep" | "blind" | "charmed" | "petrified" | "diseased" | "exhausted" | "lycanthropy_incubation" | "averted_eyes" | "poisoned" | "dead" | "silenced" | "entangled" | "afraid" | "feebleminded" | "invisible" | "turned" | "confused" | "weakened";
         /**
+         * ContentPack
+         * @description A content pack: sections of geometry-free entries plus their monster closure.
+         *
+         *     `monsters` bundles the [`MonsterTemplate`][osrlib.core.monsters.MonsterTemplate]s
+         *     the pack's encounters and wandering tables reference beyond the shipped
+         *     catalog. `id` defaults empty: a pack derived on the fly takes its identity
+         *     from its source, and only a persisted pack mints an id of its own.
+         */
+        ContentPack: {
+            /**
+             * Id
+             * @default
+             */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Author
+             * @default
+             */
+            author: string;
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["PackSection"][];
+            /**
+             * Monsters
+             * @default []
+             */
+            monsters: components["schemas"]["MonsterTemplate"][];
+        };
+        /**
+         * ContentPackEntry
+         * @description One portable room: [`AreaSpec`][osrlib.crawl.dungeon.AreaSpec] minus its geometry.
+         *
+         *     The entry carries the content slots an area has — prose, encounter, trap,
+         *     treasure, features — and nothing that binds to a grid: there are no cells,
+         *     and a consumer writes the carried slots into a target area it already has.
+         *     An entry trap must be a room trap, the same rule `AreaSpec` enforces; the
+         *     treasure-trap coupling needs no restatement because it lives on
+         *     [`FeatureSpec`][osrlib.crawl.dungeon.FeatureSpec] itself.
+         */
+        ContentPackEntry: {
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            encounter?: components["schemas"]["KeyedEncounter"] | null;
+            trap?: components["schemas"]["TrapSpec"] | null;
+            treasure?: components["schemas"]["AreaTreasureSpec"] | null;
+            /**
+             * Features
+             * @default []
+             */
+            features: components["schemas"]["FeatureSpec"][];
+        };
+        /**
          * ConversionSettings
          * @description The deterministic pipeline knobs and their pinned defaults.
          *
@@ -1738,6 +1909,21 @@ export interface components {
             error: string | null;
             /** Project Id */
             project_id: string | null;
+        };
+        /**
+         * CopyRecord
+         * @description One copy act's record: which pack, and which of its entries, landed on the keyed address.
+         *
+         *     `pack_entry_id` is the entry id for a room drop and the section id for a
+         *     wandering copy. A record is a record of the copy *act*: undoing the drop
+         *     does not remove it — used means at least once — and records survive their
+         *     pack's deletion, so a re-minted stash id must never reuse a dead one.
+         */
+        CopyRecord: {
+            /** Pack Identity */
+            pack_identity: string;
+            /** Pack Entry Id */
+            pack_entry_id: string;
         };
         /**
          * CostEstimate
@@ -2137,6 +2323,16 @@ export interface components {
          *     `auto_reasons` holds the kind-qualified override-entry keys whose reason is
          *     still a machine draft, and rides the forge undo stack with the
          *     `overrides.yaml` snapshot (derived state of the same commit).
+         *
+         *     Phase 11 grows the content library's three fields. `stash` holds the
+         *     displaced-content packs (the whole sidecar rides every op result; stash
+         *     packs are level-sized projections over localhost JSON, an accepted and
+         *     noted weight). `stash_counter` mints `stash-<n>` monotonically — next-free
+         *     minting would be wrong, because copy records outlive pack deletion by
+         *     design and a re-minted id would inherit a dead pack's badges. `copies` is
+         *     the third addressed map, keyed by *target* address (area address for room
+         *     drops, level address for wandering copies); its keys cascade in lockstep
+         *     with `notes` and `stocking.streams`, its records never ride the undo stack.
          */
         EditorSidecar: {
             /**
@@ -2174,6 +2370,23 @@ export interface components {
              *     }
              */
             stocking: components["schemas"]["StockingState"];
+            /**
+             * Stash
+             * @default []
+             */
+            stash: components["schemas"]["StashedPack"][];
+            /**
+             * Stash Counter
+             * @default 0
+             */
+            stash_counter: number;
+            /**
+             * Copies
+             * @default {}
+             */
+            copies: {
+                [key: string]: components["schemas"]["CopyRecord"][];
+            };
         };
         /**
          * Element
@@ -2672,6 +2885,7 @@ export interface components {
             /** Path */
             path: string;
         };
+        JsonValue: unknown;
         /**
          * KeyedEncounter
          * @description An area's keyed encounter: monsters with counts and optional pins.
@@ -3244,6 +3458,14 @@ export interface components {
             path: string;
         };
         /**
+         * OpenSourceRequest
+         * @description A content-library source to open read-only: a project directory or forge workdir.
+         */
+        OpenSourceRequest: {
+            /** Path */
+            path: string;
+        };
+        /**
          * Overrides
          * @description The `overrides.yaml` document: the v1 override kinds.
          */
@@ -3278,6 +3500,47 @@ export interface components {
             };
             town?: components["schemas"]["TownOverride"] | null;
             module?: components["schemas"]["ModuleOverride"] | null;
+        };
+        /**
+         * PackFinding
+         * @description A structured self-containment gap in a content pack.
+         *
+         *     `code` is dotted snake_case namespaced by subsystem, the
+         *     [`Rejection`][osrlib.core.validation.Rejection] discipline. `entry_id` names
+         *     the entry the gap sits on, or `None` for a section-scoped gap (a wandering
+         *     table's); `message` carries the specifics either way.
+         */
+        PackFinding: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Entry Id */
+            entry_id?: string | null;
+        };
+        /**
+         * PackSection
+         * @description A pack's level grouping: entries plus the level's optional wandering table.
+         *
+         *     Sections are structural because three consumers operate on a level grouping —
+         *     a panel's level rows, wandering's level scope, and a level-scoped capture.
+         *     Entry ids are unique pack-wide, so consumers address entries by id alone;
+         *     the section contributes presentation grouping and the wandering slot.
+         */
+        PackSection: {
+            /** Id */
+            id: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["ContentPackEntry"][];
+            wandering?: components["schemas"]["WanderingSpec"] | null;
         };
         /**
          * PickerLocation
@@ -3369,7 +3632,10 @@ export interface components {
              *       "auto_reasons": [],
              *       "stocking": {
              *         "streams": {}
-             *       }
+             *       },
+             *       "stash": [],
+             *       "stash_counter": 0,
+             *       "copies": {}
              *     }
              */
             sidecar: components["schemas"]["EditorSidecar"];
@@ -3559,6 +3825,23 @@ export interface components {
             missing: boolean;
         };
         /**
+         * RecordCopy
+         * @description Record one copy act onto a target address — append-with-dedupe, annotation by nature.
+         */
+        RecordCopy: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            action: "record_copy";
+            /** Address */
+            address: string;
+            /** Pack Identity */
+            pack_identity: string;
+            /** Pack Entry Id */
+            pack_entry_id: string;
+        };
+        /**
          * RemoveArea
          * @description Remove an area; its cells become corridor (osrlib's convention — cells in no area).
          *
@@ -3693,6 +3976,25 @@ export interface components {
             action: "remove_note";
             /** Address */
             address: string;
+        };
+        /**
+         * RemoveStashPack
+         * @description Delete one stash pack by id.
+         *
+         *     On the unguarded channel by the same owner sanction the spec records: the
+         *     409 discipline protects the deliverable, the stash is a recovery buffer,
+         *     and git remains the cross-session net. The frontend fronts this with a
+         *     destructive-action confirm naming what is discarded. Copy records naming
+         *     the deleted pack stay — they record acts, not links.
+         */
+        RemoveStashPack: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            action: "remove_stash_pack";
+            /** Pack Id */
+            pack_id: string;
         };
         /**
          * RemoveTemplatePatch
@@ -4355,7 +4657,7 @@ export interface components {
          */
         SidecarPatchRequest: {
             /** Patches */
-            patches: (components["schemas"]["SetViewState"] | components["schemas"]["SetNote"] | components["schemas"]["RemoveNote"] | components["schemas"]["DismissFlag"] | components["schemas"]["UndismissFlag"] | components["schemas"]["SetStockingSeed"])[];
+            patches: (components["schemas"]["SetViewState"] | components["schemas"]["SetNote"] | components["schemas"]["RemoveNote"] | components["schemas"]["DismissFlag"] | components["schemas"]["UndismissFlag"] | components["schemas"]["SetStockingSeed"] | components["schemas"]["RecordCopy"] | components["schemas"]["RemoveStashPack"])[];
         };
         /**
          * SidecarProvenance
@@ -4385,6 +4687,31 @@ export interface components {
         SniffResult: {
             /** Format Ids */
             format_ids: string[];
+        };
+        /**
+         * SourceState
+         * @description One opened content-library source: identity, pack, and findings, whatever the habitat.
+         *
+         *     Routing every habitat through this one shape is what makes the panel never
+         *     care where a pack came from. Identity is pinned per habitat: a derived
+         *     pack's identity is the resolved absolute source path, a stash pack's its
+         *     minted id — the two can never collide, because paths are absolute and
+         *     stash ids are `stash-<n>`. Findings are the pack's self-containment gaps,
+         *     the diagnostics posture: visible, never blocking.
+         */
+        SourceState: {
+            /** Identity */
+            identity: string;
+            /** Label */
+            label: string;
+            /**
+             * Habitat
+             * @enum {string}
+             */
+            habitat: "project" | "stash";
+            pack: components["schemas"]["ContentPack"];
+            /** Findings */
+            findings: components["schemas"]["PackFinding"][];
         };
         /**
          * Stage
@@ -4417,6 +4744,48 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             usage?: components["schemas"]["TokenUsage"] | null;
+        };
+        /**
+         * StashOpenRequest
+         * @description Which stash pack to open into the panel.
+         */
+        StashOpenRequest: {
+            /** Pack Id */
+            pack_id: string;
+        };
+        /**
+         * StashRequest
+         * @description A stash capture: the level whose rooms and wandering table to bank, at a named revision.
+         */
+        StashRequest: {
+            /** Revision */
+            revision: string;
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+        };
+        /**
+         * StashedPack
+         * @description One stash entry: a stamped content-pack document with its listing identity beside it.
+         *
+         *     `document` is `ContentPack.to_document()`'s output verbatim — the sidecar's
+         *     one content-bearing field, the owner-sanctioned posture change the spec
+         *     records. `pack_id` and `label` deliberately duplicate the envelope's
+         *     payload: the panel lists stash packs without parsing every stamped
+         *     document, and a pack a newer engine stamped — which the vetting open must
+         *     refuse — can still be *named* in the listing with the upgrade remedy
+         *     instead of vanishing. Drift is impossible because stash packs are
+         *     immutable: created by the stash act, deleted by the patch, never edited.
+         */
+        StashedPack: {
+            /** Pack Id */
+            pack_id: string;
+            /** Label */
+            label: string;
+            /** Created At */
+            created_at: string;
+            document: components["schemas"]["JsonValue"];
         };
         /**
          * StatBlockOverride
@@ -5638,6 +6007,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EditorSidecar"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_source_open_api_sources_open_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_library_stash_api_projects__project_id__library_stash_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StashRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditorSidecar"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_library_stash_open_api_projects__project_id__library_stash_open_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StashOpenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceState"];
                 };
             };
             /** @description Validation Error */

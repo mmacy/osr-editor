@@ -174,6 +174,18 @@ export type ProseAreaResponse = components['schemas']['ProseAreaResponse']
 export type ProseHooksResponse = components['schemas']['ProseHooksResponse']
 export type TokenUsage = components['schemas']['TokenUsage']
 
+// Phase 11: the content library — osrlib's content-pack models and the
+// library's source and stash surfaces riding the generated types, never
+// mirrored.
+export type ContentPack = components['schemas']['ContentPack']
+export type ContentPackEntry = components['schemas']['ContentPackEntry']
+export type PackSection = components['schemas']['PackSection']
+export type PackFinding = components['schemas']['PackFinding']
+export type SourceState = components['schemas']['SourceState']
+export type StashRequest = components['schemas']['StashRequest']
+export type StashedPack = components['schemas']['StashedPack']
+export type CopyRecord = components['schemas']['CopyRecord']
+
 // The discriminated aid unions, composed from their members (the route bodies
 // and responses carry the union, not a named schema — the AnyEditOp pattern).
 export type AidsPreviewRequest =
