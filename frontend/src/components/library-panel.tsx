@@ -4,7 +4,6 @@
 // content by spec: the panel opens, lists, badges, and closes; every write is
 // a drop the map editor commits as an ordinary op batch.
 import { useState } from 'react'
-import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react'
 
 import { PathField } from '@/components/path-field'
 import { Button } from '@/components/ui/button'
@@ -92,18 +91,11 @@ export function LibraryPanel({
   onDisarm,
   onCopyWandering,
 }: LibraryPanelProps) {
-  const [open, setOpen] = useState(true)
   const [path, setPath] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<StashedPack | null>(null)
   const sidecar = useProjectStore((state) => state.project?.sidecar ?? null)
   const used = usedIndex(sidecar ?? ({ copies: {} } as unknown as EditorSidecar))
   const stash = sidecar?.stash ?? []
-
-  const toggle = () => {
-    // Closing the panel disarms — the aim must not survive out of sight.
-    if (open) onDisarm()
-    setOpen((value) => !value)
-  }
 
   const deleteStashPack = (pack: StashedPack) => {
     onClosePack(pack.pack_id)
@@ -119,109 +111,99 @@ export function LibraryPanel({
       data-testid="library-panel"
       className="flex min-h-0 shrink-0 flex-col border-l bg-card"
     >
-      <div className="flex items-center gap-1 border-b px-2 py-1">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={open ? 'Collapse content library' : 'Expand content library'}
-          onClick={toggle}
-        >
-          {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
-        </Button>
+      <div className="flex items-center gap-1 border-b px-2 py-1.5">
         <span className="text-xs font-medium">Library</span>
       </div>
-      {open && (
-        <ScrollArea className="min-h-0 w-80 flex-1">
-          <div className="flex flex-col gap-3 p-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="library-source">Open a source</Label>
-              <div className="flex gap-2">
-                <PathField
-                  id="library-source"
-                  className="flex-1"
-                  kind="directory"
-                  title="Choose a project or workdir"
-                  value={path}
-                  placeholder="~/adventures/mill.osr"
-                  onChange={setPath}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && path) onOpenSource(path)
-                  }}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onOpenSource(path)}
-                  disabled={!path}
-                >
-                  Open
-                </Button>
-              </div>
+      <ScrollArea className="min-h-0 w-80 flex-1">
+        <div className="flex flex-col gap-3 p-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="library-source">Open a source</Label>
+            <div className="flex gap-2">
+              <PathField
+                id="library-source"
+                className="flex-1"
+                kind="directory"
+                title="Choose a project or workdir"
+                value={path}
+                placeholder="~/adventures/mill.osr"
+                onChange={setPath}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && path) onOpenSource(path)
+                }}
+              />
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="self-start"
-                onClick={() => onOpenSource(projectPath)}
+                onClick={() => onOpenSource(path)}
+                disabled={!path}
               >
-                This project
+                Open
               </Button>
             </div>
-
-            {stash.length > 0 && (
-              <div className="flex flex-col gap-1" aria-label="Stash">
-                <p className="text-xs font-medium text-muted-foreground">Stash</p>
-                {stash.map((pack) => (
-                  <div
-                    key={pack.pack_id}
-                    className="flex items-center gap-2 text-sm"
-                    data-testid={`stash-${pack.pack_id}`}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{pack.label}</span>
-                    <UsedBadge used={stashPackFullyUsed(pack, used)} />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      aria-label={`Open ${pack.label}`}
-                      onClick={() => onOpenStash(pack.pack_id)}
-                    >
-                      Open
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive"
-                      aria-label={`Delete ${pack.label}`}
-                      onClick={() => setConfirmDelete(pack)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {sources.map((source) => (
-              <PackView
-                key={source.identity}
-                source={source}
-                used={used}
-                armed={armed}
-                onArm={onArm}
-                onDisarm={onDisarm}
-                onClose={() => onClosePack(source.identity)}
-                onRefresh={() => onRefreshPack(source)}
-                onCopyWandering={(section) => onCopyWandering(source, section)}
-              />
-            ))}
-            {sources.length === 0 && stash.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Open a finished project or workdir to drag its rooms onto this map. Replacing or
-                clearing a level offers to bank its content here first.
-              </p>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              onClick={() => onOpenSource(projectPath)}
+            >
+              This project
+            </Button>
           </div>
-        </ScrollArea>
-      )}
+
+          {stash.length > 0 && (
+            <div className="flex flex-col gap-1" aria-label="Stash">
+              <p className="text-xs font-medium text-muted-foreground">Stash</p>
+              {stash.map((pack) => (
+                <div
+                  key={pack.pack_id}
+                  className="flex items-center gap-2 text-sm"
+                  data-testid={`stash-${pack.pack_id}`}
+                >
+                  <span className="min-w-0 flex-1 truncate">{pack.label}</span>
+                  <UsedBadge used={stashPackFullyUsed(pack, used)} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Open ${pack.label}`}
+                    onClick={() => onOpenStash(pack.pack_id)}
+                  >
+                    Open
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive"
+                    aria-label={`Delete ${pack.label}`}
+                    onClick={() => setConfirmDelete(pack)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {sources.map((source) => (
+            <PackView
+              key={source.identity}
+              source={source}
+              used={used}
+              armed={armed}
+              onArm={onArm}
+              onDisarm={onDisarm}
+              onClose={() => onClosePack(source.identity)}
+              onRefresh={() => onRefreshPack(source)}
+              onCopyWandering={(section) => onCopyWandering(source, section)}
+            />
+          ))}
+          {sources.length === 0 && stash.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Open a finished project or workdir to drag its rooms onto this map. Replacing or
+              clearing a level offers to bank its content here first.
+            </p>
+          )}
+        </div>
+      </ScrollArea>
       {confirmDelete && (
         <Dialog open onOpenChange={(next) => !next && setConfirmDelete(null)}>
           <DialogContent className="sm:max-w-md">

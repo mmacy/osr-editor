@@ -228,6 +228,16 @@ export function MapEditor({
   // The area under an entry drag, resolved by the wrapper's dragover — the
   // canvas highlights it like the armed hover.
   const [dropAreaId, setDropAreaId] = useState<string | null>(null)
+  // The panel mounts only while open — a toolbar toggle, the fit-to-level
+  // precedent — so it costs the canvas nothing at rest. Closing it disarms
+  // (the aim must not survive out of sight) while the open packs and their
+  // collision memory ride the library hook and survive the toggle: hidden is
+  // not closed, and re-opening shows the packs exactly as they were.
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const toggleLibrary = () => {
+    if (libraryOpen) library.disarm()
+    setLibraryOpen((current) => !current)
+  }
   // Arming a library entry and the modal tools are mutually exclusive:
   // arming displaces the active tool's claim on the primary click, and
   // choosing a tool disarms — there is never a click both would claim.
@@ -852,6 +862,14 @@ export function MapEditor({
               : `Roll SRD stocking over ${unstockedCount} blank room${unstockedCount === 1 ? '' : 's'} — one undo step`}
           </TooltipContent>
         </Tooltip>
+        <Button
+          variant={libraryOpen ? 'secondary' : 'ghost'}
+          size="sm"
+          aria-pressed={libraryOpen}
+          onClick={toggleLibrary}
+        >
+          Library
+        </Button>
         {forgeProject && (
           <>
             <Separator orientation="vertical" className="mx-1 h-5" />
@@ -978,18 +996,20 @@ export function MapEditor({
             onCardIntentConsumed={() => setCardIntent(null)}
           />
         </aside>
-        <LibraryPanel
-          projectPath={projectPath}
-          sources={library.sources}
-          onOpenSource={library.openSource}
-          onOpenStash={library.openStash}
-          onClosePack={library.closePack}
-          onRefreshPack={library.refreshPack}
-          armed={library.armed}
-          onArm={library.arm}
-          onDisarm={library.disarm}
-          onCopyWandering={library.copyWandering}
-        />
+        {libraryOpen && (
+          <LibraryPanel
+            projectPath={projectPath}
+            sources={library.sources}
+            onOpenSource={library.openSource}
+            onOpenStash={library.openStash}
+            onClosePack={library.closePack}
+            onRefreshPack={library.refreshPack}
+            armed={library.armed}
+            onArm={library.arm}
+            onDisarm={library.disarm}
+            onCopyWandering={library.copyWandering}
+          />
+        )}
         {forgeProject && forgeProjectId && selection?.kind === 'area' && (
           <SourcePagesPane
             projectId={forgeProjectId}
