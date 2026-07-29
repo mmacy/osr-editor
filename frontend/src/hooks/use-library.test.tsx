@@ -161,6 +161,86 @@ test('a non-colliding drop commits straight through with provenance chained', as
   )
 })
 
+test('a loaded source is remembered and restored on return', async () => {
+  // Opening writes the identity into the sidecar's view state...
+  const hook = await hookWithOpenPack()
+  const { patchSidecar } = projectStore.getState()
+  await waitFor(() =>
+    expect(vi.mocked(patchSidecar)).toHaveBeenCalledWith([
+      {
+        action: 'set_view_state',
+        view_state: expect.objectContaining({ library_sources: ['/adventures/mill.osr'] }),
+      },
+    ]),
+  )
+  hook.unmount()
+  // ...and a fresh mount over a project remembering it re-opens it unasked.
+  const project = makeProjectState()
+  projectStore.setState({
+    project: {
+      ...project,
+      sidecar: {
+        ...project.sidecar,
+        view_state: { ...project.sidecar.view_state, library_sources: ['/adventures/mill.osr'] },
+      },
+    },
+  })
+  openSource.mockClear()
+  const returned = renderHook(() => useLibrary('dungeon-1', 1, LEVEL))
+  await waitFor(() => expect(returned.result.current.sources).toHaveLength(1))
+  expect(openSource).toHaveBeenCalledWith('/adventures/mill.osr')
+})
+
+test('a remembered source that no longer opens is forgotten once', async () => {
+  const project = makeProjectState()
+  projectStore.setState({
+    project: {
+      ...project,
+      sidecar: {
+        ...project.sidecar,
+        view_state: { ...project.sidecar.view_state, library_sources: ['/gone.osr'] },
+      },
+    },
+  })
+  openSource.mockRejectedValue(new Error('no directory at /gone.osr'))
+  const hook = renderHook(() => useLibrary('dungeon-1', 1, LEVEL))
+  const { patchSidecar } = projectStore.getState()
+  await waitFor(() =>
+    expect(vi.mocked(patchSidecar)).toHaveBeenCalledWith([
+      {
+        action: 'set_view_state',
+        view_state: expect.objectContaining({ library_sources: [] }),
+      },
+    ]),
+  )
+  expect(hook.result.current.sources).toHaveLength(0)
+})
+
+test('closing a pack forgets it', async () => {
+  const hook = await hookWithOpenPack()
+  const project = projectStore.getState().project
+  if (!project) throw new Error('no project')
+  projectStore.setState({
+    project: {
+      ...project,
+      sidecar: {
+        ...project.sidecar,
+        view_state: { ...project.sidecar.view_state, library_sources: ['/adventures/mill.osr'] },
+      },
+    },
+  })
+  act(() => hook.result.current.closePack('/adventures/mill.osr'))
+  const { patchSidecar } = projectStore.getState()
+  await waitFor(() =>
+    expect(vi.mocked(patchSidecar)).toHaveBeenCalledWith([
+      {
+        action: 'set_view_state',
+        view_state: expect.objectContaining({ library_sources: [] }),
+      },
+    ]),
+  )
+})
+
 test('arming survives a miss and dies with its pack', async () => {
   const hook = await hookWithOpenPack()
   act(() => hook.result.current.arm({ identity: '/adventures/mill.osr', entryId: ENTRY_ID }))

@@ -3,7 +3,7 @@
 // and re-opening refreshes), the per-pack collision memory (panel-lifetime,
 // never persisted, dying when its pack closes), the armed click-to-place
 // entry, and the drop commit with its closure fetch and provenance record.
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api, ApiRequestError } from '@/lib/api'
@@ -50,6 +50,11 @@ function toastApiError(error: unknown): void {
   }
 }
 
+// Stash identities are minted `stash-<n>`; everything else is a resolved
+// absolute path — the two can never collide, which is what lets one
+// remembered list carry both.
+const STASH_IDENTITY = /^stash-\d+$/
+
 function findEntry(source: SourceState, entryId: string): ContentPackEntry | null {
   for (const section of source.pack.sections) {
     const entry = section.entries.find((candidate) => candidate.id === entryId)
@@ -75,6 +80,39 @@ export function useLibrary(dungeonId: string, levelNumber: number, level: LevelS
     if (!source || !findEntry(source, armed.entryId)) setArmed(null)
   }
 
+  // The open-source list rides the sidecar's view state — the same species
+  // as the active level and the cameras — so returning to a project restores
+  // its loaded packs. Each restoration is an ordinary fresh open, never a
+  // sync; an identity that no longer opens surfaces its refusal once and is
+  // forgotten.
+  const rememberedSources = (): readonly string[] =>
+    projectStore.getState().project?.sidecar.view_state.library_sources ?? []
+
+  const rememberSource = (identity: string): void => {
+    const current = projectStore.getState().project?.sidecar.view_state
+    if (!current || current.library_sources.includes(identity)) return
+    void projectStore.getState().patchSidecar([
+      {
+        action: 'set_view_state',
+        view_state: { ...current, library_sources: [...current.library_sources, identity] },
+      },
+    ])
+  }
+
+  const forgetSource = (identity: string): void => {
+    const current = projectStore.getState().project?.sidecar.view_state
+    if (!current || !current.library_sources.includes(identity)) return
+    void projectStore.getState().patchSidecar([
+      {
+        action: 'set_view_state',
+        view_state: {
+          ...current,
+          library_sources: current.library_sources.filter((entry) => entry !== identity),
+        },
+      },
+    ])
+  }
+
   const admit = (state: SourceState): void => {
     setSources((current) => {
       const index = current.findIndex((candidate) => candidate.identity === state.identity)
@@ -86,15 +124,48 @@ export function useLibrary(dungeonId: string, levelNumber: number, level: LevelS
   }
 
   const openSource = (path: string): void => {
-    api.openSource(path).then(admit).catch(toastApiError)
+    api
+      .openSource(path)
+      .then((state) => {
+        admit(state)
+        // The server-resolved identity is what the list remembers — the
+        // typed path may be a tilde form or an unresolved symlink.
+        rememberSource(state.identity)
+      })
+      .catch(toastApiError)
   }
 
   const openStash = (packId: string): void => {
     if (!projectId) return
-    api.openStashPack(projectId, packId).then(admit).catch(toastApiError)
+    api
+      .openStashPack(projectId, packId)
+      .then((state) => {
+        admit(state)
+        rememberSource(state.identity)
+      })
+      .catch(toastApiError)
   }
 
+  // One restoration per project: on the map surface's first mount for this
+  // project, re-open every remembered source fresh.
+  const restoredFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!projectId || restoredFor.current === projectId) return
+    restoredFor.current = projectId
+    for (const identity of rememberedSources()) {
+      const opening = STASH_IDENTITY.test(identity)
+        ? api.openStashPack(projectId, identity)
+        : api.openSource(identity)
+      opening.then(admit).catch((error: unknown) => {
+        toastApiError(error)
+        forgetSource(identity)
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot per project; the helpers are stable by construction
+  }, [projectId])
+
   const closePack = (identity: string): void => {
+    forgetSource(identity)
     setSources((current) => current.filter((candidate) => candidate.identity !== identity))
     // The remembered choices die with the pack — the spec's lifetime.
     setMemory((current) => {

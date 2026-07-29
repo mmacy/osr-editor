@@ -2343,7 +2343,8 @@ export interface components {
             provenance?: components["schemas"]["SidecarProvenance"] | null;
             /**
              * @default {
-             *       "zoom_pan": {}
+             *       "zoom_pan": {},
+             *       "library_sources": []
              *     }
              */
             view_state: components["schemas"]["ViewState"];
@@ -3625,6 +3626,7 @@ export interface components {
              * @default {
              *       "schema_version": 1,
              *       "view_state": {
+             *         "library_sources": [],
              *         "zoom_pan": {}
              *       },
              *       "notes": {},
@@ -5388,6 +5390,12 @@ export interface components {
          *     `review_selection` is the selected review row's address, `""` for the
          *     module-scope row, `None` when no row is selected. Writes coalesce on the
          *     frontend — navigation transitions, never per pointer frame.
+         *
+         *     `library_sources` is the content library's open-source list — derived
+         *     identities (resolved absolute paths) and stash ids, in open order — so
+         *     returning to a project restores its loaded packs. Each restoration is an
+         *     ordinary fresh open, never a sync; an identity that no longer opens is
+         *     forgotten with its refusal surfaced once.
          */
         ViewState: {
             /** Active Dungeon Id */
@@ -5403,6 +5411,11 @@ export interface components {
             };
             /** Review Selection */
             review_selection?: string | null;
+            /**
+             * Library Sources
+             * @default []
+             */
+            library_sources: string[];
         };
         /**
          * WanderingSpec

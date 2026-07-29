@@ -8,6 +8,8 @@ The **Library** button on the map toolbar opens the panel beside the canvas. Eve
 - **This project.** The one-click shortcut projects your own working document — current to the latest edit — so a dungeon can borrow from its own earlier levels.
 - **The stash.** Content banked by the two destructive acts below, stored inside this project's own sidecar.
 
+Loaded libraries are remembered per project: leave for the home screen or another adventure and come back, and the panel restores every pack you had open — each a fresh read of its source, so a source edited in the meantime comes back current. A source that no longer opens says so once and drops off the list.
+
 ![The content library panel with an open source, kind glyphs, and used badges](../assets/screenshots/library-panel-light.png#only-light)
 ![The content library panel with an open source, kind glyphs, and used badges](../assets/screenshots/library-panel-dark.png#only-dark)
 

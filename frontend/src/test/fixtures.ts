@@ -69,6 +69,7 @@ export function makeProjectState(overrides: Partial<ProjectState> = {}): Project
         active_level_number: null,
         zoom_pan: {},
         review_selection: null,
+        library_sources: [],
       },
       notes: {},
       review: [],

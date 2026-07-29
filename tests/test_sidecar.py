@@ -95,6 +95,7 @@ def test_patch_route_applies_and_answers_the_new_state(client: TestClient, tmp_p
                         "active_level_number": 1,
                         "zoom_pan": {"dungeon:dungeon-1/level:1": {"zoom": 1.5, "pan_x": 10, "pan_y": -4}},
                         "review_selection": None,
+                        "library_sources": ["/adventures/mill.osr", "stash-1"],
                     },
                 },
             ]
@@ -104,6 +105,8 @@ def test_patch_route_applies_and_answers_the_new_state(client: TestClient, tmp_p
     body = response.json()
     assert body["notes"] == {"dungeon:dungeon-1/level:1": "Start here."}
     assert body["view_state"]["zoom_pan"]["dungeon:dungeon-1/level:1"]["zoom"] == 1.5
+    # The content library's open-source list rides the view state like the cameras.
+    assert body["view_state"]["library_sources"] == ["/adventures/mill.osr", "stash-1"]
     # Persisted atomically; a later GET carries it.
     assert client.get(f"/api/projects/{state['id']}").json()["sidecar"]["notes"] == body["notes"]
     written = json.loads((tmp_path / "demo.osr" / "editor.json").read_text())

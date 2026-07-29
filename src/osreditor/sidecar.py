@@ -80,6 +80,12 @@ class ViewState(BaseModel):
     `review_selection` is the selected review row's address, `""` for the
     module-scope row, `None` when no row is selected. Writes coalesce on the
     frontend — navigation transitions, never per pointer frame.
+
+    `library_sources` is the content library's open-source list — derived
+    identities (resolved absolute paths) and stash ids, in open order — so
+    returning to a project restores its loaded packs. Each restoration is an
+    ordinary fresh open, never a sync; an identity that no longer opens is
+    forgotten with its refusal surfaced once.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -88,6 +94,7 @@ class ViewState(BaseModel):
     active_level_number: int | None = None
     zoom_pan: dict[str, ZoomPan] = {}
     review_selection: str | None = None
+    library_sources: tuple[str, ...] = ()
 
 
 class ReviewMark(BaseModel):
