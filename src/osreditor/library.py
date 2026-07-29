@@ -40,11 +40,10 @@ from osreditor.documents import (
     ADVENTURE_ARTIFACT,
     DocumentService,
     OpenProject,
-    json_pointer,
     load_adventure,
+    payload_invalid_error,
 )
 from osreditor.errors import (
-    DocumentPayloadInvalidError,
     InvalidProjectError,
     OpTargetNotFoundError,
     ProjectPathNotFoundError,
@@ -65,8 +64,6 @@ __all__ = [
     "stash_pack_for_level",
     "wandering_is_authored",
 ]
-
-_MAX_REPORTED_LOCATIONS = 10
 
 
 def wandering_is_authored(spec: WanderingSpec) -> bool:
@@ -249,13 +246,7 @@ def _read_native_adventure(store: ProjectStore, resolved: Path) -> Adventure:
     try:
         return load_adventure(data)
     except ValidationError as error:
-        reported = [
-            {"path": json_pointer(detail["loc"]), "message": detail["msg"]}
-            for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
-        ]
-        raise DocumentPayloadInvalidError(
-            f"the document at {resolved} does not match the installed osrlib's models", errors=reported
-        ) from error
+        raise payload_invalid_error(resolved, error) from error
 
 
 def open_source(service: DocumentService, path: Path) -> SourceState:

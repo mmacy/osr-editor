@@ -28,6 +28,7 @@ import {
   contentTally,
   contentTallyLines,
   hasContent,
+  replacedContentTally,
 } from '@/lib/level-content'
 import { defaultKind, defaultTargetLevel, FACING_LABELS, KIND_LABELS } from '@/lib/transitions'
 import { replaceTransitionOps, transitionOps } from '@/map/gestures'
@@ -624,12 +625,16 @@ function ClearLevelContentBody({
   if (!level) return null
   const tally = contentTally(level)
   const lines = contentTallyLines(tally)
+  // The offer shows only when the capture would hold something: area-scope
+  // content. A level whose only content is level-scope features has nothing
+  // the stash can bank — offering an empty pack would be noise.
+  const stashable = contentTallyLines(replacedContentTally(level)).length > 0
   if (removeAreas && tally.areas > 0) {
     lines.push(`${tally.areas} keyed ${tally.areas === 1 ? 'area' : 'areas'}`)
   }
   const submit = async () => {
     const store = projectStore.getState()
-    if (stashFirst && hasContent(level)) {
+    if (stashFirst && stashable) {
       // The capture is computed against the verified revision before the
       // batch; a failed capture (a raced 409) stops here with the level
       // intact — the destruction never proceeds uncaptured.
@@ -668,7 +673,7 @@ function ClearLevelContentBody({
           This level carries no content — there is nothing to clear.
         </p>
       )}
-      {hasContent(level) && (
+      {stashable && (
         <label className="flex items-start gap-2 text-sm">
           <Checkbox
             className="mt-0.5"
@@ -679,9 +684,9 @@ function ClearLevelContentBody({
           <span>
             Stash this level&apos;s content in the library first
             <span className="block text-xs text-muted-foreground">
-              Banks the rooms and the wandering table as a stash pack — deletable, and re-placeable
-              room by room from the library. Level-scope features are not captured; undo is their
-              way back.
+              Banks the rooms — and the wandering table, when one is authored — as a stash pack:
+              deletable, and re-placeable room by room from the library. Level-scope features are
+              not captured; undo is their way back.
             </span>
           </span>
         </label>

@@ -32,11 +32,10 @@ from osreditor.documents import (
     canonical_json_bytes,
     dropped_pointers,
     dump_adventure,
-    json_pointer,
     load_adventure,
+    payload_invalid_error,
 )
 from osreditor.errors import (
-    DocumentPayloadInvalidError,
     InvalidProjectError,
     ProjectExistsError,
     ProjectPathNotFoundError,
@@ -57,8 +56,6 @@ __all__ = [
     "starter_adventure",
     "utc_now_iso",
 ]
-
-_MAX_REPORTED_LOCATIONS = 10
 
 
 def utc_now_iso() -> str:
@@ -242,13 +239,7 @@ def _load_native(store: ProjectStore, resolved: Path) -> LoadedProject:
     try:
         adventure = load_adventure(data)
     except ValidationError as error:
-        reported = [
-            {"path": json_pointer(detail["loc"]), "message": detail["msg"]}
-            for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
-        ]
-        raise DocumentPayloadInvalidError(
-            f"the document at {resolved} does not match the installed osrlib's models", errors=reported
-        ) from error
+        raise payload_invalid_error(resolved, error) from error
     source_payload = json.loads(data)["payload"]
     dropped = dropped_pointers(source_payload, adventure.model_dump(mode="json"))
     return LoadedProject(

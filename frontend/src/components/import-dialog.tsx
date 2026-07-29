@@ -233,8 +233,8 @@ function ImportDialogBody({
           <span>
             Stash this level&apos;s content in the library first
             <span className="block text-xs text-muted-foreground">
-              Banks the rooms and the wandering table as a stash pack — re-place them on the new
-              map, room by room, from the library panel.
+              Banks the rooms — and the wandering table, when one is authored — as a stash pack:
+              re-place them on the new map, room by room, from the library panel.
             </span>
           </span>
         </label>

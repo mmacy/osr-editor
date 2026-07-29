@@ -213,24 +213,28 @@ def test_note_content_never_rides_the_document_stack(tmp_path: Path) -> None:
     assert project.sidecar.notes == {"dungeon:dungeon-1/level:1": "Edited after the renumber."}
 
 
+BESPOKE_TEMPLATE = {
+    "id": "bespoke-1",
+    "name": "Bespoke horror",
+    "page": "",
+    "ac": 9,
+    "ac_ascending": 10,
+    "hit_dice": {"count": 1, "die": 8},
+    "attacks": [{"attacks": [{"name": "weapon", "by_weapon": True}]}],
+    "thac0": 19,
+    "attack_bonus": 0,
+    "movement": [{"rate_feet": 120, "encounter_rate_feet": 40}],
+    "saves": {"values": {"death": 12, "wands": 13, "paralysis": 14, "breath": 15, "spells": 16}, "save_as": "1"},
+    "morale": 7,
+    "alignment": {"options": ["neutral"]},
+    "xp": 10,
+    "number_appearing": {"dungeon": {"dice": "1d6"}, "lair": {"dice": "1d6"}},
+}
+"""One bundled template, valid whole — the monster-rename cascades' shared subject."""
+
+
 def test_monster_template_rename_cascades_the_template_note(tmp_path: Path) -> None:
-    template = {
-        "id": "bespoke-1",
-        "name": "Bespoke horror",
-        "page": "",
-        "ac": 9,
-        "ac_ascending": 10,
-        "hit_dice": {"count": 1, "die": 8},
-        "attacks": [{"attacks": [{"name": "weapon", "by_weapon": True}]}],
-        "thac0": 19,
-        "attack_bonus": 0,
-        "movement": [{"rate_feet": 120, "encounter_rate_feet": 40}],
-        "saves": {"values": {"death": 12, "wands": 13, "paralysis": 14, "breath": 15, "spells": 16}, "save_as": "1"},
-        "morale": 7,
-        "alignment": {"options": ["neutral"]},
-        "xp": 10,
-        "number_appearing": {"dungeon": {"dice": "1d6"}, "lair": {"dice": "1d6"}},
-    }
+    template = BESPOKE_TEMPLATE
     service, project = open_native(tmp_path)
     service.apply_batch(project, batch(project, {"op": "add_monster_template", "template": template}))
     set_note(service, project, "monster:bespoke-1", "Ours.")
@@ -453,12 +457,29 @@ def test_addressed_maps_cascade_on_dungeon_rename_and_level_renumber(tmp_path: P
 
 def test_a_monster_rename_cascades_no_copy_keys(tmp_path: Path) -> None:
     # Copy records key on area and level addresses; the monster segment kind is
-    # phase 12's (template adoption). A monster rename must leave them alone.
+    # phase 12's (template adoption). A monster template rename moves the
+    # monster-keyed note and must leave the area-keyed copy records alone.
     service, project = open_native(tmp_path)
     make_area(service, project, "7")
+    service.apply_batch(project, batch(project, {"op": "add_monster_template", "template": BESPOKE_TEMPLATE}))
     plant_copy(service, project, "dungeon:dungeon-1/level:1/area:7")
-    service.apply_batch(project, batch(project, {"op": "rename_dungeon", "old_id": "dungeon-1", "new_id": "vaults"}))
-    assert set(project.sidecar.copies) == {"dungeon:vaults/level:1/area:7"}
+    set_note(service, project, "monster:bespoke-1", "Ours.")
+    service.apply_batch(
+        project,
+        batch(
+            project,
+            {
+                "op": "set_monster_template",
+                "template_id": "bespoke-1",
+                "template": {**BESPOKE_TEMPLATE, "id": "renamed"},
+            },
+        ),
+    )
+    assert project.sidecar.notes == {"monster:renamed": "Ours."}
+    assert set(project.sidecar.copies) == {"dungeon:dungeon-1/level:1/area:7"}
+    service.undo(project)
+    assert project.sidecar.notes == {"monster:bespoke-1": "Ours."}
+    assert set(project.sidecar.copies) == {"dungeon:dungeon-1/level:1/area:7"}
 
 
 def test_a_map_with_only_one_key_populated_still_cascades(tmp_path: Path) -> None:

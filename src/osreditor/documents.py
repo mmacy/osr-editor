@@ -73,6 +73,7 @@ from osreditor.aids import (
 )
 from osreditor.diagnostics import compute_diagnostics, forge_findings
 from osreditor.errors import (
+    DocumentPayloadInvalidError,
     OpInvariantError,
     OpRejectedError,
     OpTargetNotFoundError,
@@ -144,6 +145,7 @@ __all__ = [
     "dump_adventure",
     "json_pointer",
     "load_adventure",
+    "payload_invalid_error",
 ]
 
 ADVENTURE_ARTIFACT = "adventure.json"
@@ -202,6 +204,32 @@ def load_adventure(data: bytes) -> Adventure:
     document = json.loads(data)
     payload = check_document(document, "adventure")
     return Adventure.model_validate(payload)
+
+
+_MAX_REPORTED_LOCATIONS = 10
+
+
+def payload_invalid_error(source: Path, error: ValidationError) -> DocumentPayloadInvalidError:
+    """Shape a pydantic validation failure into the payload-invalid refusal, offending locations attached.
+
+    The one shaping both project open and the library's source open use — a
+    capped location list as RFC 6901 pointers, so the refusal names where the
+    document and the installed models disagree without flooding the envelope.
+
+    Args:
+        source: The document's directory, for the message.
+        error: The pydantic failure.
+
+    Returns:
+        The typed error, ready to raise.
+    """
+    reported = [
+        {"path": json_pointer(detail["loc"]), "message": detail["msg"]}
+        for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
+    ]
+    return DocumentPayloadInvalidError(
+        f"the document at {source} does not match the installed osrlib's models", errors=reported
+    )
 
 
 def _escape_pointer_token(token: str) -> str:

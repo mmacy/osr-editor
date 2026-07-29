@@ -18,6 +18,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { stashedPackIds, stashPackFullyUsed, usedIndex } from '@/lib/library-badges'
+import type { ArmedEntry } from '@/hooks/use-library'
 import { cn } from '@/lib/utils'
 import { projectStore, useProjectStore } from '@/store/project-store'
 import type {
@@ -27,11 +28,6 @@ import type {
   SourceState,
   StashedPack,
 } from '@/types'
-
-export interface ArmedEntry {
-  identity: string
-  entryId: string
-}
 
 export interface LibraryPanelProps {
   projectPath: string
