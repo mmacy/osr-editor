@@ -111,7 +111,12 @@ export function LibraryPanel({
         <span className="text-xs font-medium">Library</span>
       </div>
       <ScrollArea className="min-h-0 w-80 flex-1">
-        <div className="flex flex-col gap-3 p-2">
+        {/* Pinned to the viewport's own width: radix wraps scroll content in a
+            min-width:100% display:table div sized by the widest max-content
+            row, so an unpinned column grows past the panel and clips under
+            overflow:hidden — labels must truncate instead, keeping the kind
+            glyphs, used badges, and buttons in frame. */}
+        <div className="flex w-80 flex-col gap-3 p-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="library-source">Open a source</Label>
             <div className="flex gap-2">
@@ -284,7 +289,9 @@ function PackView({
       {source.pack.sections.map((section) => (
         <div key={section.id} className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-xs font-medium">{section.label}</span>
+            <span className="min-w-0 flex-1 truncate text-xs font-medium" title={section.label}>
+              {section.label}
+            </span>
             {section.wandering && (
               <>
                 <UsedBadge used={used.has(`${source.identity} ${section.id}`)} />
@@ -313,7 +320,9 @@ function PackView({
                 )}
                 data-testid={`entry-${entry.id}`}
               >
-                <span className="min-w-0 flex-1 truncate">{entryLabel(entry)}</span>
+                <span className="min-w-0 flex-1 truncate" title={entryLabel(entry)}>
+                  {entryLabel(entry)}
+                </span>
                 <span
                   className="font-mono text-[10px] text-muted-foreground"
                   title="What this entry carries"
