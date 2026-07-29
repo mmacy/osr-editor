@@ -1,7 +1,7 @@
 {
   "kind": "adventure",
   "schema_version": 2,
-  "engine_version": "1.3.0",
+  "engine_version": "1.4.0",
   "payload": {
     "name": "The tannery vaults",
     "description": "The doors-and-transitions torture case: every door state, a stairs pair, a one-way chute.",

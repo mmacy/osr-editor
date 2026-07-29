@@ -43,6 +43,7 @@ __all__ = [
     "PublishDestinationExistsError",
     "RedoStackEmptyError",
     "StaleRevisionError",
+    "StashPackNotFoundError",
     "UndoStackEmptyError",
     "WorkdirOpenAsProjectError",
 ]
@@ -181,6 +182,10 @@ class StaleRevisionError(OsrEditorError):
         """
         super().__init__(message)
         self.current_revision = current_revision
+
+
+class StashPackNotFoundError(OsrEditorError):
+    """A stash open named a pack id the sidecar's stash does not hold."""
 
 
 class UndoStackEmptyError(OsrEditorError):

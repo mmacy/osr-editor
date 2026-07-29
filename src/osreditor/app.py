@@ -114,12 +114,14 @@ from osreditor.errors import (
     PublishDestinationExistsError,
     RedoStackEmptyError,
     StaleRevisionError,
+    StashPackNotFoundError,
     UndoStackEmptyError,
     WorkdirOpenAsProjectError,
 )
 from osreditor.filesystem import DirectoryListing, browse_directory, expand_user_path
 from osreditor.forge import build_provider, provider_status, render_workdir_previews
 from osreditor.importers import GeometryImporter, ImportedGeometry, discover_importers
+from osreditor.library import SourceState, open_source, open_stash_pack, stash_level
 from osreditor.ops import Diagnostics, ForgeState, OpBatch, OpBatchResult
 from osreditor.overrides import AnyOverrideEdit, apply_override_edits
 from osreditor.projects import (
@@ -400,6 +402,28 @@ class SidecarPatchRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     patches: tuple[AnySidecarPatch, ...] = Field(min_length=1)
+
+
+class OpenSourceRequest(_AbsolutePathRequest):
+    """A content-library source to open read-only: a project directory or forge workdir."""
+
+
+class StashRequest(BaseModel):
+    """A stash capture: the level whose rooms and wandering table to bank, at a named revision."""
+
+    model_config = ConfigDict(frozen=True)
+
+    revision: str
+    dungeon_id: str
+    level_number: int = Field(ge=1)
+
+
+class StashOpenRequest(BaseModel):
+    """Which stash pack to open into the panel."""
+
+    model_config = ConfigDict(frozen=True)
+
+    pack_id: str = Field(min_length=1)
 
 
 class CreateConversionRequest(BaseModel):
@@ -998,6 +1022,73 @@ def post_sidecar_patch(
     """
     service = _service(request)
     return service.apply_sidecar_patch(service.get(project_id), body.patches)
+
+
+@router.post("/api/sources/open")
+def post_source_open(request: Request, body: OpenSourceRequest, user: CurrentUser) -> SourceState:
+    """Open a content-library source read-only: the derived habitat's one route.
+
+    Stateless: each open returns the pack, the panel holds it client-side, and
+    re-opening refreshes. Nothing registers and nothing the editor owns is
+    written to the source; a workdir source assembles current-first, and a
+    workdir with any active conversion refuses — bound or not, an assembly (or
+    even a memory read mid-adoption) has no business near a running chain.
+
+    Args:
+        request: The current request (carries the app state).
+        body: The absolute source path.
+        user: The authenticated caller.
+
+    Returns:
+        The source state: identity, label, habitat, pack, findings.
+    """
+    resolved = Path(body.path).resolve()
+    if _conversions(request).active_for(resolved) is not None:
+        raise ConversionInProgressError(f"a conversion is running over {resolved}")
+    return open_source(_service(request), resolved)
+
+
+@router.post("/api/projects/{project_id}/library/stash")
+def post_library_stash(request: Request, project_id: str, body: StashRequest, user: CurrentUser) -> EditorSidecar:
+    """Bank one level's rooms and wandering table in the stash, at a named revision.
+
+    The compound act the two destructive confirms call before their batch: the
+    capture is computed against the verified revision inside one critical
+    section, so a stash always records what the batch is about to destroy. The
+    destructive batch itself follows as its ordinary guarded self.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The level to capture and the revision it was computed against.
+        user: The authenticated caller.
+
+    Returns:
+        The updated sidecar, stash pack appended.
+    """
+    service = _service(request)
+    project = service.get(project_id)
+    _require_idle(request, project)
+    return stash_level(service, project, body.revision, body.dungeon_id, body.level_number)
+
+
+@router.post("/api/projects/{project_id}/library/stash/open")
+def post_library_stash_open(
+    request: Request, project_id: str, body: StashOpenRequest, user: CurrentUser
+) -> SourceState:
+    """Open one stash pack into the same source shape as any derived open.
+
+    Args:
+        request: The current request (carries the app state).
+        project_id: The server-minted project id.
+        body: The stash pack id.
+        user: The authenticated caller.
+
+    Returns:
+        The source state, `habitat="stash"`, findings included.
+    """
+    service = _service(request)
+    return open_stash_pack(service.get(project_id), body.pack_id)
 
 
 @router.post("/api/projects/{project_id}/aids/stock")
@@ -1729,6 +1820,7 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
         "Undo or clear the room, then roll stocking again.",
         _details_none,
     ),
+    StashPackNotFoundError: (404, "stash_pack_not_found", None, _details_none),
     ProviderRequestFailedError: (502, "provider_request_failed", None, _details_none),
     UndoStackEmptyError: (409, "nothing_to_undo", None, _details_none),
     RedoStackEmptyError: (409, "nothing_to_redo", None, _details_none),

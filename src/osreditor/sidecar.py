@@ -11,7 +11,7 @@ the project layer.
 import json
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints, ValidationError
 
 from osreditor.errors import ArtifactNotFoundError, DocumentPayloadInvalidError
 from osreditor.store import ProjectStore
@@ -20,14 +20,18 @@ __all__ = [
     "SIDECAR_ARTIFACT",
     "SIDECAR_SCHEMA_VERSION",
     "AnySidecarPatch",
+    "CopyRecord",
     "DismissFlag",
     "EditorSidecar",
+    "RecordCopy",
     "RemoveNote",
+    "RemoveStashPack",
     "ReviewMark",
     "SetNote",
     "SetStockingSeed",
     "SetViewState",
     "SidecarProvenance",
+    "StashedPack",
     "StockingState",
     "StreamState",
     "UndismissFlag",
@@ -135,6 +139,42 @@ class StockingState(BaseModel):
     streams: dict[str, StreamState] = {}
 
 
+class StashedPack(BaseModel):
+    """One stash entry: a stamped content-pack document with its listing identity beside it.
+
+    `document` is `ContentPack.to_document()`'s output verbatim — the sidecar's
+    one content-bearing field, the owner-sanctioned posture change the spec
+    records. `pack_id` and `label` deliberately duplicate the envelope's
+    payload: the panel lists stash packs without parsing every stamped
+    document, and a pack a newer engine stamped — which the vetting open must
+    refuse — can still be *named* in the listing with the upgrade remedy
+    instead of vanishing. Drift is impossible because stash packs are
+    immutable: created by the stash act, deleted by the patch, never edited.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    pack_id: str
+    label: str
+    created_at: str
+    document: JsonValue
+
+
+class CopyRecord(BaseModel):
+    """One copy act's record: which pack, and which of its entries, landed on the keyed address.
+
+    `pack_entry_id` is the entry id for a room drop and the section id for a
+    wandering copy. A record is a record of the copy *act*: undoing the drop
+    does not remove it — used means at least once — and records survive their
+    pack's deletion, so a re-minted stash id must never reuse a dead one.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    pack_identity: str
+    pack_entry_id: str
+
+
 class EditorSidecar(BaseModel):
     """The `editor.json` envelope: editor-only data beside the deliverable.
 
@@ -155,6 +195,16 @@ class EditorSidecar(BaseModel):
     `auto_reasons` holds the kind-qualified override-entry keys whose reason is
     still a machine draft, and rides the forge undo stack with the
     `overrides.yaml` snapshot (derived state of the same commit).
+
+    Phase 11 grows the content library's three fields. `stash` holds the
+    displaced-content packs (the whole sidecar rides every op result; stash
+    packs are level-sized projections over localhost JSON, an accepted and
+    noted weight). `stash_counter` mints `stash-<n>` monotonically — next-free
+    minting would be wrong, because copy records outlive pack deletion by
+    design and a re-minted id would inherit a dead pack's badges. `copies` is
+    the third addressed map, keyed by *target* address (area address for room
+    drops, level address for wandering copies); its keys cascade in lockstep
+    with `notes` and `stocking.streams`, its records never ride the undo stack.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -166,6 +216,9 @@ class EditorSidecar(BaseModel):
     review: tuple[ReviewMark, ...] = ()
     auto_reasons: tuple[str, ...] = ()
     stocking: StockingState = StockingState()
+    stash: tuple[StashedPack, ...] = ()
+    stash_counter: int = 0
+    copies: dict[str, tuple[CopyRecord, ...]] = {}
 
 
 class SetViewState(BaseModel):
@@ -231,8 +284,35 @@ class SetStockingSeed(BaseModel):
     master_seed: Annotated[str, StringConstraints(pattern=r"^[0-9]+$")]
 
 
+class RecordCopy(BaseModel):
+    """Record one copy act onto a target address — append-with-dedupe, annotation by nature."""
+
+    model_config = ConfigDict(frozen=True)
+
+    action: Literal["record_copy"] = "record_copy"
+    address: Annotated[str, StringConstraints(min_length=1)]
+    pack_identity: Annotated[str, StringConstraints(min_length=1)]
+    pack_entry_id: Annotated[str, StringConstraints(min_length=1)]
+
+
+class RemoveStashPack(BaseModel):
+    """Delete one stash pack by id.
+
+    On the unguarded channel by the same owner sanction the spec records: the
+    409 discipline protects the deliverable, the stash is a recovery buffer,
+    and git remains the cross-session net. The frontend fronts this with a
+    destructive-action confirm naming what is discarded. Copy records naming
+    the deleted pack stay — they record acts, not links.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    action: Literal["remove_stash_pack"] = "remove_stash_pack"
+    pack_id: Annotated[str, StringConstraints(min_length=1)]
+
+
 AnySidecarPatch = Annotated[
-    SetViewState | SetNote | RemoveNote | DismissFlag | UndismissFlag | SetStockingSeed,
+    SetViewState | SetNote | RemoveNote | DismissFlag | UndismissFlag | SetStockingSeed | RecordCopy | RemoveStashPack,
     Field(discriminator="action"),
 ]
 """Any sidecar patch, discriminated by `action`."""
@@ -256,6 +336,8 @@ def apply_sidecar_patches(sidecar: EditorSidecar, patches: tuple[AnySidecarPatch
     notes = dict(sidecar.notes)
     review = list(sidecar.review)
     stocking = sidecar.stocking
+    stash = list(sidecar.stash)
+    copies = dict(sidecar.copies)
     for patch in patches:
         if isinstance(patch, SetViewState):
             view_state = patch.view_state
@@ -269,11 +351,27 @@ def apply_sidecar_patches(sidecar: EditorSidecar, patches: tuple[AnySidecarPatch
                 review.append(mark)
         elif isinstance(patch, UndismissFlag):
             review = [mark for mark in review if not (mark.address == patch.address and mark.flag == patch.flag)]
+        elif isinstance(patch, RecordCopy):
+            # Append-with-dedupe: re-dropping is allowed, an identical triple
+            # never doubles — used means at least once.
+            record = CopyRecord(pack_identity=patch.pack_identity, pack_entry_id=patch.pack_entry_id)
+            existing = copies.get(patch.address, ())
+            if record not in existing:
+                copies[patch.address] = (*existing, record)
+        elif isinstance(patch, RemoveStashPack):
+            stash = [pack for pack in stash if pack.pack_id != patch.pack_id]
         else:
             # A new master seed retires every stream derived from the old one.
             stocking = StockingState(master_seed=patch.master_seed)
     return sidecar.model_copy(
-        update={"view_state": view_state, "notes": notes, "review": tuple(review), "stocking": stocking}
+        update={
+            "view_state": view_state,
+            "notes": notes,
+            "review": tuple(review),
+            "stocking": stocking,
+            "stash": tuple(stash),
+            "copies": copies,
+        }
     )
 
 
