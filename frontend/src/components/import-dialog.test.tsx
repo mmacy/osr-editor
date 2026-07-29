@@ -132,6 +132,90 @@ test('adopted metadata rides the geometry batch, and only when checked', async (
   ])
 })
 
+function documentWithStockedLevel(): Adventure {
+  const document = makeDocument()
+  return {
+    ...document,
+    dungeons: [
+      {
+        ...document.dungeons[0],
+        levels: [
+          {
+            ...document.dungeons[0].levels[0],
+            areas: [
+              {
+                id: '1',
+                name: '',
+                description: 'Watabou note text',
+                cells: [[0, 0]],
+                encounter: null,
+                features: [],
+                trap: null,
+                treasure: null,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+}
+
+async function startReplace(document: Adventure) {
+  await renderDialogWithGeometry(document)
+  fireEvent.click(screen.getByRole('radio', { name: /Replace the geometry/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+}
+
+test('a replace over content offers the stash first, and the capture precedes the batch', async () => {
+  const stashLevel = vi.fn().mockResolvedValue(true)
+  projectStore.setState({ stashLevel })
+  await startReplace(documentWithStockedLevel())
+  // The confirm step replaces the old window.confirm: an act-accurate tally
+  // plus the stash offer, default on.
+  expect(screen.getByText('This removes:')).toBeInTheDocument()
+  expect(screen.getByText('1 area description')).toBeInTheDocument()
+  const offer = screen.getByRole('checkbox', {
+    name: "Stash this level's content in the library first",
+  })
+  expect(offer).toBeChecked()
+  fireEvent.click(screen.getByRole('button', { name: 'Replace level' }))
+  await waitFor(() => expect(postOps).toHaveBeenCalled())
+  expect(stashLevel).toHaveBeenCalledWith('dungeon-1', 1)
+  // Sequenced: the capture resolves before the destructive batch posts.
+  expect(stashLevel.mock.invocationCallOrder[0]).toBeLessThan(postOps.mock.invocationCallOrder[0])
+})
+
+test('a declined offer proceeds with the plain destructive batch', async () => {
+  const stashLevel = vi.fn().mockResolvedValue(true)
+  projectStore.setState({ stashLevel })
+  await startReplace(documentWithStockedLevel())
+  fireEvent.click(
+    screen.getByRole('checkbox', { name: "Stash this level's content in the library first" }),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Replace level' }))
+  await waitFor(() => expect(postOps).toHaveBeenCalled())
+  expect(stashLevel).not.toHaveBeenCalled()
+})
+
+test('a failed capture stops the replacement with the level intact', async () => {
+  const stashLevel = vi.fn().mockResolvedValue(false)
+  projectStore.setState({ stashLevel })
+  await startReplace(documentWithStockedLevel())
+  fireEvent.click(screen.getByRole('button', { name: 'Replace level' }))
+  await waitFor(() => expect(stashLevel).toHaveBeenCalled())
+  expect(postOps).not.toHaveBeenCalled()
+})
+
+test('a replace over a content-free level needs no confirm step', async () => {
+  const stashLevel = vi.fn().mockResolvedValue(true)
+  projectStore.setState({ stashLevel })
+  await startReplace(makeDocument())
+  await waitFor(() => expect(postOps).toHaveBeenCalled())
+  expect(stashLevel).not.toHaveBeenCalled()
+  expect(screen.queryByText('This removes:')).toBeNull()
+})
+
 test('the forge new-level mode is visible and opens the blocked-op dialog', async () => {
   await renderForgeDialogWithGeometry()
   // The backported offer-in-place posture: the choice renders, is not

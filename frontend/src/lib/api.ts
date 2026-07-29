@@ -32,6 +32,7 @@ import type {
   ProviderStatus,
   PublishResult,
   SniffResult,
+  SourceState,
   Stage,
   StatusResponse,
   TreasureTypeCatalogResponse,
@@ -147,6 +148,18 @@ export const api = {
     request<ProjectState>(`/api/projects/${id}/forge/detach`, jsonPost({ path })),
   postSidecar: (id: string, patches: AnySidecarPatch[]) =>
     request<EditorSidecar>(`/api/projects/${id}/sidecar`, jsonPost({ patches })),
+  // The content library's derived-source open: stateless, read-only — the
+  // panel holds the answered pack client-side and re-opening refreshes.
+  openSource: (path: string) => request<SourceState>('/api/sources/open', jsonPost({ path })),
+  // The stash capture at a named revision; the destructive batch follows as
+  // its ordinary guarded self on the same single-flight queue.
+  postLibraryStash: (id: string, revision: string, dungeonId: string, levelNumber: number) =>
+    request<EditorSidecar>(
+      `/api/projects/${id}/library/stash`,
+      jsonPost({ revision, dungeon_id: dungeonId, level_number: levelNumber }),
+    ),
+  openStashPack: (id: string, packId: string) =>
+    request<SourceState>(`/api/projects/${id}/library/stash/open`, jsonPost({ pack_id: packId })),
   postAidsStock: (id: string, body: AidsStockRequest) =>
     request<AidsStockResponse>(`/api/projects/${id}/aids/stock`, jsonPost(body)),
   postAidsPreview: (id: string, body: AidsPreviewRequest) =>

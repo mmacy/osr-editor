@@ -97,6 +97,11 @@ export interface ProjectStoreState {
   runForgeRerun: (settings: Record<string, unknown>) => Promise<boolean>
   detach: (path: string) => Promise<ProjectState | null>
   patchSidecar: (patches: AnySidecarPatch[]) => Promise<void>
+  // Bank one level's rooms and wandering table in the sidecar's stash, at the
+  // current revision. The destructive batch follows as its own commit on the
+  // same queue — callers await the boolean and stop when the capture failed,
+  // so a raced stash never lets the destruction proceed uncaptured.
+  stashLevel: (dungeonId: string, levelNumber: number) => Promise<boolean>
   // Roll SRD stocking over one blank room or a level's unstocked areas. The
   // batch result feeds applyResult exactly like an /ops response; the report is
   // returned for the surface to render.
@@ -321,6 +326,28 @@ export function createProjectStore(client: ApiClient): StoreApi<ProjectStoreStat
             }
           } catch (error) {
             handleError(error)
+          }
+        }),
+
+      stashLevel: (dungeonId, levelNumber) =>
+        enqueue(async () => {
+          const { project } = get()
+          if (!project || busy()) return false
+          try {
+            const sidecar = await client.postLibraryStash(
+              project.id,
+              project.revision,
+              dungeonId,
+              levelNumber,
+            )
+            const current = get().project
+            if (current && current.id === project.id) {
+              set({ project: { ...current, sidecar } })
+            }
+            return true
+          } catch (error) {
+            handleError(error)
+            return false
           }
         }),
 

@@ -23,7 +23,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
 import { levelAddress, navTargetFor, type NavTarget } from '@/lib/address'
-import { clearLevelContentOps, contentTally, hasContent } from '@/lib/level-content'
+import {
+  clearLevelContentOps,
+  contentTally,
+  contentTallyLines,
+  hasContent,
+} from '@/lib/level-content'
 import { defaultKind, defaultTargetLevel, FACING_LABELS, KIND_LABELS } from '@/lib/transitions'
 import { replaceTransitionOps, transitionOps } from '@/map/gestures'
 import { projectStore, useProjectStore } from '@/store/project-store'
@@ -602,17 +607,6 @@ export function ClearLevelContentDialog(props: ClearLevelContentProps) {
   )
 }
 
-// The counted lines, in the order the ops are emitted. A zero line is dropped
-// rather than rendered as "0" — the list is what will happen, not a schema.
-const TALLY_LINES: Array<[keyof ReturnType<typeof contentTally>, string, string]> = [
-  ['names', 'area name', 'area names'],
-  ['descriptions', 'area description', 'area descriptions'],
-  ['encounters', 'encounter', 'encounters'],
-  ['traps', 'trap', 'traps'],
-  ['treasures', 'treasure', 'treasures'],
-  ['features', 'feature', 'features'],
-]
-
 function ClearLevelContentBody({
   onOpenChange,
   document,
@@ -623,25 +617,30 @@ function ClearLevelContentBody({
   // does not mean re-checking the box each time.
   const removeAreas = useProjectStore((state) => state.clearRemovesAreas)
   const setRemoveAreas = useProjectStore((state) => state.setClearRemovesAreas)
+  // The stash offer, default on: losing stocking is expensive, and a surplus
+  // stash pack is cheap, deletable, and honestly labeled.
+  const [stashFirst, setStashFirst] = useState(true)
   const level = findLevel(document, dungeonId, levelNumber)
   if (!level) return null
   const tally = contentTally(level)
-  const lines = TALLY_LINES.filter(([key]) => key !== 'areas' && tally[key] > 0).map(
-    ([key, singular, plural]) => `${tally[key]} ${tally[key] === 1 ? singular : plural}`,
-  )
+  const lines = contentTallyLines(tally)
   if (removeAreas && tally.areas > 0) {
     lines.push(`${tally.areas} keyed ${tally.areas === 1 ? 'area' : 'areas'}`)
   }
-  const submit = () => {
-    void projectStore
-      .getState()
-      .commit((current) => {
-        const target = findLevel(current, dungeonId, levelNumber)
-        return target ? clearLevelContentOps(target, dungeonId, levelNumber, removeAreas) : []
-      })
-      .then((committed) => {
-        if (committed) onOpenChange(false)
-      })
+  const submit = async () => {
+    const store = projectStore.getState()
+    if (stashFirst && hasContent(level)) {
+      // The capture is computed against the verified revision before the
+      // batch; a failed capture (a raced 409) stops here with the level
+      // intact — the destruction never proceeds uncaptured.
+      const stashed = await store.stashLevel(dungeonId, levelNumber)
+      if (!stashed) return
+    }
+    const committed = await store.commit((current) => {
+      const target = findLevel(current, dungeonId, levelNumber)
+      return target ? clearLevelContentOps(target, dungeonId, levelNumber, removeAreas) : []
+    })
+    if (committed) onOpenChange(false)
   }
   return (
     <DialogContent>
@@ -669,6 +668,24 @@ function ClearLevelContentBody({
           This level carries no content — there is nothing to clear.
         </p>
       )}
+      {hasContent(level) && (
+        <label className="flex items-start gap-2 text-sm">
+          <Checkbox
+            className="mt-0.5"
+            checked={stashFirst}
+            onCheckedChange={(next) => setStashFirst(next === true)}
+            aria-label="Stash this level's content in the library first"
+          />
+          <span>
+            Stash this level&apos;s content in the library first
+            <span className="block text-xs text-muted-foreground">
+              Banks the rooms and the wandering table as a stash pack — deletable, and re-placeable
+              room by room from the library. Level-scope features are not captured; undo is their
+              way back.
+            </span>
+          </span>
+        </label>
+      )}
       {tally.areas > 0 && (
         <label className="flex items-start gap-2 text-sm">
           <Checkbox
@@ -689,7 +706,7 @@ function ClearLevelContentBody({
       <DialogFooter>
         <Button
           variant="destructive"
-          onClick={submit}
+          onClick={() => void submit()}
           disabled={!hasContent(level) && !(removeAreas && tally.areas > 0)}
         >
           Clear content
