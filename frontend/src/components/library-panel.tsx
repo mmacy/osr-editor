@@ -1,10 +1,17 @@
 // The content library: a map-adjacent collapsible aside listing open packs —
 // derived from any project or forge workdir, or banked in the sidecar's stash
 // — whose entries drag (or click-to-place) onto the map. Read-only over pack
-// content by spec: the panel opens, lists, badges, and closes; every write is
-// a drop the map editor commits as an ordinary op batch.
-import { useState } from 'react'
+// content by spec: the panel opens, lists, previews, badges, and closes; every
+// write is a drop the map editor commits as an ordinary op batch.
+import { Fragment, useState } from 'react'
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+} from 'lucide-react'
 
+import { ContentPreviewLines, hasPreviewContents } from '@/components/content-preview'
 import { PathField } from '@/components/path-field'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,6 +24,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { loadMonsterCatalog, useCatalog } from '@/lib/catalogs'
 import { stashedPackIds, stashPackFullyUsed, usedIndex } from '@/lib/library-badges'
 import type { ArmedEntry } from '@/hooks/use-library'
 import { cn } from '@/lib/utils'
@@ -89,6 +97,22 @@ export function LibraryPanel({
 }: LibraryPanelProps) {
   const [path, setPath] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<StashedPack | null>(null)
+  // The open entry previews across every pack, keyed like the used badges
+  // (`identity entryId`) — panel state; the packs themselves never change.
+  const [previews, setPreviews] = useState<ReadonlySet<string>>(new Set())
+  const togglePreview = (key: string) =>
+    setPreviews((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  const allPreviewKeys = sources.flatMap((source) =>
+    source.pack.sections.flatMap((section) =>
+      section.entries.map((entry) => `${source.identity} ${entry.id}`),
+    ),
+  )
+  const allOpen = allPreviewKeys.length > 0 && allPreviewKeys.every((key) => previews.has(key))
   const sidecar = useProjectStore((state) => state.project?.sidecar ?? null)
   const used = usedIndex(sidecar ?? ({ copies: {} } as unknown as EditorSidecar))
   const stash = sidecar?.stash ?? []
@@ -109,6 +133,19 @@ export function LibraryPanel({
     >
       <div className="flex items-center gap-1 border-b px-2 py-1.5">
         <span className="text-xs font-medium">Library</span>
+        {allPreviewKeys.length > 0 && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="ml-auto"
+            aria-pressed={allOpen}
+            aria-label={allOpen ? 'Collapse all previews' : 'Expand all previews'}
+            title={allOpen ? 'Collapse all previews' : 'Expand all previews'}
+            onClick={() => setPreviews(allOpen ? new Set() : new Set(allPreviewKeys))}
+          >
+            {allOpen ? <ChevronsDownUpIcon /> : <ChevronsUpDownIcon />}
+          </Button>
+        )}
       </div>
       <ScrollArea className="min-h-0 w-80 flex-1">
         {/* Pinned to the viewport's own width: radix wraps scroll content in a
@@ -190,6 +227,8 @@ export function LibraryPanel({
               source={source}
               used={used}
               armed={armed}
+              previews={previews}
+              onTogglePreview={(entryId) => togglePreview(`${source.identity} ${entryId}`)}
               onArm={onArm}
               onDisarm={onDisarm}
               onClose={() => onClosePack(source.identity)}
@@ -240,6 +279,8 @@ function PackView({
   source,
   used,
   armed,
+  previews,
+  onTogglePreview,
   onArm,
   onDisarm,
   onClose,
@@ -249,12 +290,22 @@ function PackView({
   source: SourceState
   used: Set<string>
   armed: ArmedEntry | null
+  previews: ReadonlySet<string>
+  onTogglePreview: (entryId: string) => void
   onArm: (entry: ArmedEntry) => void
   onDisarm: () => void
   onClose: () => void
   onRefresh: () => void
   onCopyWandering: (section: PackSection) => void
 }) {
+  // Monster names resolve the way play would: the shipped catalog first —
+  // osrlib's first-occurrence-wins order — then the pack's own bundled
+  // templates (the closure carries every non-SRD reference), then the raw id.
+  const shipped = useCatalog(loadMonsterCatalog)
+  const nameFor = (templateId: string): string =>
+    shipped?.find((monster) => monster.id === templateId)?.name ??
+    source.pack.monsters.find((monster) => monster.id === templateId)?.name ??
+    templateId
   return (
     <div
       className="flex flex-col gap-1 rounded-md border p-2"
@@ -303,45 +354,78 @@ function PackView({
           </div>
           {section.entries.map((entry) => {
             const isArmed = armed?.identity === source.identity && armed.entryId === entry.id
+            const isOpen = previews.has(`${source.identity} ${entry.id}`)
             return (
-              <div
-                key={entry.id}
-                draggable
-                onDragStart={(event) => {
-                  event.dataTransfer.effectAllowed = 'copy'
-                  event.dataTransfer.setData(
-                    'application/x-osr-pack-entry',
-                    JSON.stringify({ identity: source.identity, entryId: entry.id }),
-                  )
-                }}
-                className={cn(
-                  'flex cursor-grab items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-accent/50',
-                  isArmed && 'bg-accent',
+              <Fragment key={entry.id}>
+                <div
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'copy'
+                    event.dataTransfer.setData(
+                      'application/x-osr-pack-entry',
+                      JSON.stringify({ identity: source.identity, entryId: entry.id }),
+                    )
+                  }}
+                  className={cn(
+                    'flex cursor-grab items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-accent/50',
+                    isArmed && 'bg-accent',
+                  )}
+                  data-testid={`entry-${entry.id}`}
+                >
+                  <button
+                    type="button"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    aria-expanded={isOpen}
+                    aria-label={`Preview ${entryLabel(entry)}`}
+                    onClick={() => onTogglePreview(entry.id)}
+                  >
+                    {isOpen ? (
+                      <ChevronDownIcon className="size-3.5" />
+                    ) : (
+                      <ChevronRightIcon className="size-3.5" />
+                    )}
+                  </button>
+                  <span className="min-w-0 flex-1 truncate" title={entryLabel(entry)}>
+                    {entryLabel(entry)}
+                  </span>
+                  <span
+                    className="font-mono text-[10px] text-muted-foreground"
+                    title="What this entry carries"
+                  >
+                    {entryGlyphs(entry)}
+                  </span>
+                  <UsedBadge used={used.has(`${source.identity} ${entry.id}`)} />
+                  <Button
+                    variant={isArmed ? 'secondary' : 'ghost'}
+                    size="sm"
+                    aria-pressed={isArmed}
+                    aria-label={`${isArmed ? 'Disarm' : 'Place'} ${entryLabel(entry)}`}
+                    onClick={() =>
+                      isArmed ? onDisarm() : onArm({ identity: source.identity, entryId: entry.id })
+                    }
+                  >
+                    {isArmed ? 'Armed' : 'Place'}
+                  </Button>
+                </div>
+                {isOpen && (
+                  <div
+                    className="mb-1 ml-2.5 flex flex-col gap-1 border-l pl-3"
+                    data-testid={`entry-preview-${entry.id}`}
+                  >
+                    {entry.description !== '' && (
+                      <p className="text-xs break-words whitespace-pre-wrap text-muted-foreground">
+                        {entry.description}
+                      </p>
+                    )}
+                    <ContentPreviewLines contents={entry} nameFor={nameFor} />
+                    {entry.description === '' && !hasPreviewContents(entry) && (
+                      <p className="text-xs text-muted-foreground italic">
+                        Only the name — nothing else travels.
+                      </p>
+                    )}
+                  </div>
                 )}
-                data-testid={`entry-${entry.id}`}
-              >
-                <span className="min-w-0 flex-1 truncate" title={entryLabel(entry)}>
-                  {entryLabel(entry)}
-                </span>
-                <span
-                  className="font-mono text-[10px] text-muted-foreground"
-                  title="What this entry carries"
-                >
-                  {entryGlyphs(entry)}
-                </span>
-                <UsedBadge used={used.has(`${source.identity} ${entry.id}`)} />
-                <Button
-                  variant={isArmed ? 'secondary' : 'ghost'}
-                  size="sm"
-                  aria-pressed={isArmed}
-                  aria-label={`${isArmed ? 'Disarm' : 'Place'} ${entryLabel(entry)}`}
-                  onClick={() =>
-                    isArmed ? onDisarm() : onArm({ identity: source.identity, entryId: entry.id })
-                  }
-                >
-                  {isArmed ? 'Armed' : 'Place'}
-                </Button>
-              </div>
+              </Fragment>
             )
           })}
         </div>

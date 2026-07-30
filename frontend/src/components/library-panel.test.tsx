@@ -3,10 +3,11 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 import { LibraryPanel } from '@/components/library-panel'
+import { emptyTrap } from '@/lib/content-builders'
 import { stashPackFullyUsed, usedIndex } from '@/lib/library-badges'
 import { projectStore } from '@/store/project-store'
 import { makeProjectState } from '@/test/fixtures'
-import type { EditorSidecar, SourceState, StashedPack } from '@/types'
+import type { EditorSidecar, MonsterTemplate, SourceState, StashedPack } from '@/types'
 
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
@@ -114,6 +115,71 @@ test('an open pack lists its sections, entries, glyphs, and wandering affordance
   // wandering entry (the authored predicate, applied server-side).
   fireEvent.click(screen.getByRole('button', { name: 'Copy wandering' }))
   expect(HANDLERS.onCopyWandering).toHaveBeenCalled()
+})
+
+test('an entry previews its description and carried kinds, monster names resolved', () => {
+  const source = makeSource()
+  source.pack.monsters = [{ id: 'orc', name: 'Orc' } as unknown as MonsterTemplate]
+  render(<LibraryPanel {...HANDLERS} sources={[source]} />)
+  expect(screen.queryByTestId(`entry-preview-${ENTRY_ID}`)).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Preview The guard post' }))
+  const preview = screen.getByTestId(`entry-preview-${ENTRY_ID}`)
+  expect(preview).toHaveTextContent('Orcs dice by torchlight.')
+  expect(preview).toHaveTextContent('Encounter')
+  // The count and the pack-bundled template's name, not its raw id.
+  expect(preview).toHaveTextContent('4 × Orc')
+  // The same toggle closes what it opened.
+  fireEvent.click(screen.getByRole('button', { name: 'Preview The guard post' }))
+  expect(screen.queryByTestId(`entry-preview-${ENTRY_ID}`)).toBeNull()
+})
+
+test('expand all opens every preview — trap, treasure, and features included — then flips', () => {
+  const source = makeSource()
+  source.pack.sections[0].entries.push(
+    {
+      id: 'cell-2',
+      name: 'The flooded cell',
+      description: '',
+      encounter: null,
+      trap: emptyTrap('room'),
+      treasure: { letters: ['C'], unguarded: false },
+      features: [
+        {
+          id: 'F1',
+          kind: 'treasure_cache',
+          description: '',
+          cell: null,
+          item_ids: [],
+          coins: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
+          valuables: [],
+          trap: null,
+        },
+      ],
+    },
+    {
+      id: 'cell-3',
+      name: 'The bare landing',
+      description: '',
+      encounter: null,
+      trap: null,
+      treasure: null,
+      features: [],
+    },
+  )
+  render(<LibraryPanel {...HANDLERS} sources={[source]} />)
+  fireEvent.click(screen.getByRole('button', { name: /Expand all previews/ }))
+  const second = screen.getByTestId('entry-preview-cell-2')
+  expect(second).toHaveTextContent('Trap')
+  expect(second).toHaveTextContent('enter')
+  expect(second).toHaveTextContent('type C')
+  expect(second).toHaveTextContent('cache')
+  // An entry carrying nothing beyond its name says so instead of rendering blank.
+  expect(screen.getByTestId('entry-preview-cell-3')).toHaveTextContent(
+    'Only the name — nothing else travels.',
+  )
+  // Every preview open flips the toggle to collapse.
+  fireEvent.click(screen.getByRole('button', { name: /Collapse all previews/ }))
+  expect(screen.queryByTestId('entry-preview-cell-2')).toBeNull()
 })
 
 test('a section without a wandering entry offers no copy', () => {

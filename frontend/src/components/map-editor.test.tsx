@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react'
-import { expect, test } from 'vitest'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { expect, test, vi } from 'vitest'
 
 import { MapEditor } from '@/components/map-editor'
+import { HOVER_CARD_DELAY_MS } from '@/map/hover-card'
 import { makeDocument } from '@/test/fixtures'
 import type { AreaSpec, Diagnostics } from '@/types'
 
@@ -153,4 +154,46 @@ test('the clear-content dialog counts what it will remove and keeps geometry', (
 test('a vanished level renders the honest message', () => {
   renderEditor({ levelNumber: 9 })
   expect(screen.getByText('This level no longer exists.')).toBeInTheDocument()
+})
+
+// The pointer coordinates ride the deterministic reset transform (`0`): cell
+// (0, 0)'s centre is 24 + 12 canvas px on each axis, and jsdom's zero-sized
+// bounding rects make canvas and client coordinates coincide.
+test('resting on a stocked area raises the hover card; a drawing tool never does', () => {
+  vi.useFakeTimers()
+  try {
+    renderEditor({
+      document: documentWithAreas([
+        makeArea({
+          id: 'a1',
+          description: 'A dry well below the wheel.',
+          cells: [
+            [0, 0],
+            [1, 0],
+          ],
+        }),
+      ]),
+    })
+    fireEvent.keyDown(document.body, { key: '0' })
+    const canvas = screen.getByTestId('map-canvas')
+    fireEvent.pointerMove(canvas, { clientX: 36, clientY: 36 })
+    // The rest delay: nothing raises while the pointer is still sweeping.
+    expect(screen.queryByTestId('area-hover-card')).toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(HOVER_CARD_DELAY_MS)
+    })
+    expect(screen.getByTestId('area-hover-card')).toHaveTextContent('A dry well below the wheel.')
+    // Leaving the canvas drops the card at once, no delay.
+    fireEvent.pointerLeave(canvas)
+    expect(screen.queryByTestId('area-hover-card')).toBeNull()
+    // A drawing tool suppresses the card outright, however long the rest.
+    fireEvent.keyDown(document.body, { key: 'r' })
+    fireEvent.pointerMove(canvas, { clientX: 36, clientY: 36 })
+    act(() => {
+      vi.advanceTimersByTime(HOVER_CARD_DELAY_MS)
+    })
+    expect(screen.queryByTestId('area-hover-card')).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
 })

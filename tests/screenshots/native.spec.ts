@@ -169,6 +169,17 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   }
   await shoot(inspector, 'area-content-cards', testInfo)
 
+  // The hover card: rest the pointer on the stocked room and its contents
+  // raise beside it — no click needed. The pointer then parks on the toolbar
+  // so the card is down again before the next shot frames the canvas.
+  await page.mouse.move(guardCell.x, guardCell.y)
+  const hoverCard = page.getByTestId('area-hover-card')
+  await expect(hoverCard).toBeVisible()
+  await expect(hoverCard).toContainText('Skeleton')
+  await shoot(page.getByTestId('map-canvas'), 'area-hover-card', testInfo)
+  await page.getByRole('button', { name: 'Unstocked filter' }).hover()
+  await expect(hoverCard).toBeHidden()
+
   // The map's own reading: a stocked key number beside a hollow one, with the
   // unstocked filter dimming what is done.
   await page.getByRole('button', { name: 'Unstocked filter' }).click()
