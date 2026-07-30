@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 
 import type { CardIntent } from '@/components/area-content-cards'
+import { ContentPreviewLines } from '@/components/content-preview'
 import { ForgePreviewDialog } from '@/components/forge-preview-dialog'
 import { ImportDialog } from '@/components/import-dialog'
 import { LibraryCollisionDialog } from '@/components/library-collision-dialog'
@@ -65,6 +66,7 @@ import {
   type Tool,
 } from '@/map/gestures'
 import { hitTest, type HitTarget } from '@/map/hit-test'
+import { HOVER_CARD_DELAY_MS, hoverCardAreaId, hoverCardPlacement } from '@/map/hover-card'
 import { DARK_THEME, LIGHT_THEME, markersFor, targetRef, type MapSelection } from '@/map/render'
 import {
   areaAt,
@@ -253,6 +255,38 @@ export function MapEditor({
   )
   const monsterNameFor = (templateId: string) =>
     pickerMonsters.find((monster) => monster.id === templateId)?.name ?? templateId
+
+  // The hovered area, shared by the toolbar's hover line and the hover card:
+  // null off the grid, over corridor, and on a vanished level.
+  const hoverArea = level && hover?.kind === 'cell' ? areaAt(level, hover.cell) : null
+
+  // The hover card: the hovered area's contents beside the area itself,
+  // raised after a rest so sweeping the map stays quiet. The eligibility
+  // rules — the inspect posture only, and never while another surface owns
+  // the hover — live in map/hover-card with the placement math. An
+  // eligibility change drops the card at once (render-time adjustment); the
+  // effect only arms the raise timer.
+  const [hoverCard, setHoverCard] = useState<{ eligible: string | null; shown: boolean }>({
+    eligible: null,
+    shown: false,
+  })
+  const eligibleHoverCardId = hoverCardAreaId(hoverArea, {
+    tool,
+    gesturing: gesture !== null,
+    placing: library.armed !== null,
+    dragging: dropAreaId !== null,
+  })
+  if (hoverCard.eligible !== eligibleHoverCardId) {
+    setHoverCard({ eligible: eligibleHoverCardId, shown: false })
+  }
+  useEffect(() => {
+    if (eligibleHoverCardId === null) return
+    const timer = window.setTimeout(
+      () => setHoverCard({ eligible: eligibleHoverCardId, shown: true }),
+      HOVER_CARD_DELAY_MS,
+    )
+    return () => window.clearTimeout(timer)
+  }, [eligibleHoverCardId])
 
   // A level switch resets the interaction state — the render-time adjustment
   // pattern, not an effect. The view derives fit-level-on-open below, so
@@ -607,10 +641,6 @@ export function MapEditor({
   }
   const unstockedCount = level.areas.filter((area) => !isAreaStocked(area)).length
 
-  // The hover line: the cell/edge ref plus the hovered area's one-line
-  // contents in module notation.
-  const hoverArea = hover?.kind === 'cell' ? areaAt(level, hover.cell) : null
-
   // The drop target's resolution — the context menu's own hit-test + areaAt
   // shape, over the same wrapper geometry. Existing areas only: corridors are
   // unkeyed floor, and creating areas stays the area tool's job.
@@ -621,10 +651,24 @@ export function MapEditor({
     const target = hitTest(point, level, effectiveView, 'cell')
     return target?.kind === 'cell' ? areaAt(level, target.cell) : null
   }
+  // The hover line: the cell/edge ref plus the hovered area's one-line
+  // contents in module notation.
   const hoverContents = hoverArea ? formatAreaContents(hoverArea, monsterNameFor) : ''
   const hoverLine = hoverArea
     ? `${targetRef(hover)} · ${hoverArea.id}${hoverContents ? `: ${hoverContents}` : ''}`
     : targetRef(hover)
+
+  // The raised card resolves against the current document, so an area edited
+  // or removed mid-hover renders fresh or not at all; placement is the pure
+  // computation over the live view transform, so the card rides a pan.
+  const hoverCardArea =
+    hoverCard.shown && hoverCard.eligible !== null
+      ? (level.areas.find((candidate) => candidate.id === hoverCard.eligible) ?? null)
+      : null
+  const hoverCardBox =
+    hoverCardArea && effectiveView && viewport
+      ? hoverCardPlacement(hoverCardArea.cells, effectiveView, viewport)
+      : null
 
   const markers = markersFor(
     [...diagnostics.validation, ...diagnostics.lint],
@@ -906,7 +950,7 @@ export function MapEditor({
             }}
           >
             <div
-              className="relative min-w-0 flex-1"
+              className="relative min-w-0 flex-1 overflow-hidden"
               onDragOver={(event) => {
                 if (!event.dataTransfer.types.includes('application/x-osr-pack-entry')) return
                 event.preventDefault()
@@ -959,6 +1003,28 @@ export function MapEditor({
                 }}
                 placementAreaId={dropAreaId ?? (library.armed ? (hoverArea?.id ?? null) : null)}
               />
+              {/* Hover-only and pointer-transparent: the card never takes a
+                  click, and it duplicates what the inspector already offers
+                  accessibly, so it hides from the accessibility tree. */}
+              {hoverCardArea && hoverCardBox && (
+                <div
+                  aria-hidden="true"
+                  data-testid="area-hover-card"
+                  className="pointer-events-none absolute z-10 flex max-h-56 w-72 flex-col gap-1 overflow-hidden rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
+                  style={{ left: hoverCardBox.left, top: hoverCardBox.top }}
+                >
+                  <p className="text-xs font-medium">
+                    Area {hoverCardArea.id}
+                    {hoverCardArea.name !== '' && ` — ${hoverCardArea.name}`}
+                  </p>
+                  {hoverCardArea.description !== '' && (
+                    <p className="line-clamp-3 text-xs break-words text-muted-foreground">
+                      {hoverCardArea.description}
+                    </p>
+                  )}
+                  <ContentPreviewLines contents={hoverCardArea} nameFor={monsterNameFor} />
+                </div>
+              )}
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent aria-label={menuArea ? `Stock area ${menuArea.id}` : undefined}>

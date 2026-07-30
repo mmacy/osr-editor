@@ -67,6 +67,12 @@ test('the content library', async ({ page }, testInfo) => {
   await page.mouse.click(second.x, second.y)
   await expect(page.getByTestId('revision')).toHaveText('r4')
   await expect(panel.getByTitle('Placed at least once')).toHaveCount(2)
+  // One entry preview open, so the shot shows the panel's reading surface —
+  // the description and per-kind lines — beside the collapsed rows.
+  await panel.getByRole('button', { name: 'Preview Grinding Hall' }).click()
+  await expect(
+    panel.getByTestId('entry-preview-dungeon:millstone-warrens/level:1/area:1'),
+  ).toBeVisible()
   await shoot(panel, 'library-panel', testInfo)
 
   // The stash offer, photographed in the clear-content dialog: the tally, the

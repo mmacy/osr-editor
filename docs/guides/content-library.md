@@ -10,8 +10,10 @@ The **Library** button on the map toolbar opens the panel beside the canvas. Eve
 
 Loaded libraries are remembered per project: leave for the home screen or another adventure and come back, and the panel restores every pack you had open — each a fresh read of its source, so a source edited in the meantime comes back current. A source that no longer opens says so once and drops off the list.
 
-![The content library panel with an open source, kind glyphs, and used badges](../assets/screenshots/library-panel-light.png#only-light)
-![The content library panel with an open source, kind glyphs, and used badges](../assets/screenshots/library-panel-dark.png#only-dark)
+Every entry row previews in place: the chevron discloses the entry's description and one module-notation line per carried kind — the encounter with its monster names resolved, the trap, the treasure, each feature — so you can read a room before placing it rather than dropping it to find out. The toggle in the panel header expands or collapses every row in every open pack at once, for scanning a whole palette. Previews are read-only, like everything else in the panel; placing is still the only write.
+
+![The content library panel with an open source, kind glyphs, used badges, and an expanded entry preview](../assets/screenshots/library-panel-light.png#only-light)
+![The content library panel with an open source, kind glyphs, used badges, and an expanded entry preview](../assets/screenshots/library-panel-dark.png#only-dark)
 
 ## Placing a room
 
