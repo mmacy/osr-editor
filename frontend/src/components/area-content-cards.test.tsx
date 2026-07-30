@@ -47,6 +47,7 @@ function stockedCache(overrides: Partial<FeatureSpec> = {}): FeatureSpec {
     ...emptyFeature('feature-1', null),
     kind: 'treasure_cache',
     item_ids: ['longsword'],
+    magic_item_ids: ['sword_plus_1'],
     coins: { pp: 0, gp: 500, ep: 0, sp: 0, cp: 0 },
     valuables: [{ kind: 'gem', name: 'Star sapphire', value_gp: 1000, weight_coins: 1 }],
     ...overrides,
@@ -158,9 +159,24 @@ const FEATURES_INTENT: CardIntent = { areaId: '1', card: 'features', action: 'ed
 test('a cache offers the contents editors — the kinds osrlib cannot open offer none', () => {
   renderCards('1', FEATURES_INTENT, { features: [stockedCache()] })
   const cache = expandFeature('feature-1')
-  for (const label of ['Items', 'Coins', 'Valuables', 'Treasure trap']) {
+  for (const label of ['Items', 'Magic items', 'Coins', 'Valuables', 'Treasure trap']) {
     expect(within(cache).getByText(label)).toBeInTheDocument()
   }
+})
+
+test('removing a placed magic item posts the filtered cache', async () => {
+  renderCards('1', FEATURES_INTENT, { features: [stockedCache()] })
+  const cache = expandFeature('feature-1')
+  fireEvent.click(within(cache).getByRole('button', { name: 'Remove sword_plus_1' }))
+  await waitFor(() => expect(postOps).toHaveBeenCalledTimes(1))
+  const [, , ops] = postOps.mock.calls[0]
+  expect(ops).toEqual([
+    expect.objectContaining({
+      op: 'set_feature',
+      feature_id: 'feature-1',
+      feature: expect.objectContaining({ magic_item_ids: [] }),
+    }),
+  ])
 })
 
 test('a trick hides them: contents it carries would be unreachable in play', () => {
@@ -168,7 +184,7 @@ test('a trick hides them: contents it carries would be unreachable in play', () 
     features: [stockedCache({ kind: 'construction_trick' })],
   })
   const trick = expandFeature('feature-1')
-  for (const label of ['Items', 'Coins', 'Valuables', 'Treasure trap']) {
+  for (const label of ['Items', 'Magic items', 'Coins', 'Valuables', 'Treasure trap']) {
     expect(within(trick).queryByText(label)).not.toBeInTheDocument()
   }
 })
@@ -207,6 +223,7 @@ test('leaving the cache kind clears the contents with the trap — one batch, on
         kind: 'custom',
         trap: null,
         item_ids: [],
+        magic_item_ids: [],
         coins: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
         valuables: [],
       }),
@@ -270,8 +287,9 @@ test('a non-cache carrying contents names them and points at the way back', () =
   })
   const trick = expandFeature('feature-1')
   expect(within(trick).getByTestId('stranded-contents')).toHaveTextContent(
-    'Carries 500 gp, 1 gem, 1 item, a trap, which the party can never reach — only a treasure ' +
-      'cache can be opened. Set the kind back to Treasure cache to edit or remove them.',
+    'Carries 500 gp, 1 gem, 1 item, 1 magic item, a trap, which the party can never reach — ' +
+      'only a treasure cache can be opened. Set the kind back to Treasure cache to edit or ' +
+      'remove them.',
   )
 })
 

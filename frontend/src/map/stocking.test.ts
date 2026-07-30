@@ -58,6 +58,7 @@ function cache(id: string, trapped: boolean): AreaSpec['features'][number] {
     description: '',
     cell: null,
     item_ids: [],
+    magic_item_ids: [],
     coins: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
     valuables: [],
     trap: trapped ? { ...ROOM_TRAP, kind: 'treasure', trigger: 'open' } : null,

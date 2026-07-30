@@ -47,11 +47,13 @@ from osreditor.aids import (
 from osreditor.catalogs import (
     EncounterTableCatalogResponse,
     EquipmentCatalogResponse,
+    MagicItemCatalogResponse,
     MonsterCatalogResponse,
     TreasureTypeCatalogResponse,
     catalog_monster,
     encounter_table_catalog,
     equipment_catalog,
+    magic_item_catalog,
     monster_catalog,
     treasure_type_catalog,
 )
@@ -1568,6 +1570,19 @@ def get_equipment_catalog(user: CurrentUser) -> EquipmentCatalogResponse:
         Every item across the four id-addressable lists, in list order.
     """
     return equipment_catalog()
+
+
+@router.get("/api/catalogs/magic-items")
+def get_magic_item_catalog(user: CurrentUser) -> MagicItemCatalogResponse:
+    """Report the shipped magic items.
+
+    Args:
+        user: The authenticated caller.
+
+    Returns:
+        Every shipped magic item as a picker summary, in catalog order.
+    """
+    return magic_item_catalog()
 
 
 @router.get("/api/catalogs/treasure-types")

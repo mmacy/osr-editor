@@ -2,9 +2,10 @@
 
 The pickers need identity and a few display fields, not whole stat blocks, so
 each route model wraps exactly what its picker consumes. The catalogs are small
-(233 monsters, 51 pickable equipment items, 22 treasure types) and immutable per
-process — osrlib's loaders are `functools.cache`d — so the builders here cache
-too and the routes serve whole lists; the frontend filters client-side.
+(233 monsters, 51 pickable equipment items, 164 magic items, 22 treasure types)
+and immutable per process — osrlib's loaders are `functools.cache`d — so the
+builders here cache too and the routes serve whole lists; the frontend filters
+client-side.
 
 The *effective* monster catalog (shipped plus the open document's bundled
 templates) is a client-side merge — the document is already in hand there, so no
@@ -22,25 +23,29 @@ server-side, no consumer.
 from functools import cache
 
 from osrlib.core.alignment import Alignment
+from osrlib.core.items import MagicItemCategory
 from osrlib.core.monsters import MonsterHitDice, MonsterTemplate
 from osrlib.core.tables import EncounterTable
 from osrlib.core.treasure import TreasureSection
-from osrlib.data import load_encounter_tables, load_equipment, load_monsters, load_treasure_tables
+from osrlib.data import load_encounter_tables, load_equipment, load_magic_items, load_monsters, load_treasure_tables
 from pydantic import BaseModel, ConfigDict
 
 from osreditor.errors import CatalogMonsterNotFoundError
 
 __all__ = [
     "CatalogItem",
+    "CatalogMagicItem",
     "CatalogMonster",
     "CatalogTreasureType",
     "EncounterTableCatalogResponse",
     "EquipmentCatalogResponse",
+    "MagicItemCatalogResponse",
     "MonsterCatalogResponse",
     "TreasureTypeCatalogResponse",
     "catalog_monster",
     "encounter_table_catalog",
     "equipment_catalog",
+    "magic_item_catalog",
     "monster_catalog",
     "treasure_type_catalog",
 ]
@@ -95,6 +100,30 @@ class EquipmentCatalogResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     items: tuple[CatalogItem, ...]
+
+
+class CatalogMagicItem(BaseModel):
+    """One magic-item picker entry.
+
+    `cursed` rides along so the picker can mark the trap-for-players forms —
+    placing a cursed item in a cache is a deliberate authoring choice, never a
+    surprise the catalog withheld.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str
+    category: MagicItemCategory
+    cursed: bool
+
+
+class MagicItemCatalogResponse(BaseModel):
+    """The shipped magic items, catalog order preserved."""
+
+    model_config = ConfigDict(frozen=True)
+
+    items: tuple[CatalogMagicItem, ...]
 
 
 class CatalogTreasureType(BaseModel):
@@ -180,6 +209,21 @@ def equipment_catalog() -> EquipmentCatalogResponse:
         items=tuple(
             CatalogItem(id=template.id, name=template.name, item_type=template.item_type, cost_gp=template.cost_gp)
             for template in (*equipment.weapons, *equipment.armour, *equipment.gear, *equipment.ammunition)
+        )
+    )
+
+
+@cache
+def magic_item_catalog() -> MagicItemCatalogResponse:
+    """Build the magic-item catalog response from the shipped data.
+
+    Returns:
+        Every shipped magic item as a picker summary, in catalog order.
+    """
+    return MagicItemCatalogResponse(
+        items=tuple(
+            CatalogMagicItem(id=template.id, name=template.name, category=template.category, cursed=template.cursed)
+            for template in load_magic_items().items
         )
     )
 

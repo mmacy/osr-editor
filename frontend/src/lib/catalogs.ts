@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import type {
   CatalogItem,
+  CatalogMagicItem,
   CatalogMonster,
   CatalogTreasureType,
   EncounterTable,
@@ -27,6 +28,7 @@ function once<T>(load: () => Promise<T>): () => Promise<T> {
 
 export const loadMonsterCatalog = once(async () => (await api.getMonsterCatalog()).monsters)
 export const loadEquipmentCatalog = once(async () => (await api.getEquipmentCatalog()).items)
+export const loadMagicItemCatalog = once(async () => (await api.getMagicItemCatalog()).items)
 export const loadTreasureTypeCatalog = once(
   async () => (await api.getTreasureTypeCatalog()).treasure_types,
 )
@@ -142,6 +144,20 @@ export function groupEquipment(items: readonly CatalogItem[]): [string, CatalogI
     const group = groups.get(item.item_type)
     if (group) group.push(item)
     else groups.set(item.item_type, [item])
+  }
+  return [...groups.entries()]
+}
+
+// Magic items grouped by category for the picker's sections, catalog order
+// preserved within each group.
+export function groupMagicItems(
+  items: readonly CatalogMagicItem[],
+): [string, CatalogMagicItem[]][] {
+  const groups = new Map<string, CatalogMagicItem[]>()
+  for (const item of items) {
+    const group = groups.get(item.category)
+    if (group) group.push(item)
+    else groups.set(item.category, [item])
   }
   return [...groups.entries()]
 }

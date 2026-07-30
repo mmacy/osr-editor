@@ -9,6 +9,7 @@ import { ChevronDownIcon, ChevronRightIcon, PlusIcon, XIcon } from 'lucide-react
 
 import { EncounterPreviewPanel, TreasurePreviewPanel } from '@/components/aid-previews'
 import { EquipmentPicker } from '@/components/equipment-picker'
+import { MagicItemPicker } from '@/components/magic-item-picker'
 import { MiniLevelPicker } from '@/components/mini-level-picker'
 import { MonsterPicker } from '@/components/monster-picker'
 import { TrapBuilder } from '@/components/trap-builder'
@@ -853,6 +854,45 @@ export function FeatureEditor({
                 <EquipmentPicker
                   onPick={(itemId) =>
                     update((committed) => ({ item_ids: [...committed.item_ids, itemId] }))
+                  }
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Magic items</Label>
+                {feature.magic_item_ids.length > 0 && (
+                  <ul className="flex flex-wrap gap-1.5" aria-label="Cache magic items">
+                    {feature.magic_item_ids.map((itemId, index) => (
+                      <li
+                        key={`${itemId}-${index}`}
+                        className="bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs"
+                      >
+                        {itemId}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${itemId}`}
+                          onClick={() =>
+                            update((committed) => {
+                              const at = committed.magic_item_ids.indexOf(itemId)
+                              if (at === -1) return null
+                              return {
+                                magic_item_ids: committed.magic_item_ids.filter(
+                                  (_, index) => index !== at,
+                                ),
+                              }
+                            })
+                          }
+                        >
+                          <XIcon className="size-3" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <MagicItemPicker
+                  onPick={(itemId) =>
+                    update((committed) => ({
+                      magic_item_ids: [...committed.magic_item_ids, itemId],
+                    }))
                   }
                 />
               </div>

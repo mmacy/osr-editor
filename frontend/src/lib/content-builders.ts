@@ -367,6 +367,7 @@ export function emptyFeature(id: string, cell: Position | null): FeatureSpec {
     description: '',
     cell,
     item_ids: [],
+    magic_item_ids: [],
     coins: emptyCoins(),
     valuables: [],
     trap: null,
@@ -379,7 +380,7 @@ export function emptyFeature(id: string, cell: Position | null): FeatureSpec {
 // unreachable in play. One patch, so the whole change is one undo step.
 export function clearCacheContentsPatch(kind: FeatureSpec['kind']): Partial<FeatureSpec> {
   if (kind === 'treasure_cache') return { kind }
-  return { kind, trap: null, item_ids: [], coins: emptyCoins(), valuables: [] }
+  return { kind, trap: null, item_ids: [], magic_item_ids: [], coins: emptyCoins(), valuables: [] }
 }
 
 function scopeFeatures(document: Adventure, scope: FeatureScope): readonly FeatureSpec[] | null {

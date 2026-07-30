@@ -562,7 +562,7 @@ docs = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.139" },
     { name = "osr-forge", specifier = ">=0.1,<0.2" },
-    { name = "osrlib", git = "https://github.com/mmacy/osrlib-python?rev=13157bdc75948017d4146491da8ff42d9f6e6d28" },
+    { name = "osrlib", git = "https://github.com/mmacy/osrlib-python?rev=a26c08cf1d93ef528e223ed40a1004a21d01d268" },
     { name = "platformdirs", specifier = ">=4" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pyyaml", specifier = ">=6" },
@@ -607,7 +607,7 @@ wheels = [
 [[package]]
 name = "osrlib"
 version = "1.4.0"
-source = { git = "https://github.com/mmacy/osrlib-python?rev=13157bdc75948017d4146491da8ff42d9f6e6d28#13157bdc75948017d4146491da8ff42d9f6e6d28" }
+source = { git = "https://github.com/mmacy/osrlib-python?rev=a26c08cf1d93ef528e223ed40a1004a21d01d268#a26c08cf1d93ef528e223ed40a1004a21d01d268" }
 dependencies = [
     { name = "pydantic" },
 ]

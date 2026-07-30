@@ -183,6 +183,13 @@ export function formatFeatureContents(feature: FeatureSpec): string {
   if (feature.item_ids.length > 0) {
     parts.push(feature.item_ids.length === 1 ? '1 item' : `${feature.item_ids.length} items`)
   }
+  if (feature.magic_item_ids.length > 0) {
+    parts.push(
+      feature.magic_item_ids.length === 1
+        ? '1 magic item'
+        : `${feature.magic_item_ids.length} magic items`,
+    )
+  }
   return parts.join(', ')
 }
 

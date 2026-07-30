@@ -271,6 +271,12 @@ test('the four content-kind cards', async ({ page }, testInfo) => {
     await page.getByPlaceholder('Search equipment…').fill(query)
     await page.getByRole('option', { name }).first().click()
   }
+  // A named magic item beside the mundane three — the strongbox's sword +1,
+  // the placement the Magic items row exists for.
+  await feature.getByRole('button', { name: 'Add magic item' }).click()
+  await page.getByPlaceholder('Search magic items…').fill('sword +1')
+  await page.getByRole('option', { name: 'Sword +1', exact: true }).click()
+
   await feature.getByLabel('gp', { exact: true }).fill('250')
   await feature.getByLabel('gp', { exact: true }).blur()
   await feature.getByLabel('sp', { exact: true }).fill('400')
@@ -301,6 +307,7 @@ test('the four content-kind cards', async ({ page }, testInfo) => {
 
   await expect(feature.getByLabel('Kind', { exact: true })).toHaveValue('treasure_cache')
   await expect(feature.getByLabel('Cache items').getByRole('listitem')).toHaveCount(3)
+  await expect(feature.getByLabel('Cache magic items').getByRole('listitem')).toHaveCount(1)
   await expect(feature.getByLabel('gp', { exact: true })).toHaveValue('250')
   await expect(feature.getByLabel('sp', { exact: true })).toHaveValue('400')
   await expect(feature.getByLabel('Valuable name')).toHaveValue('Amber bead')
