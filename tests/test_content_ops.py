@@ -184,6 +184,18 @@ def test_add_feature_to_an_area(service: DocumentService, tmp_path: Path) -> Non
     assert result.delta[0].path == "/dungeons/0/levels/0/areas/0"
 
 
+def test_add_feature_carries_placed_magic_items(service: DocumentService, tmp_path: Path) -> None:
+    # The cache's hand-placed magic items ride the FeatureSpec verbatim: the op
+    # layer neither interprets nor strips them, and listing an id twice places
+    # two — order and repetition both survive the commit.
+    project = make_project(service, tmp_path)
+    cache = feature(
+        id="feature-1", kind="treasure_cache", magic_item_ids=("sword_plus_1", "wand_of_fear", "sword_plus_1")
+    )
+    commit(service, project, AddFeature(dungeon_id="d", level_number=1, area_id="1", feature=cache))
+    assert the_area(project).features[0].magic_item_ids == ("sword_plus_1", "wand_of_fear", "sword_plus_1")
+
+
 def test_add_feature_to_the_level_itself(service: DocumentService, tmp_path: Path) -> None:
     project = make_project(service, tmp_path)
     trick = feature(id="trick-1", kind="construction_trick", cell=(0, 1))

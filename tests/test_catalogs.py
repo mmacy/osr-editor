@@ -2,7 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from osrlib.data import load_encounter_tables, load_equipment, load_monsters, load_treasure_tables
+from osrlib.data import load_encounter_tables, load_equipment, load_magic_items, load_monsters, load_treasure_tables
 
 from osreditor.app import create_app
 from osreditor.catalogs import encounter_table_catalog
@@ -75,6 +75,30 @@ def test_equipment_catalog_excludes_treasure_weights(client: TestClient) -> None
     assert len(items) == len(equipment.weapons) + len(equipment.armour) + len(equipment.gear) + len(
         equipment.ammunition
     )
+
+
+def test_magic_item_catalog_serves_the_shipped_list(client: TestClient) -> None:
+    response = client.get("/api/catalogs/magic-items")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    shipped = load_magic_items().items
+    assert [entry["id"] for entry in items] == [template.id for template in shipped]
+    sword = next(entry for entry in items if entry["id"] == "sword_plus_1")
+    template = load_magic_items().get("sword_plus_1")
+    assert sword == {
+        "id": "sword_plus_1",
+        "name": template.name,
+        "category": template.category.value,
+        "cursed": False,
+    }
+
+
+def test_magic_item_catalog_marks_the_cursed_forms(client: TestClient) -> None:
+    items = client.get("/api/catalogs/magic-items").json()["items"]
+    cursed = {entry["id"] for entry in items if entry["cursed"]}
+    shipped_cursed = {template.id for template in load_magic_items().items if template.cursed}
+    assert cursed == shipped_cursed
+    assert "sword_minus_1_cursed" in cursed
 
 
 def test_treasure_type_catalog_serves_the_shipped_letters(client: TestClient) -> None:

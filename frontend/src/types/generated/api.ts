@@ -1124,6 +1124,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/catalogs/magic-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Magic Item Catalog
+         * @description Report the shipped magic items.
+         *
+         *     Args:
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         Every shipped magic item as a picker summary, in catalog order.
+         */
+        get: operations["get_magic_item_catalog_api_catalogs_magic_items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/catalogs/treasure-types": {
         parameters: {
             query?: never;
@@ -1647,6 +1673,23 @@ export interface components {
             item_type: string;
             /** Cost Gp */
             cost_gp: number;
+        };
+        /**
+         * CatalogMagicItem
+         * @description One magic-item picker entry.
+         *
+         *     `cursed` rides along so the picker can mark the trap-for-players forms —
+         *     placing a cursed item in a cache is a deliberate authoring choice, never a
+         *     surprise the catalog withheld.
+         */
+        CatalogMagicItem: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            category: components["schemas"]["MagicItemCategory"];
+            /** Cursed */
+            cursed: boolean;
         };
         /**
          * CatalogMonster
@@ -2620,10 +2663,16 @@ export interface components {
          *     Stairs are [`TransitionSpec`][osrlib.crawl.dungeon.TransitionSpec]'s alone — no
          *     second home. Caches carry hand-placed contents — `item_ids` (any id from
          *     [`load_equipment`][osrlib.data.load_equipment], see
-         *     [the equipment id index][equipment-index]) and `coins` — plus an optional
+         *     [the equipment id index][equipment-index]), `magic_item_ids` (any id from
+         *     [`load_magic_items`][osrlib.data.load_magic_items], see
+         *     [the magic item id index][magic-items-index]), and `coins` — plus an optional
          *     treasure trap, so a cache's contents can be dropped, found, and recovered like
-         *     any other treasure. `cell` binds the feature to a cell; a feature listed on an
-         *     area with `cell=None` binds to the whole area.
+         *     any other treasure. Hand-placed magic items instantiate when the cache is
+         *     emptied: the author names the item, and its creation details (charges,
+         *     quantities, sword sentience) roll on the treasure stream via
+         *     [`instantiate_magic_item`][osrlib.core.treasure.instantiate_magic_item].
+         *     `cell` binds the feature to a cell; a feature listed on an area with
+         *     `cell=None` binds to the whole area.
          */
         FeatureSpec: {
             /** Id */
@@ -2648,6 +2697,11 @@ export interface components {
              * @default []
              */
             item_ids: string[];
+            /**
+             * Magic Item Ids
+             * @default []
+             */
+            magic_item_ids: string[];
             /**
              * @default {
              *       "pp": 0,
@@ -3013,6 +3067,23 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * MagicItemCatalogResponse
+         * @description The shipped magic items, catalog order preserved.
+         */
+        MagicItemCatalogResponse: {
+            /** Items */
+            items: components["schemas"]["CatalogMagicItem"][];
+        };
+        /**
+         * MagicItemCategory
+         * @description The magic item catalog's categories — the master table's types, devices split.
+         *
+         *     The master *Magic Item Type* table's `rod_staff_wand` type covers three catalog
+         *     categories; every other type maps to one.
+         * @enum {string}
+         */
+        MagicItemCategory: "armour" | "misc" | "potion" | "ring" | "rod" | "staff" | "wand" | "scroll" | "sword" | "weapon";
         /**
          * MagicItemView
          * @description One generated magic item, its template id resolved to a display name.
@@ -6656,6 +6727,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EquipmentCatalogResponse"];
+                };
+            };
+        };
+    };
+    get_magic_item_catalog_api_catalogs_magic_items_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MagicItemCatalogResponse"];
                 };
             };
         };

@@ -150,6 +150,7 @@ test('expand all opens every preview â€” trap, treasure, and features included â
           description: '',
           cell: null,
           item_ids: [],
+          magic_item_ids: [],
           coins: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
           valuables: [],
           trap: null,

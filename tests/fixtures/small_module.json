@@ -189,6 +189,7 @@
                     "item_ids": [
                       "sword"
                     ],
+                    "magic_item_ids": [],
                     "coins": {
                       "pp": 0,
                       "gp": 120,
@@ -259,6 +260,7 @@
                   0
                 ],
                 "item_ids": [],
+                "magic_item_ids": [],
                 "coins": {
                   "pp": 0,
                   "gp": 0,
@@ -333,6 +335,7 @@
                     "description": "The third alcove's back wall pivots when the shelf is unweighted.",
                     "cell": null,
                     "item_ids": [],
+                    "magic_item_ids": [],
                     "coins": {
                       "pp": 0,
                       "gp": 0,

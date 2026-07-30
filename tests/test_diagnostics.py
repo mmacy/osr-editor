@@ -189,6 +189,13 @@ def test_feature_unknown_item() -> None:
     assert finding.address == "dungeon:d/level:1"
 
 
+def test_feature_unknown_magic_item() -> None:
+    features = (feature("cache", kind="treasure_cache", magic_item_ids=("no-such-item",)),)
+    finding = sole_finding(adventure(DungeonSpec(id="d", levels=(level(features=features),))))
+    assert finding.code == "feature_unknown_magic_item"
+    assert finding.address == "dungeon:d/level:1"
+
+
 def test_feature_cell_out_of_bounds() -> None:
     finding = sole_finding(adventure(DungeonSpec(id="d", levels=(level(features=(feature("f", cell=(9, 9)),)),))))
     assert finding.code == "feature_cell_out_of_bounds"

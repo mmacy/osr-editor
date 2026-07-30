@@ -72,6 +72,7 @@ _OWNER_SHAPES: tuple[tuple[str, re.Pattern[str], str | None], ...] = (
     ("encounter_unknown_monster", re.compile(r"area .+ references unknown monster .+"), " references unknown monster "),
     ("encounter_alignment_invalid", re.compile(r"area .+ pins alignment .+ outside .+'s options"), " pins alignment "),
     ("feature_unknown_item", re.compile(r"feature .+ references unknown item .+"), None),
+    ("feature_unknown_magic_item", re.compile(r"feature .+ references unknown magic item .+"), None),
     ("feature_cell_out_of_bounds", re.compile(rf"feature .+ cell {_POSITION} is out of bounds"), None),
     ("feature_needs_cell", re.compile(r"level-scope feature .+ needs a cell"), None),
     ("wandering_unknown_monster", re.compile(r"wandering row .+ references unknown monster .+"), None),

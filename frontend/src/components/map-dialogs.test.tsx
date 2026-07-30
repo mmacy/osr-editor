@@ -119,6 +119,7 @@ test('a level with nothing capturable shows no offer', () => {
           description: 'A chalk warning.',
           cell: [0, 0],
           item_ids: [],
+          magic_item_ids: [],
           coins: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
           valuables: [],
           trap: null,

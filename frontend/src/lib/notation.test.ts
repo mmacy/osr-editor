@@ -37,6 +37,7 @@ const feature = (overrides: Partial<FeatureSpec> = {}): FeatureSpec => ({
   description: '',
   cell: null,
   item_ids: [],
+  magic_item_ids: [],
   coins: coins(),
   valuables: [],
   trap: null,
@@ -275,10 +276,11 @@ describe('features and wandering', () => {
             { kind: 'gem', name: '', value_gp: 50, weight_coins: 1 },
           ],
           item_ids: ['sword'],
+          magic_item_ids: ['sword_plus_1'],
           trap: trap({ damage_dice: '1d4' }, 'open'),
         }),
       ),
-    ).toBe('cache: 120 gp, 2 gems, 1 item — trapped')
+    ).toBe('cache: 120 gp, 2 gems, 1 item, 1 magic item — trapped')
   })
 
   test('payloadless kinds render the bare label', () => {
@@ -294,10 +296,11 @@ describe('features and wandering', () => {
           coins: coins({ gp: 120 }),
           valuables: [{ kind: 'gem', name: '', value_gp: 50, weight_coins: 1 }],
           item_ids: ['sword'],
+          magic_item_ids: ['wand_of_fear', 'potion_of_healing'],
           trap: trap({ damage_dice: '1d4' }),
         }),
       ),
-    ).toBe('120 gp, 1 gem, 1 item, a trap')
+    ).toBe('120 gp, 1 gem, 1 item, 2 magic items, a trap')
     // A trap alone still strands: the gate hides its builder too.
     expect(formatStrandedContents(feature({ kind: 'custom', trap: trap({}) }))).toBe('a trap')
   })
