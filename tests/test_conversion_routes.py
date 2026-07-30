@@ -234,6 +234,11 @@ def test_an_active_session_blocks_a_second_conversion_and_the_open(
     opened = client.post("/api/projects/open", json={"path": str(warm_workdir)})
     assert (opened.status_code, opened.json()["error"]["code"]) == (409, "conversion_in_progress")
 
+    # The content library's source open is a document act like any other: an
+    # active conversion refuses it with the same remedy, before any assembly.
+    source = client.post("/api/sources/open", json={"path": str(warm_workdir)})
+    assert (source.status_code, source.json()["error"]["code"]) == (409, "conversion_in_progress")
+
 
 def test_the_recovery_lookup_answers_the_path_and_404s_when_there_is_none(
     client: TestClient, warm_workdir: Path, tmp_path: Path

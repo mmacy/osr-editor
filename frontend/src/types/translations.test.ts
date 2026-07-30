@@ -254,8 +254,13 @@ test('the override-edit and sidecar unions discriminate', () => {
     | 'dismiss_flag'
     | 'undismiss_flag'
     | 'set_stocking_seed'
+    | 'record_copy'
+    | 'remove_stash_pack'
   >()
   expectTypeOf<Extract<AnySidecarPatch, { action: 'dismiss_flag' }>>().toHaveProperty('flag')
+  expectTypeOf<Extract<AnySidecarPatch, { action: 'record_copy' }>>().toHaveProperty(
+    'pack_entry_id',
+  )
   expectTypeOf<EditorSidecar['review']>().toEqualTypeOf<ReviewMark[]>()
   expectTypeOf<EditorSidecar['notes']>().toEqualTypeOf<Record<string, string>>()
 })

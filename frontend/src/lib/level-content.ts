@@ -73,6 +73,36 @@ export function hasClearable(level: LevelSpec): boolean {
 }
 
 /**
+ * What a replace-mode import destroys: the areas and the content they carry,
+ * alone. Level-scope features survive the swap (or reject the resize as
+ * offenders — phase 8's standing behavior) and the wandering spec is never
+ * touched, so the offer's tally must not describe destruction that does not
+ * happen.
+ */
+export function replacedContentTally(level: LevelSpec): ContentTally {
+  const tally = contentTally(level)
+  return { ...tally, features: tally.features - level.features.length }
+}
+
+// The counted lines, in the order the ops are emitted. A zero line is dropped
+// rather than rendered as "0" — the list is what will happen, not a schema.
+const TALLY_LABELS: Array<[Exclude<keyof ContentTally, 'areas'>, string, string]> = [
+  ['names', 'area name', 'area names'],
+  ['descriptions', 'area description', 'area descriptions'],
+  ['encounters', 'encounter', 'encounters'],
+  ['traps', 'trap', 'traps'],
+  ['treasures', 'treasure', 'treasures'],
+  ['features', 'feature', 'features'],
+]
+
+/** Render a tally's non-zero content lines — the two destructive dialogs' shared copy. */
+export function contentTallyLines(tally: ContentTally): string[] {
+  return TALLY_LABELS.filter(([key]) => tally[key] > 0).map(
+    ([key, singular, plural]) => `${tally[key]} ${tally[key] === 1 ? singular : plural}`,
+  )
+}
+
+/**
  * The batch that strips one level's keyed content, leaving its geometry.
  *
  * Only what actually differs is emitted, so a level already clear answers `[]`

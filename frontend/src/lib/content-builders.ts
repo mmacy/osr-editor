@@ -337,10 +337,18 @@ export function toggleTreasureLetter(
 // established. The uniqueness scope spans the level's own features and every
 // area's, matching the AddFeature invariant.
 export function nextFreeFeatureKey(level: LevelSpec): string {
-  const taken = new Set([
-    ...level.features.map((feature) => feature.id),
-    ...level.areas.flatMap((area) => area.features.map((feature) => feature.id)),
-  ])
+  return nextFreeFeatureKeyIn(
+    new Set([
+      ...level.features.map((feature) => feature.id),
+      ...level.areas.flatMap((area) => area.features.map((feature) => feature.id)),
+    ]),
+  )
+}
+
+// The mint over an explicit taken set — for callers placing several features
+// in one batch, where each mint must join the set before the next so the
+// batch never collides with itself (the library drop's sequencing).
+export function nextFreeFeatureKeyIn(taken: ReadonlySet<string>): string {
   let candidate = 1
   while (taken.has(`feature-${candidate}`)) candidate += 1
   return `feature-${candidate}`

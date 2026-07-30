@@ -95,6 +95,7 @@ nav:
       - Forge-backed review: guides/forge-backed-review.md
       - Converting a PDF: guides/converting-a-pdf.md
       - Authoring aids: guides/authoring-aids.md
+      - The content library: guides/content-library.md
       - Import, export, and publish: guides/import-export-publish.md
   - Reference:
       - The CLI and configuration: reference/cli-and-configuration.md

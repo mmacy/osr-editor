@@ -71,6 +71,10 @@ export interface RenderInput {
   // The unstocked filter: stocked areas dim — reduced-alpha tint and key
   // number; nothing hides, everything stays clickable.
   dimStocked?: boolean
+  // The content library's placement target: the area under an armed hover or
+  // an entry drag, highlighted so the drop's landing zone reads before the
+  // click or release commits it.
+  placementAreaId?: string | null
 }
 
 const DIMMED_ALPHA = 0.3
@@ -188,6 +192,29 @@ export function drawLevel(ctx: CanvasRenderingContext2D, input: RenderInput): vo
   }
   if (input.hover) drawTargetOutline(ctx, view, input.hover, theme.faded, 2)
   if (input.selection) drawSelection(ctx, input)
+  if (input.placementAreaId) drawPlacementHighlight(ctx, input, input.placementAreaId)
+}
+
+// The placement target's highlight: tinted fill plus a dashed accent outline,
+// distinct from the solid selection stroke so an armed hover never reads as a
+// committed selection.
+function drawPlacementHighlight(
+  ctx: CanvasRenderingContext2D,
+  input: RenderInput,
+  areaId: string,
+): void {
+  const area = input.level.areas.find((candidate) => candidate.id === areaId)
+  if (!area) return
+  ctx.save()
+  ctx.fillStyle = input.theme.areaTint
+  ctx.strokeStyle = input.theme.accent
+  ctx.lineWidth = 2
+  ctx.setLineDash([6, 4])
+  for (const cell of area.cells) {
+    fillCell(ctx, input.view, cell)
+    strokeCell(ctx, input.view, cell, 1.5)
+  }
+  ctx.restore()
 }
 
 // The content glyphs beside the key number, pencil-weight: crossed lines for

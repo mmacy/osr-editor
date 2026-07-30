@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { api, ApiRequestError } from '@/lib/api'
 import type { NavTarget } from '@/lib/address'
 import { importOps, unresolvedTransitionIndices } from '@/lib/import-mapping'
+import { contentTallyLines, replacedContentTally } from '@/lib/level-content'
 import { KIND_LABELS } from '@/lib/transitions'
 import { projectStore } from '@/store/project-store'
 import type { Adventure, ImportedGeometry, ImporterInfo } from '@/types'
@@ -85,6 +86,10 @@ function ImportDialogBody({
   // rewriting the adventure's name is not what the author asked for.
   const [adoptTitle, setAdoptTitle] = useState(false)
   const [adoptDescription, setAdoptDescription] = useState(false)
+  // The replace-mode confirm step, with the stash offer defaulting on: losing
+  // stocking is expensive, and a surplus stash pack is cheap and deletable.
+  const [confirmingReplace, setConfirmingReplace] = useState(false)
+  const [stashFirst, setStashFirst] = useState(true)
 
   useEffect(() => {
     api
@@ -153,44 +158,96 @@ function ImportDialogBody({
         })
       : []
 
-  const submit = () => {
+  const existingReplaced =
+    mode === 'replace' && destinationNumber !== null
+      ? (dungeon?.levels.find((level) => level.number === destinationNumber) ?? null)
+      : null
+  const replacedTally = existingReplaced ? replacedContentTally(existingReplaced) : null
+  const replacesContent = replacedTally !== null && contentTallyLines(replacedTally).length > 0
+
+  const proceed = async () => {
     if (!source || !destinationValid || destinationNumber === null) return
-    if (mode === 'replace') {
-      const existing = dungeon?.levels.find((level) => level.number === destinationNumber)
-      const carriesContent = existing?.areas.some(
-        (area) => area.encounter || area.features.length > 0 || area.trap || area.treasure,
-      )
-      if (
-        carriesContent &&
-        !window.confirm(
-          `Replacing level ${destinationNumber} removes its areas and the content they carry. Continue?`,
-        )
-      ) {
-        return
-      }
+    if (mode === 'replace' && stashFirst && replacesContent) {
+      // The capture runs at the verified revision before the batch; a failed
+      // capture (a raced 409) stops here with the level intact.
+      const stashed = await projectStore.getState().stashLevel(targetDungeon, destinationNumber)
+      if (!stashed) return
     }
     const adopt: { name?: string; description?: string } = {}
     if (adoptTitle && titleAdoptable) adopt.name = geometry?.title ?? ''
     if (adoptDescription && descriptionAdoptable) adopt.description = geometry?.description ?? ''
-    void projectStore
-      .getState()
-      .commit((current) =>
-        importOps(source, current, {
-          dungeonId: targetDungeon,
-          levelNumber: destinationNumber,
-          mode,
-          keepUnresolved,
-          forge,
-          adopt,
-        }),
-      )
-      .then((committed) => {
-        if (committed) {
-          onOpenChange(false)
-          toast.success(`Imported ${source.label} as level ${destinationNumber}`)
-          onNavigate({ kind: 'level', dungeonId: targetDungeon, levelNumber: destinationNumber })
-        }
-      })
+    const committed = await projectStore.getState().commit((current) =>
+      importOps(source, current, {
+        dungeonId: targetDungeon,
+        levelNumber: destinationNumber,
+        mode,
+        keepUnresolved,
+        forge,
+        adopt,
+      }),
+    )
+    if (committed) {
+      onOpenChange(false)
+      toast.success(`Imported ${source.label} as level ${destinationNumber}`)
+      onNavigate({ kind: 'level', dungeonId: targetDungeon, levelNumber: destinationNumber })
+    }
+  }
+
+  const submit = () => {
+    if (!source || !destinationValid || destinationNumber === null) return
+    if (mode === 'replace' && replacesContent) {
+      setConfirmingReplace(true)
+      return
+    }
+    void proceed()
+  }
+
+  if (confirmingReplace && replacedTally) {
+    return (
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Replace level {destinationNumber}</DialogTitle>
+          <DialogDescription>
+            The new map replaces the level&apos;s keyed areas and the content they carry, in one
+            undo step. Level-scope features and the wandering monsters stay.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium">This removes:</p>
+          <ul className="flex flex-col gap-0.5" aria-label="Content the replacement removes">
+            {contentTallyLines(replacedTally).map((line) => (
+              <li key={line} className="text-sm text-muted-foreground">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={stashFirst}
+            onChange={(event) => setStashFirst(event.target.checked)}
+            aria-label="Stash this level's content in the library first"
+          />
+          <span>
+            Stash this level&apos;s content in the library first
+            <span className="block text-xs text-muted-foreground">
+              Banks the rooms — and the wandering table, when one is authored — as a stash pack:
+              re-place them on the new map, room by room, from the library panel.
+            </span>
+          </span>
+        </label>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setConfirmingReplace(false)}>
+            Back
+          </Button>
+          <Button variant="destructive" onClick={() => void proceed()}>
+            Replace level
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    )
   }
 
   // This dialog is the one that found the grid-child `min-width: auto` trap

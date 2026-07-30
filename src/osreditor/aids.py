@@ -74,6 +74,7 @@ __all__ = [
     "build_hooks_prose_request",
     "derive_or_restore_stream",
     "effective_catalog",
+    "key_order",
     "mint_master_seed",
     "preview_aid",
     "roll_area",
@@ -207,8 +208,18 @@ class AidsStockResponse(BaseModel):
     result: OpBatchResult | None = None
 
 
-def _key_order(areas: list[AreaSpec]) -> list[AreaSpec]:
-    """Key order: numeric ids numerically, then non-numeric ids lexicographically (the map's walk order)."""
+def key_order(areas: list[AreaSpec]) -> list[AreaSpec]:
+    """Key order: numeric ids numerically, then non-numeric ids lexicographically (the map's walk order).
+
+    Shared by stocking's sweep targets and the content library's pack
+    projection — both walk a level the way the map reads it.
+
+    Args:
+        areas: The areas to order.
+
+    Returns:
+        The areas in key order.
+    """
     numeric = sorted((area for area in areas if area.id.isdigit()), key=lambda area: int(area.id))
     rest = sorted((area for area in areas if not area.id.isdigit()), key=lambda area: area.id)
     return [*numeric, *rest]
@@ -242,7 +253,7 @@ def stock_targets(level: LevelSpec, area_id: str | None) -> list[AreaSpec]:
                     )
                 return [area]
         raise OpTargetNotFoundError(f"level {level.number} has no area {area_id!r}")
-    return _key_order([area for area in level.areas if not area_is_stocked(area)])
+    return key_order([area for area in level.areas if not area_is_stocked(area)])
 
 
 def mint_master_seed() -> str:

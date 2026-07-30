@@ -33,6 +33,15 @@ export interface MapCanvasProps {
   markers: readonly MapMarker[]
   theme: MapTheme
   dimStocked?: boolean
+  // The content library's click-to-place mode. While `placing`, the primary
+  // click is the placement's — a stationary press answers `onPlace` with its
+  // cell instead of driving the active tool — while panning (space, middle,
+  // and the click-drag threshold conversion) keeps working untouched.
+  placing?: boolean
+  onPlace?: (cell: Position) => void
+  // The area under an armed hover or an entry drag, highlighted like a drop
+  // target (the editor resolves it; the canvas only draws it).
+  placementAreaId?: string | null
 }
 
 // The cell tools always want the cell, however close to a border the pointer
@@ -115,6 +124,7 @@ export function MapCanvas(props: MapCanvasProps) {
       markers: props.markers,
       gesture: props.gesture,
       dimStocked: props.dimStocked,
+      placementAreaId: props.placementAreaId,
     })
   })
 
@@ -172,6 +182,15 @@ export function MapCanvas(props: MapCanvasProps) {
       return
     }
     if (event.button !== 0) return
+    if (props.placing) {
+      // An armed entry displaces the active tool's claim on the primary
+      // click. The select tool's press-versus-pan deferral applies verbatim:
+      // the press commits to a placement only if it stays put, so panning
+      // works while armed and a missed click never destroys the aim.
+      const cellTarget = hitTest(pointFor(event), props.level, props.view, 'cell')
+      pendingSelect.current = { x: event.clientX, y: event.clientY, target: cellTarget }
+      return
+    }
     const target = hitTest(pointFor(event), props.level, props.view, preferFor(props.tool))
     if (props.tool === 'select') {
       // Deferred to release: a select-tool drag is a pan, so the press cannot
@@ -211,7 +230,12 @@ export function MapCanvas(props: MapCanvasProps) {
       props.onViewChange((current) => panView(current, event.clientX - x, event.clientY - y))
       return
     }
-    const target = hitTest(pointFor(event), props.level, props.view, preferFor(props.tool))
+    const target = hitTest(
+      pointFor(event),
+      props.level,
+      props.view,
+      props.placing ? 'cell' : preferFor(props.tool),
+    )
     props.onHover(target)
     if (props.gesture && target) {
       props.onGestureChange(updateGesture(props.gesture, target))
@@ -236,6 +260,12 @@ export function MapCanvas(props: MapCanvasProps) {
     const pending = pendingSelect.current
     if (pending) {
       pendingSelect.current = null
+      if (props.placing) {
+        // Off-grid presses stay armed no-ops; the editor decides whether the
+        // cell lands in an area.
+        if (pending.target?.kind === 'cell') props.onPlace?.(pending.target.cell)
+        return
+      }
       // A press that never moved and landed on nothing selects nothing; it was
       // still a pan that happened not to travel.
       if (pending.target) props.onSelect(pending.target)
@@ -258,7 +288,9 @@ export function MapCanvas(props: MapCanvasProps) {
   }
 
   // Select drags the map, so it grabs; the drawing tools keep the crosshair.
-  const grabs = spaceHeld || props.tool === 'pan' || props.tool === 'select'
+  // Placing aims, so it keeps the crosshair too — except under an explicit
+  // space-pan chord.
+  const grabs = spaceHeld || (!props.placing && (props.tool === 'pan' || props.tool === 'select'))
   return (
     <canvas
       ref={canvasRef}

@@ -95,6 +95,7 @@ def test_patch_route_applies_and_answers_the_new_state(client: TestClient, tmp_p
                         "active_level_number": 1,
                         "zoom_pan": {"dungeon:dungeon-1/level:1": {"zoom": 1.5, "pan_x": 10, "pan_y": -4}},
                         "review_selection": None,
+                        "library_sources": ["/adventures/mill.osr", "stash-1"],
                     },
                 },
             ]
@@ -104,6 +105,8 @@ def test_patch_route_applies_and_answers_the_new_state(client: TestClient, tmp_p
     body = response.json()
     assert body["notes"] == {"dungeon:dungeon-1/level:1": "Start here."}
     assert body["view_state"]["zoom_pan"]["dungeon:dungeon-1/level:1"]["zoom"] == 1.5
+    # The content library's open-source list rides the view state like the cameras.
+    assert body["view_state"]["library_sources"] == ["/adventures/mill.osr", "stash-1"]
     # Persisted atomically; a later GET carries it.
     assert client.get(f"/api/projects/{state['id']}").json()["sidecar"]["notes"] == body["notes"]
     written = json.loads((tmp_path / "demo.osr" / "editor.json").read_text())
@@ -213,24 +216,28 @@ def test_note_content_never_rides_the_document_stack(tmp_path: Path) -> None:
     assert project.sidecar.notes == {"dungeon:dungeon-1/level:1": "Edited after the renumber."}
 
 
+BESPOKE_TEMPLATE = {
+    "id": "bespoke-1",
+    "name": "Bespoke horror",
+    "page": "",
+    "ac": 9,
+    "ac_ascending": 10,
+    "hit_dice": {"count": 1, "die": 8},
+    "attacks": [{"attacks": [{"name": "weapon", "by_weapon": True}]}],
+    "thac0": 19,
+    "attack_bonus": 0,
+    "movement": [{"rate_feet": 120, "encounter_rate_feet": 40}],
+    "saves": {"values": {"death": 12, "wands": 13, "paralysis": 14, "breath": 15, "spells": 16}, "save_as": "1"},
+    "morale": 7,
+    "alignment": {"options": ["neutral"]},
+    "xp": 10,
+    "number_appearing": {"dungeon": {"dice": "1d6"}, "lair": {"dice": "1d6"}},
+}
+"""One bundled template, valid whole — the monster-rename cascades' shared subject."""
+
+
 def test_monster_template_rename_cascades_the_template_note(tmp_path: Path) -> None:
-    template = {
-        "id": "bespoke-1",
-        "name": "Bespoke horror",
-        "page": "",
-        "ac": 9,
-        "ac_ascending": 10,
-        "hit_dice": {"count": 1, "die": 8},
-        "attacks": [{"attacks": [{"name": "weapon", "by_weapon": True}]}],
-        "thac0": 19,
-        "attack_bonus": 0,
-        "movement": [{"rate_feet": 120, "encounter_rate_feet": 40}],
-        "saves": {"values": {"death": 12, "wands": 13, "paralysis": 14, "breath": 15, "spells": 16}, "save_as": "1"},
-        "morale": 7,
-        "alignment": {"options": ["neutral"]},
-        "xp": 10,
-        "number_appearing": {"dungeon": {"dice": "1d6"}, "lair": {"dice": "1d6"}},
-    }
+    template = BESPOKE_TEMPLATE
     service, project = open_native(tmp_path)
     service.apply_batch(project, batch(project, {"op": "add_monster_template", "template": template}))
     set_note(service, project, "monster:bespoke-1", "Ours.")
@@ -340,6 +347,24 @@ def plant_stream(service: DocumentService, project: OpenProject, address: str, s
     service.persist_sidecar(project)
 
 
+def plant_copy(service: DocumentService, project: OpenProject, address: str, entry_id: str = "e-1") -> None:
+    """Record one copy at an address, the way a library drop would."""
+    from osreditor.sidecar import RecordCopy
+
+    service.apply_sidecar_patch(
+        project, (RecordCopy(address=address, pack_identity="/packs/mill.osr", pack_entry_id=entry_id),)
+    )
+
+
+def addressed_keys(project: OpenProject) -> tuple[set[str], set[str], set[str]]:
+    """The three addressed maps' key sets — the parity assertions' currency."""
+    return (
+        set(project.sidecar.notes),
+        set(project.sidecar.stocking.streams),
+        set(project.sidecar.copies),
+    )
+
+
 def make_area(service: DocumentService, project: OpenProject, area_id: str) -> None:
     service.apply_batch(
         project,
@@ -369,12 +394,13 @@ def test_set_stocking_seed_sets_the_master_and_clears_streams(tmp_path: Path) ->
     assert project.sidecar.stocking.streams == {}
 
 
-def test_stocking_streams_cascade_key_for_key_with_notes_on_area_rekey(tmp_path: Path) -> None:
+def test_addressed_maps_cascade_key_for_key_on_area_rekey(tmp_path: Path) -> None:
     service, project = open_native(tmp_path)
     make_area(service, project, "7")
     addr = "dungeon:dungeon-1/level:1/area:7"
     set_note(service, project, addr, "The bone room.")
     plant_stream(service, project, addr, state="42", inc="99")
+    plant_copy(service, project, addr)
     service.apply_batch(
         project,
         batch(
@@ -390,45 +416,76 @@ def test_stocking_streams_cascade_key_for_key_with_notes_on_area_rekey(tmp_path:
         ),
     )
     moved = "dungeon:dungeon-1/level:1/area:7a"
-    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {moved}
-    # The key followed the re-key; the stream state itself never rewound.
+    assert addressed_keys(project) == ({moved}, {moved}, {moved})
+    # The key followed the re-key; the stream state and the copy records never moved.
     assert project.sidecar.stocking.streams[moved].state == "42"
-    # Undo and redo keep the two maps key-for-key identical.
+    assert project.sidecar.copies[moved][0].pack_entry_id == "e-1"
+    # Undo and redo keep the three maps key-for-key identical.
     service.undo(project)
-    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {addr}
+    assert addressed_keys(project) == ({addr}, {addr}, {addr})
     assert project.sidecar.stocking.streams[addr].state == "42"
+    assert project.sidecar.copies[addr][0].pack_entry_id == "e-1"
     service.redo(project)
-    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {moved}
+    assert addressed_keys(project) == ({moved}, {moved}, {moved})
 
 
-def test_stocking_streams_cascade_with_notes_on_dungeon_rename_and_level_renumber(tmp_path: Path) -> None:
+def test_addressed_maps_cascade_on_dungeon_rename_and_level_renumber(tmp_path: Path) -> None:
     service, project = open_native(tmp_path)
     make_area(service, project, "7")
     addr = "dungeon:dungeon-1/level:1/area:7"
     set_note(service, project, addr, "note")
     plant_stream(service, project, addr, state="7", inc="9")
+    plant_copy(service, project, addr)
     service.apply_batch(project, batch(project, {"op": "rename_dungeon", "old_id": "dungeon-1", "new_id": "vaults"}))
     after_rename = "dungeon:vaults/level:1/area:7"
-    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_rename}
+    assert addressed_keys(project) == ({after_rename}, {after_rename}, {after_rename})
     service.apply_batch(
         project, batch(project, {"op": "renumber_level", "dungeon_id": "vaults", "old_number": 1, "new_number": 3})
     )
     after_renumber = "dungeon:vaults/level:3/area:7"
-    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_renumber}
+    assert addressed_keys(project) == ({after_renumber}, {after_renumber}, {after_renumber})
     # Parity holds through undo/redo of both re-keying ops, and the stream state
     # never rewinds — only the key follows history.
     service.undo(project)  # undo the renumber
-    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_rename}
+    assert addressed_keys(project) == ({after_rename}, {after_rename}, {after_rename})
     service.undo(project)  # undo the rename
-    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {addr}
+    assert addressed_keys(project) == ({addr}, {addr}, {addr})
     assert project.sidecar.stocking.streams[addr].state == "7"
     service.redo(project)
     service.redo(project)
-    assert set(project.sidecar.notes) == set(project.sidecar.stocking.streams) == {after_renumber}
+    assert addressed_keys(project) == ({after_renumber}, {after_renumber}, {after_renumber})
     assert project.sidecar.stocking.streams[after_renumber].state == "7"
+    assert project.sidecar.copies[after_renumber][0].pack_identity == "/packs/mill.osr"
 
 
-def test_a_stream_with_no_paired_note_still_cascades(tmp_path: Path) -> None:
+def test_a_monster_rename_cascades_no_copy_keys(tmp_path: Path) -> None:
+    # Copy records key on area and level addresses; the monster segment kind is
+    # phase 12's (template adoption). A monster template rename moves the
+    # monster-keyed note and must leave the area-keyed copy records alone.
+    service, project = open_native(tmp_path)
+    make_area(service, project, "7")
+    service.apply_batch(project, batch(project, {"op": "add_monster_template", "template": BESPOKE_TEMPLATE}))
+    plant_copy(service, project, "dungeon:dungeon-1/level:1/area:7")
+    set_note(service, project, "monster:bespoke-1", "Ours.")
+    service.apply_batch(
+        project,
+        batch(
+            project,
+            {
+                "op": "set_monster_template",
+                "template_id": "bespoke-1",
+                "template": {**BESPOKE_TEMPLATE, "id": "renamed"},
+            },
+        ),
+    )
+    assert project.sidecar.notes == {"monster:renamed": "Ours."}
+    assert set(project.sidecar.copies) == {"dungeon:dungeon-1/level:1/area:7"}
+    service.undo(project)
+    assert project.sidecar.notes == {"monster:bespoke-1": "Ours."}
+    assert set(project.sidecar.copies) == {"dungeon:dungeon-1/level:1/area:7"}
+
+
+def test_a_map_with_only_one_key_populated_still_cascades(tmp_path: Path) -> None:
     # The maps are keyed independently; a stocked room the author never annotated
     # still remaps — the guard must not skip when only one map has the key.
     service, project = open_native(tmp_path)
@@ -437,3 +494,78 @@ def test_a_stream_with_no_paired_note_still_cascades(tmp_path: Path) -> None:
     service.apply_batch(project, batch(project, {"op": "rename_dungeon", "old_id": "dungeon-1", "new_id": "vaults"}))
     assert set(project.sidecar.stocking.streams) == {"dungeon:vaults/level:1/area:7"}
     assert project.sidecar.notes == {}
+    service.apply_batch(project, batch(project, {"op": "rename_dungeon", "old_id": "vaults", "new_id": "deeps"}))
+    assert set(project.sidecar.stocking.streams) == {"dungeon:deeps/level:1/area:7"}
+
+
+def test_a_copy_with_no_paired_note_or_stream_still_cascades(tmp_path: Path) -> None:
+    service, project = open_native(tmp_path)
+    make_area(service, project, "7")
+    plant_copy(service, project, "dungeon:dungeon-1/level:1/area:7")
+    service.apply_batch(project, batch(project, {"op": "rename_dungeon", "old_id": "dungeon-1", "new_id": "vaults"}))
+    assert set(project.sidecar.copies) == {"dungeon:vaults/level:1/area:7"}
+    assert project.sidecar.notes == {} and project.sidecar.stocking.streams == {}
+
+
+# --- the copies map and the stash patches ------------------------------------
+
+
+def test_record_copy_appends_and_dedupes(tmp_path: Path) -> None:
+    from osreditor.sidecar import RecordCopy
+
+    service, project = open_native(tmp_path)
+    addr = "dungeon:dungeon-1/level:1/area:7"
+    plant_copy(service, project, addr, entry_id="e-1")
+    plant_copy(service, project, addr, entry_id="e-1")
+    plant_copy(service, project, addr, entry_id="e-2")
+    service.apply_sidecar_patch(project, (RecordCopy(address=addr, pack_identity="stash-1", pack_entry_id="e-1"),))
+    records = project.sidecar.copies[addr]
+    # The identical triple never doubles; a differing entry or identity appends.
+    assert [(record.pack_identity, record.pack_entry_id) for record in records] == [
+        ("/packs/mill.osr", "e-1"),
+        ("/packs/mill.osr", "e-2"),
+        ("stash-1", "e-1"),
+    ]
+
+
+def test_copy_records_go_dormant_on_area_removal_and_survive_undo(tmp_path: Path) -> None:
+    service, project = open_native(tmp_path)
+    make_area(service, project, "7")
+    addr = "dungeon:dungeon-1/level:1/area:7"
+    plant_copy(service, project, addr)
+    service.apply_batch(
+        project, batch(project, {"op": "remove_area", "dungeon_id": "dungeon-1", "level_number": 1, "area_id": "7"})
+    )
+    # RemoveArea leaves the record dormant — the notes rule; undoing the drop
+    # (or the removal) never unearns the badge.
+    assert set(project.sidecar.copies) == {addr}
+    service.undo(project)
+    assert set(project.sidecar.copies) == {addr}
+
+
+def test_remove_stash_pack_removes_and_tolerates_the_absent(tmp_path: Path) -> None:
+    from osreditor.library import stash_level
+    from osreditor.sidecar import RemoveStashPack
+
+    service, project = open_native(tmp_path)
+    stash_level(service, project, project.revision, "dungeon-1", 1)
+    assert [pack.pack_id for pack in project.sidecar.stash] == ["stash-1"]
+    service.apply_sidecar_patch(project, (RemoveStashPack(pack_id="stash-1"),))
+    assert project.sidecar.stash == ()
+    # The unguarded channel's tolerance: removing the absent is a no-op.
+    service.apply_sidecar_patch(project, (RemoveStashPack(pack_id="stash-1"),))
+    assert project.sidecar.stash == ()
+
+
+def test_a_sidecar_carrying_stash_content_is_byte_stable(tmp_path: Path) -> None:
+    from osreditor.documents import canonical_json_bytes
+    from osreditor.library import stash_level
+    from osreditor.sidecar import load_sidecar
+
+    service, project = open_native(tmp_path)
+    make_area(service, project, "7")
+    plant_copy(service, project, "dungeon:dungeon-1/level:1/area:7")
+    stash_level(service, project, project.revision, "dungeon-1", 1)
+    written = (project.path / "editor.json").read_bytes()
+    reloaded = load_sidecar(service.store, str(project.path))
+    assert canonical_json_bytes(reloaded.model_dump(mode="json")) == written

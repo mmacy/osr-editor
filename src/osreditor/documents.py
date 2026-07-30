@@ -73,6 +73,7 @@ from osreditor.aids import (
 )
 from osreditor.diagnostics import compute_diagnostics, forge_findings
 from osreditor.errors import (
+    DocumentPayloadInvalidError,
     OpInvariantError,
     OpRejectedError,
     OpTargetNotFoundError,
@@ -144,6 +145,7 @@ __all__ = [
     "dump_adventure",
     "json_pointer",
     "load_adventure",
+    "payload_invalid_error",
 ]
 
 ADVENTURE_ARTIFACT = "adventure.json"
@@ -202,6 +204,32 @@ def load_adventure(data: bytes) -> Adventure:
     document = json.loads(data)
     payload = check_document(document, "adventure")
     return Adventure.model_validate(payload)
+
+
+_MAX_REPORTED_LOCATIONS = 10
+
+
+def payload_invalid_error(source: Path, error: ValidationError) -> DocumentPayloadInvalidError:
+    """Shape a pydantic validation failure into the payload-invalid refusal, offending locations attached.
+
+    The one shaping both project open and the library's source open use — a
+    capped location list as RFC 6901 pointers, so the refusal names where the
+    document and the installed models disagree without flooding the envelope.
+
+    Args:
+        source: The document's directory, for the message.
+        error: The pydantic failure.
+
+    Returns:
+        The typed error, ready to raise.
+    """
+    reported = [
+        {"path": json_pointer(detail["loc"]), "message": detail["msg"]}
+        for detail in error.errors()[:_MAX_REPORTED_LOCATIONS]
+    ]
+    return DocumentPayloadInvalidError(
+        f"the document at {source} does not match the installed osrlib's models", errors=reported
+    )
 
 
 def _escape_pointer_token(token: str) -> str:
@@ -320,9 +348,10 @@ class HistoryEntry:
 
     Native entries carry the prior document plus the address key-remaps the
     commit's re-keying ops performed (undo replays them inversely, redo
-    forward, on the live sidecar's addressed maps — the per-entity `notes` and
-    the per-area stocking `streams` — in lockstep, so the two maps can never
-    drift; the addressed *content* never rides the stack, only the keys).
+    forward, on the live sidecar's addressed maps — the per-entity `notes`,
+    the per-area stocking `streams`, and the per-target copy records — in
+    lockstep, so the maps can never drift; the addressed *content* never rides
+    the stack, only the keys).
     Forge entries carry the snapshot pair instead: the `overrides.yaml` bytes
     and the `auto_reasons` tuple together — the document is derived state, and
     `auto_reasons` is derived state of the same commit, so one is never
@@ -437,6 +466,27 @@ class DocumentService:
         """
         with self._registry_lock:
             return self._by_path.get(str(path))
+
+    def with_registry[T](self, path: Path, action: Callable[[OpenProject | None], T]) -> T:
+        """Run `action` under the registry lock, passing the project open at `path` (or `None`).
+
+        The content library's source-open synchronization: the already-open
+        check and whatever load the miss branch performs (a workdir source's
+        assembly included) run under the same lock `get_or_open` serializes
+        project opens with, so a source open and a project open of one workdir
+        can never interleave two assemblies. `action` may take a project's own
+        lock (registry → project is the codebase's one lock order; nothing
+        acquires them the other way around).
+
+        Args:
+            path: The resolved directory path to look up.
+            action: The work to run; receives the open project or `None`.
+
+        Returns:
+            Whatever `action` returns.
+        """
+        with self._registry_lock:
+            return action(self._by_path.get(str(path)))
 
     def get_or_open(self, path: Path, loader: Callable[[], LoadedProject]) -> OpenProject:
         """Return the already-open project for a resolved path, or admit a new one.
@@ -897,24 +947,27 @@ class DocumentService:
     ) -> tuple[tuple[str, str], ...]:
         """Apply address-prefix remap rules to the sidecar's addressed maps in lockstep.
 
-        The two maps keyed by the diagnostics address grammar — per-entity
-        `notes` and per-area stocking `streams` — move together under the same
-        rules, so they can never drift. Each rule is an address-prefix pair; a
-        key matches when it equals the old prefix or continues it with a `/`
-        segment. Returns the actual `(old key, new key)` pairs applied across
-        the union of both maps — the entry undo replays inversely. A rule
-        landing on a key where a dormant entry sits overwrites it: the live
-        entity's entry wins, an acceptable outcome. Stream *state* never moves —
-        only its key; a re-keyed stream keeps its advanced snapshot.
+        The three maps keyed by the diagnostics address grammar — per-entity
+        `notes`, per-area stocking `streams`, and per-target copy records
+        (`copies`) — move together under the same rules, so they can never
+        drift. Each rule is an address-prefix pair; a key matches when it
+        equals the old prefix or continues it with a `/` segment. Returns the
+        actual `(old key, new key)` pairs applied across the union of the
+        maps — the entry undo replays inversely. A rule landing on a key where
+        a dormant entry sits overwrites it: the live entity's entry wins, an
+        acceptable outcome. Stream and copy *content* never moves — only its
+        key; a re-keyed stream keeps its advanced snapshot, a re-keyed copy
+        list its records.
         """
         notes = dict(project.sidecar.notes)
         streams = dict(project.sidecar.stocking.streams)
-        if not rules or (not notes and not streams):
+        copies = dict(project.sidecar.copies)
+        if not rules or (not notes and not streams and not copies):
             return ()
         applied: list[tuple[str, str]] = []
         for old_prefix, new_prefix in rules:
             moved: dict[str, str] = {}
-            for key in (*notes, *streams):
+            for key in (*notes, *streams, *copies):
                 if (key == old_prefix or key.startswith(f"{old_prefix}/")) and key not in moved:
                     moved[key] = f"{new_prefix}{key[len(old_prefix) :]}"
             for old_key, new_key in moved.items():
@@ -922,11 +975,17 @@ class DocumentService:
                     notes[new_key] = notes.pop(old_key)
                 if old_key in streams:
                     streams[new_key] = streams.pop(old_key)
+                if old_key in copies:
+                    copies[new_key] = copies.pop(old_key)
                 applied.append((old_key, new_key))
         if not applied:
             return ()
         project.sidecar = project.sidecar.model_copy(
-            update={"notes": notes, "stocking": project.sidecar.stocking.model_copy(update={"streams": streams})}
+            update={
+                "notes": notes,
+                "stocking": project.sidecar.stocking.model_copy(update={"streams": streams}),
+                "copies": copies,
+            }
         )
         self.persist_sidecar(project)
         return tuple(applied)

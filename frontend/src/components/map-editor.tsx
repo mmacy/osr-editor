@@ -22,6 +22,8 @@ import {
 import type { CardIntent } from '@/components/area-content-cards'
 import { ForgePreviewDialog } from '@/components/forge-preview-dialog'
 import { ImportDialog } from '@/components/import-dialog'
+import { LibraryCollisionDialog } from '@/components/library-collision-dialog'
+import { LibraryPanel } from '@/components/library-panel'
 import { StockingReportDialog } from '@/components/stocking-report'
 import { MapCanvas } from '@/components/map-canvas'
 import { SourcePagesPane } from '@/components/source-pages-pane'
@@ -72,6 +74,7 @@ import {
   type StockingMenuEntry,
 } from '@/map/stocking'
 import { cellSizePx, fitView, resetView, zoomAt, type ViewTransform } from '@/map/view'
+import { useLibrary } from '@/hooks/use-library'
 import { usePrefersDark } from '@/hooks/use-prefers-dark'
 import { projectStore, useProjectStore } from '@/store/project-store'
 import type {
@@ -218,6 +221,30 @@ export function MapEditor({
   // exist only for forge-backed projects.
   const forgeProject = useProjectStore((state) => state.project?.forge ?? null)
   const forgeProjectId = useProjectStore((state) => state.project?.id ?? null)
+  const projectPath = useProjectStore((state) => state.project?.path ?? '')
+  // The content library: open packs, collision memory, and the armed
+  // click-to-place entry all live for the map surface's lifetime.
+  const library = useLibrary(dungeonId, levelNumber, level)
+  // The area under an entry drag, resolved by the wrapper's dragover — the
+  // canvas highlights it like the armed hover.
+  const [dropAreaId, setDropAreaId] = useState<string | null>(null)
+  // The panel mounts only while open — a toolbar toggle, the fit-to-level
+  // precedent — so it costs the canvas nothing at rest. Closing it disarms
+  // (the aim must not survive out of sight) while the open packs and their
+  // collision memory ride the library hook and survive the toggle: hidden is
+  // not closed, and re-opening shows the packs exactly as they were.
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const toggleLibrary = () => {
+    if (libraryOpen) library.disarm()
+    setLibraryOpen((current) => !current)
+  }
+  // Arming a library entry and the modal tools are mutually exclusive:
+  // arming displaces the active tool's claim on the primary click, and
+  // choosing a tool disarms — there is never a click both would claim.
+  const chooseTool = (next: Tool) => {
+    library.disarm()
+    setTool(next)
+  }
   // The hover line's monster names resolve through the effective catalog.
   const shippedMonsters = useCatalog(loadMonsterCatalog)
   const pickerMonsters = useMemo(
@@ -416,7 +443,8 @@ export function MapEditor({
       if (dialog !== null || transitionDialog !== null) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'Escape') {
-        if (gesture) setGesture(null)
+        if (library.armed) library.disarm()
+        else if (gesture) setGesture(null)
         else setSelection(null)
         return
       }
@@ -450,7 +478,7 @@ export function MapEditor({
         return
       }
       const shortcut = SHORTCUTS.get(event.key.toLowerCase())
-      if (shortcut) setTool(shortcut)
+      if (shortcut) chooseTool(shortcut)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -582,6 +610,17 @@ export function MapEditor({
   // The hover line: the cell/edge ref plus the hovered area's one-line
   // contents in module notation.
   const hoverArea = hover?.kind === 'cell' ? areaAt(level, hover.cell) : null
+
+  // The drop target's resolution — the context menu's own hit-test + areaAt
+  // shape, over the same wrapper geometry. Existing areas only: corridors are
+  // unkeyed floor, and creating areas stays the area tool's job.
+  const resolveDropArea = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!effectiveView) return null
+    const rect = event.currentTarget.getBoundingClientRect()
+    const point = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    const target = hitTest(point, level, effectiveView, 'cell')
+    return target?.kind === 'cell' ? areaAt(level, target.cell) : null
+  }
   const hoverContents = hoverArea ? formatAreaContents(hoverArea, monsterNameFor) : ''
   const hoverLine = hoverArea
     ? `${targetRef(hover)} · ${hoverArea.id}${hoverContents ? `: ${hoverContents}` : ''}`
@@ -724,7 +763,7 @@ export function MapEditor({
                 size="icon-sm"
                 aria-label={label}
                 aria-pressed={tool === candidate}
-                onClick={() => setTool(candidate)}
+                onClick={() => chooseTool(candidate)}
               >
                 {icon}
               </Button>
@@ -823,6 +862,14 @@ export function MapEditor({
               : `Roll SRD stocking over ${unstockedCount} blank room${unstockedCount === 1 ? '' : 's'} — one undo step`}
           </TooltipContent>
         </Tooltip>
+        <Button
+          variant={libraryOpen ? 'secondary' : 'ghost'}
+          size="sm"
+          aria-pressed={libraryOpen}
+          onClick={toggleLibrary}
+        >
+          Library
+        </Button>
         {forgeProject && (
           <>
             <Separator orientation="vertical" className="mx-1 h-5" />
@@ -858,7 +905,33 @@ export function MapEditor({
               setMenuAreaId(area.id)
             }}
           >
-            <div className="relative min-w-0 flex-1">
+            <div
+              className="relative min-w-0 flex-1"
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes('application/x-osr-pack-entry')) return
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'copy'
+                setDropAreaId(resolveDropArea(event)?.id ?? null)
+              }}
+              onDragLeave={() => setDropAreaId(null)}
+              onDrop={(event) => {
+                if (!event.dataTransfer.types.includes('application/x-osr-pack-entry')) return
+                event.preventDefault()
+                setDropAreaId(null)
+                const area = resolveDropArea(event)
+                if (!area) return
+                try {
+                  const payload = JSON.parse(
+                    event.dataTransfer.getData('application/x-osr-pack-entry'),
+                  ) as { identity?: string; entryId?: string }
+                  if (payload.identity && payload.entryId) {
+                    library.placeDropped(payload.identity, payload.entryId, area.id)
+                  }
+                } catch {
+                  // A malformed payload is not a drop.
+                }
+              }}
+            >
               <MapCanvas
                 level={level}
                 view={effectiveView}
@@ -877,6 +950,14 @@ export function MapEditor({
                 markers={markers}
                 theme={theme}
                 dimStocked={unstockedFilter}
+                placing={library.armed !== null}
+                onPlace={(cell) => {
+                  // Corridor, empty cell, off-grid: a no-op that stays armed —
+                  // a missed click must not destroy the aim.
+                  const area = areaAt(level, cell)
+                  if (area) library.placeArmed(area.id)
+                }}
+                placementAreaId={dropAreaId ?? (library.armed ? (hoverArea?.id ?? null) : null)}
               />
             </div>
           </ContextMenuTrigger>
@@ -915,6 +996,20 @@ export function MapEditor({
             onCardIntentConsumed={() => setCardIntent(null)}
           />
         </aside>
+        {libraryOpen && (
+          <LibraryPanel
+            projectPath={projectPath}
+            sources={library.sources}
+            onOpenSource={library.openSource}
+            onOpenStash={library.openStash}
+            onClosePack={library.closePack}
+            onRefreshPack={library.refreshPack}
+            armed={library.armed}
+            onArm={library.arm}
+            onDisarm={library.disarm}
+            onCopyWandering={library.copyWandering}
+          />
+        )}
         {forgeProject && forgeProjectId && selection?.kind === 'area' && (
           <SourcePagesPane
             projectId={forgeProjectId}
@@ -1008,6 +1103,13 @@ export function MapEditor({
         />
       )}
       <StockingReportDialog rolls={stockingRolls} onClose={() => setStockingRolls(null)} />
+      {library.prompt && (
+        <LibraryCollisionDialog
+          kinds={library.prompt.kinds}
+          onSubmit={library.submitPrompt}
+          onCancel={library.cancelPrompt}
+        />
+      )}
     </div>
   )
 }
