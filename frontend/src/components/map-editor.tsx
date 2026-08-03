@@ -3,6 +3,7 @@
 // dialogs — all driving one selection state and committing through the
 // store's single-flight queue, one batch per completed gesture.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { usePanelRef } from 'react-resizable-panels'
 import {
   ArrowUpDownIcon,
   DoorOpenIcon,
@@ -240,6 +241,23 @@ export function MapEditor({
     (state) => state.project?.sidecar.view_state.pane_widths ?? EMPTY_PANE_WIDTHS,
   )
   const { onPaneResize, onLayoutChanged } = usePaneWidths()
+  const inspectorPanel = usePanelRef()
+  // The inspector's width while nobody has dragged it: wider for an area,
+  // because the deep content forms expand in place and need the room. Once the
+  // author has sized the pane it is theirs, whatever is selected.
+  const inspectorWidth = paneWidth(
+    paneWidths,
+    'inspector',
+    selection?.kind === 'area' ? INSPECTOR_AREA_DEFAULT : undefined,
+  )
+  // Applied imperatively, because a panel takes `defaultSize` at mount and the
+  // inspector never remounts across a selection change. Resizing the panel is
+  // an external system's business, not React state, and the layout change it
+  // provokes is not a user interaction — so nothing about it is persisted.
+  useEffect(() => {
+    inspectorPanel.current?.resize(inspectorWidth)
+  }, [inspectorWidth, inspectorPanel])
+
   // The content library: open packs, collision memory, and the armed
   // click-to-place entry all live for the map surface's lifetime.
   const library = useLibrary(dungeonId, levelNumber, level)
@@ -1079,15 +1097,11 @@ export function MapEditor({
         <ResizableHandle />
         <ResizablePanel
           id="pane-inspector"
-          // The unsized inspector still widens for an area — the deep content
-          // forms expand in place and need the room — but only until the
-          // author sizes it themselves, after which their width holds whatever
-          // is selected.
-          defaultSize={paneWidth(
-            paneWidths,
-            'inspector',
-            selection?.kind === 'area' ? INSPECTOR_AREA_DEFAULT : undefined,
-          )}
+          panelRef={inspectorPanel}
+          // The mount width; the effect above is what tracks the selection
+          // afterwards, since a changed `defaultSize` does not resize a panel
+          // that already has a size.
+          defaultSize={inspectorWidth}
           minSize={PANE_LIMITS.inspector.min}
           maxSize={PANE_LIMITS.inspector.max}
           groupResizeBehavior="preserve-pixel-size"

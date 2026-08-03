@@ -11,9 +11,10 @@ import { join } from 'node:path'
 
 import { expect, test, type Page } from '@playwright/test'
 
-import { createProject, openMap } from './helpers'
+import { cellCenter, createProject, drawRoom, openMap } from './helpers'
 
 const INSPECTOR_DEFAULT = 256
+const INSPECTOR_AREA_DEFAULT = 384
 const INSPECTOR_MIN = 224
 const CANVAS_MIN = 320
 
@@ -23,17 +24,32 @@ async function paneWidth(page: Page, pane: string): Promise<number> {
   return box!.width
 }
 
-/** Drag the splitter that sizes `pane` by `dx` page pixels. */
+/**
+ * Drag the splitter that sizes `pane` by `dx` page pixels.
+ *
+ * The target is clamped into the window, because a pointer event dispatched
+ * outside it is dropped rather than clamped — a drag "past the edge" to prove a
+ * limit would otherwise silently not happen at all.
+ */
 async function dragSplitter(page: Page, pane: string, dx: number): Promise<void> {
-  const box = await page.locator(`[data-separator][aria-controls="${pane}"]`).boundingBox()
+  const splitter = page.locator(`[data-separator][aria-controls="${pane}"]`)
+  const width = page.viewportSize()?.width ?? 0
+  // A box measured before a window resize has been laid out puts the press
+  // outside the new window, where the event is dropped and the drag silently
+  // does not happen. Wait for the splitter to be somewhere it can be pressed.
+  await expect
+    .poll(async () => (await splitter.boundingBox())?.x ?? Number.POSITIVE_INFINITY)
+    .toBeLessThan(width)
+  const box = await splitter.boundingBox()
   expect(box).not.toBeNull()
   const y = box!.y + box!.height / 2
   const x = box!.x + box!.width / 2
+  const target = Math.max(1, Math.min(width - 1, x + dx))
   await page.mouse.move(x, y)
   await page.mouse.down()
   // Two steps, so the gesture reads as a drag rather than a teleport.
-  await page.mouse.move(x + dx / 2, y)
-  await page.mouse.move(x + dx, y)
+  await page.mouse.move((x + target) / 2, y)
+  await page.mouse.move(target, y)
   await page.mouse.up()
 }
 
@@ -70,4 +86,34 @@ test('a dragged pane keeps its width across a reopen, and the floors hold', asyn
   await page.setViewportSize({ width: 900, height: 720 })
   await dragSplitter(page, 'pane-canvas', -2000)
   expect(await paneWidth(page, 'pane-canvas')).toBe(CANVAS_MIN)
+})
+
+test('the inspector widens for an area until the author sizes it, then holds', async ({ page }) => {
+  const projectDir = join(mkdtempSync(join(tmpdir(), 'osr-editor-panes-')), 'inspector.osr')
+  await createProject(page, projectDir, 'Inspector width')
+  await openMap(page)
+  await drawRoom(page, [1, 1], [2, 2])
+  const inspector = page.getByLabel('Inspector')
+
+  // Unsized, the pane follows the selection: an area's content forms expand in
+  // place and need the room. The panel library re-applies a default size when
+  // the prop changes, which is what makes this a default rather than a one-shot
+  // at mount — the pane never remounts across a selection change.
+  await expect(inspector.getByLabel('Key')).toHaveValue('1')
+  expect(await paneWidth(page, 'pane-inspector')).toBe(INSPECTOR_AREA_DEFAULT)
+  const empty = await cellCenter(page, 8, 8)
+  await page.mouse.click(empty.x, empty.y)
+  await expect(inspector).toContainText('Cell(8, 8)')
+  expect(await paneWidth(page, 'pane-inspector')).toBe(INSPECTOR_DEFAULT)
+
+  // One drag ends that: from here the author's width holds whatever is
+  // selected, because a pane that keeps jumping after it was sized reads as
+  // broken.
+  await dragSplitter(page, 'pane-canvas', -60)
+  const sized = await paneWidth(page, 'pane-inspector')
+  expect(sized).toBeCloseTo(INSPECTOR_DEFAULT + 60, 0)
+  const room = await cellCenter(page, 1, 1)
+  await page.mouse.click(room.x, room.y)
+  await expect(inspector.getByLabel('Key')).toHaveValue('1')
+  expect(await paneWidth(page, 'pane-inspector')).toBe(sized)
 })
