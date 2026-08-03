@@ -1,6 +1,11 @@
 // The view transform: level grid coordinates (cell units) to canvas CSS
 // pixels. In-memory only, per the phase 2 scope decision — an always-saved
 // editor must not turn every pan into a disk write.
+//
+// The camera arithmetic itself is content-unit-agnostic and shared with the
+// source-pages viewer (lib/pan-zoom); what lives here is the grid: the cell
+// size, the level's own fit, and this surface's scale bounds.
+import { zoomAbout, clampScale as clampToBounds, type PanZoom, type PointPx } from '@/lib/pan-zoom'
 
 // The pinned cell size in CSS pixels at 100% zoom, exported so e2e coordinate
 // math is deterministic after the reset-to-100% control.
@@ -11,17 +16,12 @@ export const RESET_MARGIN = 24
 
 export const MIN_SCALE = 0.25
 export const MAX_SCALE = 4
+const SCALE_BOUNDS = { min: MIN_SCALE, max: MAX_SCALE }
 
-export interface ViewTransform {
-  scale: number
-  offsetX: number
-  offsetY: number
-}
+/** The map's camera. The shared shape, named for the surface that holds it. */
+export type ViewTransform = PanZoom
 
-export interface PointPx {
-  x: number
-  y: number
-}
+export type { PointPx }
 
 export function cellSizePx(view: ViewTransform): number {
   return CELL_SIZE * view.scale
@@ -66,22 +66,11 @@ export function fitView(
 }
 
 export function clampScale(scale: number): number {
-  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale))
+  return clampToBounds(scale, SCALE_BOUNDS)
 }
 
 // Zoom about a canvas point: the grid coordinate under the cursor stays under
 // the cursor.
 export function zoomAt(view: ViewTransform, point: PointPx, factor: number): ViewTransform {
-  const scale = clampScale(view.scale * factor)
-  if (scale === view.scale) return view
-  const anchor = canvasToGrid(view, point)
-  return {
-    scale,
-    offsetX: point.x - anchor.x * CELL_SIZE * scale,
-    offsetY: point.y - anchor.y * CELL_SIZE * scale,
-  }
-}
-
-export function panView(view: ViewTransform, dx: number, dy: number): ViewTransform {
-  return { ...view, offsetX: view.offsetX + dx, offsetY: view.offsetY + dy }
+  return zoomAbout(view, point, factor, SCALE_BOUNDS)
 }

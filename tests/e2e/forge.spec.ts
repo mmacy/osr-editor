@@ -53,6 +53,16 @@ test('the forge review loop: flags to corrected, resolved, checked, published', 
     'Sacks of flour line the walls; something has gnawed clean through the lot.',
   )
 
+  // The page is a viewer, not a thumbnail: it opens fitted to the pane, and
+  // zooming in is what makes a printed block readable to correct against.
+  const pageStack = page.getByTestId('source-pages-viewport').locator('> div')
+  const fitted = await pageStack.evaluate((element) => element.style.transform)
+  await page.getByRole('button', { name: 'Zoom page in' }).click()
+  const zoomed = await pageStack.evaluate((element) => element.style.transform)
+  expect(zoomed).not.toBe(fitted)
+  await page.getByRole('button', { name: 'Fit page' }).click()
+  expect(await pageStack.evaluate((element) => element.style.transform)).toBe(fitted)
+
   // Correct the description against the printed page — one override entry.
   await page.getByLabel('Description').fill(CORRECTED)
   await page.getByLabel('Description').blur()

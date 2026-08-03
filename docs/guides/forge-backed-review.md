@@ -20,6 +20,8 @@ Correction happens against the page. Here a different conversion — *The Root C
 ![A flagged area open beside its printed source page, in a second converted module](../assets/screenshots/source-pages-light.png#only-light)
 ![A flagged area open beside its printed source page, in a second converted module](../assets/screenshots/source-pages-dark.png#only-dark)
 
+The page is a viewer, not a thumbnail. It opens fitted to the pane, and from there it moves like the map: drag the page to pan it, wheel or pinch to zoom about the pointer, **Fit page** to frame the whole page again, **Reset page zoom** for full size. When the printed block is what you are reading, [drag the pane wider](map-editor.md#sizing-the-panels) — the width is remembered with the rest of the project's layout.
+
 Every edit you commit gets an auto-drafted, page-anchored reason: redrawing geometry writes explicit wall seals over stale synthesized openings, importing a level lands as `geometry:` overrides, drawing past the derived extent grows it by rule. Machine drafts are badged until a human composes the reason — the record stays reviewable either way.
 
 ## Corrections
