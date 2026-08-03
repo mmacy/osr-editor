@@ -23,6 +23,7 @@ __all__ = [
     "CopyRecord",
     "DismissFlag",
     "EditorSidecar",
+    "PaneWidths",
     "RecordCopy",
     "RemoveNote",
     "RemoveStashPack",
@@ -73,6 +74,28 @@ class ZoomPan(BaseModel):
     pan_y: float
 
 
+class PaneWidths(BaseModel):
+    """The author-dragged width of each resizable side pane, in CSS pixels.
+
+    One optional field per pane rather than a keyed map, because the panes are
+    a closed set the editor names in code — an unset field means the pane has
+    never been dragged and follows the layout's own default, which for the
+    inspector still tracks the selection (wider for an area). A pane the editor
+    grows later lands as another optional field, the additive-only rule the
+    sidecar's schema version already carries.
+
+    Widths are whole pixels: the file is read by humans in a diff, and a pane
+    dragged to 265.3333 pixels is not a fact worth recording.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    nav: int | None = None
+    inspector: int | None = None
+    library: int | None = None
+    source_pages: int | None = None
+
+
 class ViewState(BaseModel):
     """Where a session left off: the active level, per-level cameras, the review queue's selected row.
 
@@ -86,6 +109,9 @@ class ViewState(BaseModel):
     returning to a project restores its loaded packs. Each restoration is an
     ordinary fresh open, never a sync; an identity that no longer opens is
     forgotten with its refusal surfaced once.
+
+    `pane_widths` is the layout the author dragged, on the same terms as the
+    cameras: written when a drag ends, never per pointer frame.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -95,6 +121,7 @@ class ViewState(BaseModel):
     zoom_pan: dict[str, ZoomPan] = {}
     review_selection: str | None = None
     library_sources: tuple[str, ...] = ()
+    pane_widths: PaneWidths = PaneWidths()
 
 
 class ReviewMark(BaseModel):

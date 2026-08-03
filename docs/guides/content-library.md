@@ -12,6 +12,8 @@ Loaded libraries are remembered per project: leave for the home screen or anothe
 
 Every entry row previews in place: the chevron discloses the entry's description and one module-notation line per carried kind — the encounter with its monster names resolved, the trap, the treasure, each feature — so you can read a room before placing it rather than dropping it to find out. The toggle in the panel header expands or collapses every row in every open pack at once, for scanning a whole palette. Previews are read-only, like everything else in the panel; placing is still the only write.
 
+Long section and entry labels truncate to the panel's width rather than pushing the glyphs and the **Place** button out of frame — and the panel's width is yours to set, so [drag it wider](map-editor.md#sizing-the-panels) when a palette's names deserve the room.
+
 ![The content library panel with an open source, kind glyphs, used badges, and an expanded entry preview](../assets/screenshots/library-panel-light.png#only-light)
 ![The content library panel with an open source, kind glyphs, used badges, and an expanded entry preview](../assets/screenshots/library-panel-dark.png#only-dark)
 

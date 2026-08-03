@@ -38,6 +38,14 @@ Zoom is proportional to the gesture and **accelerates as you push it**: the firs
 
 A mouse wheel and a trackpad two-finger drag reach the browser as the same event, so the editor tells them apart by the shape of the scroll. If yours is ever read wrong, **ctrl-scroll** (or **cmd-scroll**) always zooms.
 
+## Sizing the panels
+
+Every panel around the canvas takes the width you drag it to: the section list on the left, the inspector, the [content library](content-library.md), and — in a forge-backed project — the [source pages](forge-backed-review.md#review). Grab the splitter between a panel and its neighbour and pull. A room name too long for the panel is then your decision rather than the layout's, which is the point: trade canvas for panel when you are writing, and back when you are drawing.
+
+Neither side can be dragged away. Each panel stops at a width that still shows its own controls, and the canvas keeps a floor of its own, so no panel can take the window.
+
+Widths belong to the project, kept in its editor sidecar beside the per-level camera — set a layout and it is still there when you open the project tomorrow. Until you set one, the inspector widens on its own whenever an area is selected, because the content forms need the room; from your first drag onward your width holds whatever is selected.
+
 ## Levels and dungeons
 
 An adventure holds any number of dungeons, each with any number of levels. The map chrome manages both: create, rename, and renumber (renames cascade through every reference in one undo step), and resize a level — with the offenders listed first when a shrink would strand geometry. **Remove level** discards the level from the row itself; a dungeon's last level can't go, and hovering the dimmed control says why.

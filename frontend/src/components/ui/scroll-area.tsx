@@ -14,9 +14,17 @@ function ScrollArea({
       className={cn('relative', className)}
       {...props}
     >
+      {/* One deliberate departure from the upstream component: radix wraps
+          scroll content in an inline-styled `min-width:100%; display:table`
+          div, which sizes to its widest max-content row and so grows past a
+          narrow container instead of wrapping or truncating inside it. Forcing
+          it back to a block holds content to the viewport's width — the
+          override has to be `!important` because the style it beats is inline.
+          Nothing in the editor scrolls horizontally, and the resizable panes
+          depend on their content following the width the author dragged. */}
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] outline-none transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="size-full rounded-[inherit] outline-none transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring/50 [&>div]:!block"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

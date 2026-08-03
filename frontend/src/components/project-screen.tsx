@@ -19,13 +19,16 @@ import { AdventureForm, TownForm } from '@/components/forms'
 import { MapEditor } from '@/components/map-editor'
 import { buildReviewRows, undismissedFlagCount } from '@/lib/review'
 import { Button } from '@/components/ui/button'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { usePaneWidths } from '@/hooks/use-pane-widths'
 import { api, ApiRequestError } from '@/lib/api'
 import type { NavTarget } from '@/lib/address'
 import { isActive } from '@/lib/conversion'
 import { removeInvalidEdgeOps } from '@/lib/lint-actions'
+import { CANVAS_MIN, PANE_LIMITS, paneWidth } from '@/lib/pane-widths'
 import { cn } from '@/lib/utils'
 import { projectStore, useProjectStore } from '@/store/project-store'
 import type { Finding } from '@/types'
@@ -40,6 +43,9 @@ export function ProjectScreen() {
   const conversion = useProjectStore((state) => state.conversion)
   const conversionBusy = conversion !== null && isActive(conversion.state)
   const [section, setSection] = useState<NavTarget>({ kind: 'adventure' })
+  // The section nav's splitter; the map surface's three panes carry their own
+  // group inside the map editor.
+  const { onPaneResize, onLayoutChanged } = usePaneWidths()
   // Bumped on every diagnostics navigation so clicking the same finding twice
   // re-applies its focus (re-select, re-scroll, re-open properties).
   const [focusToken, setFocusToken] = useState(0)
@@ -186,8 +192,20 @@ export function ProjectScreen() {
         <PublishDialog onNavigate={navigateTo} />
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <aside className="w-56 shrink-0 border-r bg-card">
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 flex-1"
+        onLayoutChanged={onLayoutChanged}
+      >
+        <ResizablePanel
+          id="pane-nav"
+          defaultSize={paneWidth(project.sidecar.view_state.pane_widths, 'nav')}
+          minSize={PANE_LIMITS.nav.min}
+          maxSize={PANE_LIMITS.nav.max}
+          groupResizeBehavior="preserve-pixel-size"
+          onResize={onPaneResize('nav')}
+          className="bg-card"
+        >
           <ScrollArea className="h-full">
             <nav aria-label="Sections" className="flex flex-col gap-0.5 p-2">
               {project.forge && (
@@ -264,38 +282,40 @@ export function ProjectScreen() {
               ))}
             </nav>
           </ScrollArea>
-        </aside>
-
-        <main
-          className={cn(
-            'min-w-0 flex-1',
-            section.kind === 'level' ? 'flex min-h-0 flex-col' : 'overflow-y-auto p-6',
-          )}
-        >
-          {section.kind === 'adventure' && <AdventureForm document={project.document} />}
-          {section.kind === 'town' && <TownForm document={project.document} />}
-          {section.kind === 'review' && <ReviewQueue project={project} onNavigate={navigateTo} />}
-          {section.kind === 'corrections' && (
-            <CorrectionsPanel project={project} onNavigate={navigateTo} />
-          )}
-          {section.kind === 'pipeline' && <PipelinePanel project={project} />}
-          {section.kind === 'monster-resolution' && <MonsterResolutionPanel project={project} />}
-          {section.kind === 'monsters' && (
-            <MonstersSection project={project} section={section} focusToken={focusToken} />
-          )}
-          {section.kind === 'level' && (
-            <MapEditor
-              document={project.document}
-              diagnostics={project.diagnostics}
-              dungeonId={section.dungeonId}
-              levelNumber={section.levelNumber}
-              focus={section.focus}
-              focusToken={focusToken}
-              onNavigate={navigateTo}
-            />
-          )}
-        </main>
-      </div>
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel id="pane-body" minSize={CANVAS_MIN}>
+          <main
+            className={cn(
+              'h-full min-w-0',
+              section.kind === 'level' ? 'flex min-h-0 flex-col' : 'overflow-y-auto p-6',
+            )}
+          >
+            {section.kind === 'adventure' && <AdventureForm document={project.document} />}
+            {section.kind === 'town' && <TownForm document={project.document} />}
+            {section.kind === 'review' && <ReviewQueue project={project} onNavigate={navigateTo} />}
+            {section.kind === 'corrections' && (
+              <CorrectionsPanel project={project} onNavigate={navigateTo} />
+            )}
+            {section.kind === 'pipeline' && <PipelinePanel project={project} />}
+            {section.kind === 'monster-resolution' && <MonsterResolutionPanel project={project} />}
+            {section.kind === 'monsters' && (
+              <MonstersSection project={project} section={section} focusToken={focusToken} />
+            )}
+            {section.kind === 'level' && (
+              <MapEditor
+                document={project.document}
+                diagnostics={project.diagnostics}
+                dungeonId={section.dungeonId}
+                levelNumber={section.levelNumber}
+                focus={section.focus}
+                focusToken={focusToken}
+                onNavigate={navigateTo}
+              />
+            )}
+          </main>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       <DiagnosticsPanel
         diagnostics={project.diagnostics}
