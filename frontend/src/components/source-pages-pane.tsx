@@ -70,10 +70,8 @@ export function SourcePagesPane({
     setFitted(false)
   }
 
-  const fit = (page: PageSize | null = widest) => {
-    if (!page) return
-    setView(fitAcross(page.width, viewportRef.current?.clientWidth ?? 0, FIT_MARGIN, SCALE_BOUNDS))
-  }
+  const fitTo = (width: number) =>
+    setView(fitAcross(width, viewportRef.current?.clientWidth ?? 0, FIT_MARGIN, SCALE_BOUNDS))
 
   // Native and non-passive, exactly as the map canvas registers its own:
   // React's root `wheel` listener is passive, where preventDefault is a no-op,
@@ -152,7 +150,12 @@ export function SourcePagesPane({
             >
               <MaximizeIcon />
             </Button>
-            <Button variant="ghost" size="icon-sm" aria-label="Fit page" onClick={() => fit()}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Fit page"
+              onClick={() => widest && fitTo(widest.width)}
+            >
               <FullscreenIcon />
             </Button>
           </span>
@@ -221,12 +224,13 @@ export function SourcePagesPane({
                       setWidest((current) =>
                         current && current.width >= size.width ? current : size,
                       )
-                      // The first page to arrive frames the pane; every page
-                      // after it is the author's to find, because by then the
-                      // camera is theirs.
+                      // The first render to arrive frames the pane — the pages
+                      // of one scan share a width, so which one it is does not
+                      // matter — and from there the camera is the author's: a
+                      // page that loads later never moves it.
                       if (!fitted) {
                         setFitted(true)
-                        fit(size)
+                        fitTo(size.width)
                       }
                     }}
                     onError={() => setFailed((state) => ({ ...state, [page]: true }))}
