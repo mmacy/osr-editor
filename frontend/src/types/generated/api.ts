@@ -2387,7 +2387,8 @@ export interface components {
             /**
              * @default {
              *       "zoom_pan": {},
-             *       "library_sources": []
+             *       "library_sources": [],
+             *       "pane_widths": {}
              *     }
              */
             view_state: components["schemas"]["ViewState"];
@@ -3615,6 +3616,30 @@ export interface components {
             wandering?: components["schemas"]["WanderingSpec"] | null;
         };
         /**
+         * PaneWidths
+         * @description The author-dragged width of each resizable side pane, in CSS pixels.
+         *
+         *     One optional field per pane rather than a keyed map, because the panes are
+         *     a closed set the editor names in code — an unset field means the pane has
+         *     never been dragged and follows the layout's own default, which for the
+         *     inspector still tracks the selection (wider for an area). A pane the editor
+         *     grows later lands as another optional field, the additive-only rule the
+         *     sidecar's schema version already carries.
+         *
+         *     Widths are whole pixels: the file is read by humans in a diff, and a pane
+         *     dragged to 265.3333 pixels is not a fact worth recording.
+         */
+        PaneWidths: {
+            /** Nav */
+            nav?: number | null;
+            /** Inspector */
+            inspector?: number | null;
+            /** Library */
+            library?: number | null;
+            /** Source Pages */
+            source_pages?: number | null;
+        };
+        /**
          * PickerLocation
          * @description One remembered picker location.
          */
@@ -3698,6 +3723,7 @@ export interface components {
              *       "schema_version": 1,
              *       "view_state": {
              *         "library_sources": [],
+             *         "pane_widths": {},
              *         "zoom_pan": {}
              *       },
              *       "notes": {},
@@ -5467,6 +5493,9 @@ export interface components {
          *     returning to a project restores its loaded packs. Each restoration is an
          *     ordinary fresh open, never a sync; an identity that no longer opens is
          *     forgotten with its refusal surfaced once.
+         *
+         *     `pane_widths` is the layout the author dragged, on the same terms as the
+         *     cameras: written when a drag ends, never per pointer frame.
          */
         ViewState: {
             /** Active Dungeon Id */
@@ -5487,6 +5516,8 @@ export interface components {
              * @default []
              */
             library_sources: string[];
+            /** @default {} */
+            pane_widths: components["schemas"]["PaneWidths"];
         };
         /**
          * WanderingSpec

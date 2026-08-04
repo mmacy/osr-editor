@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { beginGesture, updateGesture, type Gesture, type Tool } from '@/map/gestures'
 import { hitTest, type HitTarget } from '@/map/hit-test'
 import { drawLevel, type MapMarker, type MapSelection, type MapTheme } from '@/map/render'
-import { panView, zoomAt, type PointPx, type ViewTransform } from '@/map/view'
+import { panBy } from '@/lib/pan-zoom'
+import { zoomAt, type PointPx, type ViewTransform } from '@/map/view'
 import { NO_BURST, readWheel } from '@/map/wheel'
 import type { LevelSpec, Position } from '@/types'
 
@@ -83,9 +84,7 @@ export function MapCanvas(props: MapCanvasProps) {
   }, [])
 
   // Track the element size: backing store scales for devicePixelRatio, and
-  // the editor learns the viewport for fit-on-open. jsdom has no
-  // ResizeObserver and no layout — fall back to a fixed size so component
-  // tests still initialize a view.
+  // the editor learns the viewport for fit-on-open.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -94,10 +93,6 @@ export function MapCanvas(props: MapCanvasProps) {
       canvas.width = Math.max(1, Math.round(width * ratio))
       canvas.height = Math.max(1, Math.round(height * ratio))
       props.onViewportSize({ width, height })
-    }
-    if (typeof ResizeObserver === 'undefined') {
-      apply(800, 600)
-      return
     }
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -159,7 +154,7 @@ export function MapCanvas(props: MapCanvasProps) {
       onViewChangeRef.current((current) =>
         action.kind === 'zoom'
           ? zoomAt(current, point, action.factor)
-          : panView(current, action.dx, action.dy),
+          : panBy(current, action.dx, action.dy),
       )
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
@@ -227,7 +222,7 @@ export function MapCanvas(props: MapCanvasProps) {
     if (panning.current) {
       const { x, y } = panning.current
       panning.current = { x: event.clientX, y: event.clientY }
-      props.onViewChange((current) => panView(current, event.clientX - x, event.clientY - y))
+      props.onViewChange((current) => panBy(current, event.clientX - x, event.clientY - y))
       return
     }
     const target = hitTest(

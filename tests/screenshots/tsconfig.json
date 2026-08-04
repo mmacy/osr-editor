@@ -11,7 +11,8 @@
     "typeRoots": ["../../frontend/node_modules/@types"],
     "baseUrl": ".",
     "paths": {
-      "@playwright/test": ["../../frontend/node_modules/@playwright/test"]
+      "@playwright/test": ["../../frontend/node_modules/@playwright/test"],
+      "@/*": ["../../frontend/src/*"]
     }
   },
   "include": ["**/*.ts", "../e2e/helpers.ts"]

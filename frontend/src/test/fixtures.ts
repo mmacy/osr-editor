@@ -70,6 +70,7 @@ export function makeProjectState(overrides: Partial<ProjectState> = {}): Project
         zoom_pan: {},
         review_selection: null,
         library_sources: [],
+        pane_widths: {},
       },
       notes: {},
       review: [],

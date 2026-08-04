@@ -129,7 +129,7 @@ export function LibraryPanel({
     <aside
       aria-label="Content library"
       data-testid="library-panel"
-      className="flex min-h-0 shrink-0 flex-col border-l bg-card"
+      className="flex h-full min-h-0 flex-col bg-card"
     >
       <div className="flex items-center gap-1 border-b px-2 py-1.5">
         <span className="text-xs font-medium">Library</span>
@@ -147,13 +147,13 @@ export function LibraryPanel({
           </Button>
         )}
       </div>
-      <ScrollArea className="min-h-0 w-80 flex-1">
-        {/* Pinned to the viewport's own width: radix wraps scroll content in a
-            min-width:100% display:table div sized by the widest max-content
-            row, so an unpinned column grows past the panel and clips under
-            overflow:hidden — labels must truncate instead, keeping the kind
-            glyphs, used badges, and buttons in frame. */}
-        <div className="flex w-80 flex-col gap-3 p-2">
+      <ScrollArea className="min-h-0 w-full flex-1">
+        {/* Pinned to the viewport's own width, which the author now sets by
+            dragging the splitter: labels must truncate at whatever that width
+            is, keeping the kind glyphs, used badges, and buttons in frame. The
+            scroll area's own viewport is what holds the content to it — see
+            the note in ui/scroll-area.tsx. */}
+        <div className="flex w-full flex-col gap-3 p-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="library-source">Open a source</Label>
             <div className="flex gap-2">

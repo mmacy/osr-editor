@@ -3,6 +3,7 @@
 // dialogs — all driving one selection state and committing through the
 // store's single-flight queue, one batch per completed gesture.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { usePanelRef } from 'react-resizable-panels'
 import {
   ArrowUpDownIcon,
   DoorOpenIcon,
@@ -46,6 +47,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { levelAddress, type LevelFocus, type NavTarget } from '@/lib/address'
@@ -53,6 +55,14 @@ import { effectiveMonsterCatalog, loadMonsterCatalog, useCatalog } from '@/lib/c
 import { areaTrapOps, encounterOps, treasureOps } from '@/lib/content-builders'
 import { hasClearable } from '@/lib/level-content'
 import { formatAreaContents } from '@/lib/notation'
+import {
+  CANVAS_MIN,
+  EMPTY_PANE_WIDTHS,
+  INSPECTOR_AREA_DEFAULT,
+  PANE_LIMITS,
+  paneWidth,
+} from '@/lib/pane-widths'
+import { areaReportFor } from '@/lib/review'
 import { cn } from '@/lib/utils'
 import { parseEdgeKey } from '@/map/edge-key'
 import {
@@ -77,6 +87,7 @@ import {
 } from '@/map/stocking'
 import { cellSizePx, fitView, resetView, zoomAt, type ViewTransform } from '@/map/view'
 import { useLibrary } from '@/hooks/use-library'
+import { usePaneWidths } from '@/hooks/use-pane-widths'
 import { usePrefersDark } from '@/hooks/use-prefers-dark'
 import { projectStore, useProjectStore } from '@/store/project-store'
 import type {
@@ -224,6 +235,29 @@ export function MapEditor({
   const forgeProject = useProjectStore((state) => state.project?.forge ?? null)
   const forgeProjectId = useProjectStore((state) => state.project?.id ?? null)
   const projectPath = useProjectStore((state) => state.project?.path ?? '')
+  // The three map-side panes and their splitters: widths come from the sidecar
+  // and go back to it when a drag ends.
+  const paneWidths = useProjectStore(
+    (state) => state.project?.sidecar.view_state.pane_widths ?? EMPTY_PANE_WIDTHS,
+  )
+  const { onPaneResize, onLayoutChanged } = usePaneWidths()
+  const inspectorPanel = usePanelRef()
+  // The inspector's width while nobody has dragged it: wider for an area,
+  // because the deep content forms expand in place and need the room. Once the
+  // author has sized the pane it is theirs, whatever is selected.
+  const inspectorWidth = paneWidth(
+    paneWidths,
+    'inspector',
+    selection?.kind === 'area' ? INSPECTOR_AREA_DEFAULT : undefined,
+  )
+  // Applied imperatively, because a panel takes `defaultSize` at mount and the
+  // inspector never remounts across a selection change. Resizing the panel is
+  // an external system's business, not React state, and the layout change it
+  // provokes is not a user interaction — so nothing about it is persisted.
+  useEffect(() => {
+    inspectorPanel.current?.resize(inspectorWidth)
+  }, [inspectorWidth, inspectorPanel])
+
   // The content library: open packs, collision memory, and the armed
   // click-to-place entry all live for the map surface's lifetime.
   const library = useLibrary(dungeonId, levelNumber, level)
@@ -675,6 +709,20 @@ export function MapEditor({
     dungeonId,
     levelNumber,
   )
+
+  // The selected area's printed pages, when the report knows any. Resolved here
+  // rather than inside the pane because the pane and its splitter now mount
+  // together: a forge area whose report lists no page must not leave a bare
+  // splitter and an empty column behind.
+  const selectedAreaPages =
+    forgeProject && selection?.kind === 'area'
+      ? (areaReportFor(forgeProject.report, dungeonId, levelNumber, selection.areaId)
+          ?.source_pages ?? [])
+      : []
+  const sourcePages =
+    forgeProjectId && selectedAreaPages.length > 0
+      ? { projectId: forgeProjectId, pages: selectedAreaPages }
+      : null
   const sortedLevels = [...dungeon.levels].sort((a, b) => a.number - b.number)
   const lastDungeon = document.dungeons.length === 1
   const lastLevel = dungeon.levels.length === 1
@@ -927,166 +975,195 @@ export function MapEditor({
         </span>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        <ContextMenu>
-          <ContextMenuTrigger
-            asChild
-            onContextMenu={(event) => {
-              // The trigger only fires over an area cell; preventDefault
-              // suppresses both radix and the native menu everywhere else.
-              if (!effectiveView) {
-                event.preventDefault()
-                return
-              }
-              const rect = event.currentTarget.getBoundingClientRect()
-              const point = { x: event.clientX - rect.left, y: event.clientY - rect.top }
-              const target = hitTest(point, level, effectiveView, 'cell')
-              const area = target?.kind === 'cell' ? areaAt(level, target.cell) : null
-              if (!area) {
-                event.preventDefault()
-                return
-              }
-              setMenuAreaId(area.id)
-            }}
-          >
-            <div
-              className="relative min-w-0 flex-1 overflow-hidden"
-              onDragOver={(event) => {
-                if (!event.dataTransfer.types.includes('application/x-osr-pack-entry')) return
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'copy'
-                setDropAreaId(resolveDropArea(event)?.id ?? null)
-              }}
-              onDragLeave={() => setDropAreaId(null)}
-              onDrop={(event) => {
-                if (!event.dataTransfer.types.includes('application/x-osr-pack-entry')) return
-                event.preventDefault()
-                setDropAreaId(null)
-                const area = resolveDropArea(event)
-                if (!area) return
-                try {
-                  const payload = JSON.parse(
-                    event.dataTransfer.getData('application/x-osr-pack-entry'),
-                  ) as { identity?: string; entryId?: string }
-                  if (payload.identity && payload.entryId) {
-                    library.placeDropped(payload.identity, payload.entryId, area.id)
-                  }
-                } catch {
-                  // A malformed payload is not a drop.
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 flex-1"
+        onLayoutChanged={onLayoutChanged}
+      >
+        <ResizablePanel id="pane-canvas" minSize={CANVAS_MIN} className="overflow-hidden">
+          <ContextMenu>
+            <ContextMenuTrigger
+              asChild
+              onContextMenu={(event) => {
+                // The trigger only fires over an area cell; preventDefault
+                // suppresses both radix and the native menu everywhere else.
+                if (!effectiveView) {
+                  event.preventDefault()
+                  return
                 }
+                const rect = event.currentTarget.getBoundingClientRect()
+                const point = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+                const target = hitTest(point, level, effectiveView, 'cell')
+                const area = target?.kind === 'cell' ? areaAt(level, target.cell) : null
+                if (!area) {
+                  event.preventDefault()
+                  return
+                }
+                setMenuAreaId(area.id)
               }}
             >
-              <MapCanvas
-                level={level}
-                view={effectiveView}
-                onViewChange={updateView}
-                onViewportSize={setViewport}
-                tool={tool}
-                gesture={gesture}
-                onGestureChange={setGesture}
-                onGestureComplete={completeGesture}
-                selection={selection}
-                hover={hover}
-                onHover={setHover}
-                onSelect={selectTarget}
-                onPlaceEntrance={placeEntrance}
-                onTransitionAt={transitionAt}
-                markers={markers}
-                theme={theme}
-                dimStocked={unstockedFilter}
-                placing={library.armed !== null}
-                onPlace={(cell) => {
-                  // Corridor, empty cell, off-grid: a no-op that stays armed —
-                  // a missed click must not destroy the aim.
-                  const area = areaAt(level, cell)
-                  if (area) library.placeArmed(area.id)
+              <div
+                className="relative h-full w-full overflow-hidden"
+                onDragOver={(event) => {
+                  if (!event.dataTransfer.types.includes('application/x-osr-pack-entry')) return
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'copy'
+                  setDropAreaId(resolveDropArea(event)?.id ?? null)
                 }}
-                placementAreaId={dropAreaId ?? (library.armed ? (hoverArea?.id ?? null) : null)}
-              />
-              {/* Hover-only and pointer-transparent: the card never takes a
+                onDragLeave={() => setDropAreaId(null)}
+                onDrop={(event) => {
+                  if (!event.dataTransfer.types.includes('application/x-osr-pack-entry')) return
+                  event.preventDefault()
+                  setDropAreaId(null)
+                  const area = resolveDropArea(event)
+                  if (!area) return
+                  try {
+                    const payload = JSON.parse(
+                      event.dataTransfer.getData('application/x-osr-pack-entry'),
+                    ) as { identity?: string; entryId?: string }
+                    if (payload.identity && payload.entryId) {
+                      library.placeDropped(payload.identity, payload.entryId, area.id)
+                    }
+                  } catch {
+                    // A malformed payload is not a drop.
+                  }
+                }}
+              >
+                <MapCanvas
+                  level={level}
+                  view={effectiveView}
+                  onViewChange={updateView}
+                  onViewportSize={setViewport}
+                  tool={tool}
+                  gesture={gesture}
+                  onGestureChange={setGesture}
+                  onGestureComplete={completeGesture}
+                  selection={selection}
+                  hover={hover}
+                  onHover={setHover}
+                  onSelect={selectTarget}
+                  onPlaceEntrance={placeEntrance}
+                  onTransitionAt={transitionAt}
+                  markers={markers}
+                  theme={theme}
+                  dimStocked={unstockedFilter}
+                  placing={library.armed !== null}
+                  onPlace={(cell) => {
+                    // Corridor, empty cell, off-grid: a no-op that stays armed —
+                    // a missed click must not destroy the aim.
+                    const area = areaAt(level, cell)
+                    if (area) library.placeArmed(area.id)
+                  }}
+                  placementAreaId={dropAreaId ?? (library.armed ? (hoverArea?.id ?? null) : null)}
+                />
+                {/* Hover-only and pointer-transparent: the card never takes a
                   click, and it duplicates what the inspector already offers
                   accessibly, so it hides from the accessibility tree. */}
-              {hoverCardArea && hoverCardBox && (
-                <div
-                  aria-hidden="true"
-                  data-testid="area-hover-card"
-                  className="pointer-events-none absolute z-10 flex max-h-56 w-72 flex-col gap-1 overflow-hidden rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
-                  style={{ left: hoverCardBox.left, top: hoverCardBox.top }}
-                >
-                  <p className="text-xs font-medium">
-                    Area {hoverCardArea.id}
-                    {hoverCardArea.name !== '' && ` — ${hoverCardArea.name}`}
-                  </p>
-                  {hoverCardArea.description !== '' && (
-                    <p className="line-clamp-3 text-xs break-words text-muted-foreground">
-                      {hoverCardArea.description}
+                {hoverCardArea && hoverCardBox && (
+                  <div
+                    aria-hidden="true"
+                    data-testid="area-hover-card"
+                    className="pointer-events-none absolute z-10 flex max-h-56 w-72 flex-col gap-1 overflow-hidden rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
+                    style={{ left: hoverCardBox.left, top: hoverCardBox.top }}
+                  >
+                    <p className="text-xs font-medium">
+                      Area {hoverCardArea.id}
+                      {hoverCardArea.name !== '' && ` — ${hoverCardArea.name}`}
                     </p>
-                  )}
-                  <ContentPreviewLines contents={hoverCardArea} nameFor={monsterNameFor} />
-                </div>
-              )}
-            </div>
-          </ContextMenuTrigger>
-          <ContextMenuContent aria-label={menuArea ? `Stock area ${menuArea.id}` : undefined}>
-            {menuArea &&
-              stockingMenuEntries(menuArea).map((entry) => (
-                <ContextMenuItem
-                  key={entry.id}
-                  variant={entry.action === 'remove' ? 'destructive' : 'default'}
-                  onSelect={() => applyMenuEntry(menuArea.id, entry)}
-                >
-                  {entry.label}
-                </ContextMenuItem>
-              ))}
-          </ContextMenuContent>
-        </ContextMenu>
-        <aside
-          className={cn(
-            'shrink-0 overflow-y-auto border-l bg-card',
-            // The deep content forms expand in place and need the room —
-            // still an aside, never a modal.
-            selection?.kind === 'area' ? 'w-96' : 'w-64',
-          )}
-          aria-label="Inspector"
+                    {hoverCardArea.description !== '' && (
+                      <p className="line-clamp-3 text-xs break-words text-muted-foreground">
+                        {hoverCardArea.description}
+                      </p>
+                    )}
+                    <ContentPreviewLines contents={hoverCardArea} nameFor={monsterNameFor} />
+                  </div>
+                )}
+              </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent aria-label={menuArea ? `Stock area ${menuArea.id}` : undefined}>
+              {menuArea &&
+                stockingMenuEntries(menuArea).map((entry) => (
+                  <ContextMenuItem
+                    key={entry.id}
+                    variant={entry.action === 'remove' ? 'destructive' : 'default'}
+                    onSelect={() => applyMenuEntry(menuArea.id, entry)}
+                  >
+                    {entry.label}
+                  </ContextMenuItem>
+                ))}
+            </ContextMenuContent>
+          </ContextMenu>
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel
+          id="pane-inspector"
+          panelRef={inspectorPanel}
+          // The mount width; the effect above is what tracks the selection
+          // afterwards, since a changed `defaultSize` does not resize a panel
+          // that already has a size.
+          defaultSize={inspectorWidth}
+          minSize={PANE_LIMITS.inspector.min}
+          maxSize={PANE_LIMITS.inspector.max}
+          groupResizeBehavior="preserve-pixel-size"
+          onResize={onPaneResize('inspector')}
         >
-          <MapInspector
-            document={document}
-            dungeonId={dungeonId}
-            levelNumber={levelNumber}
-            selection={selection}
-            onSelectionChange={setSelection}
-            onEditTransition={(cell, transition) =>
-              setTransitionDialog({ cell, existing: transition })
-            }
-            cardIntent={cardIntent}
-            onCardIntentConsumed={() => setCardIntent(null)}
-          />
-        </aside>
+          <aside className="h-full overflow-y-auto bg-card" aria-label="Inspector">
+            <MapInspector
+              document={document}
+              dungeonId={dungeonId}
+              levelNumber={levelNumber}
+              selection={selection}
+              onSelectionChange={setSelection}
+              onEditTransition={(cell, transition) =>
+                setTransitionDialog({ cell, existing: transition })
+              }
+              cardIntent={cardIntent}
+              onCardIntentConsumed={() => setCardIntent(null)}
+            />
+          </aside>
+        </ResizablePanel>
         {libraryOpen && (
-          <LibraryPanel
-            projectPath={projectPath}
-            sources={library.sources}
-            onOpenSource={library.openSource}
-            onOpenStash={library.openStash}
-            onClosePack={library.closePack}
-            onRefreshPack={library.refreshPack}
-            armed={library.armed}
-            onArm={library.arm}
-            onDisarm={library.disarm}
-            onCopyWandering={library.copyWandering}
-          />
+          <>
+            <ResizableHandle />
+            <ResizablePanel
+              id="pane-library"
+              defaultSize={paneWidth(paneWidths, 'library')}
+              minSize={PANE_LIMITS.library.min}
+              maxSize={PANE_LIMITS.library.max}
+              groupResizeBehavior="preserve-pixel-size"
+              onResize={onPaneResize('library')}
+            >
+              <LibraryPanel
+                projectPath={projectPath}
+                sources={library.sources}
+                onOpenSource={library.openSource}
+                onOpenStash={library.openStash}
+                onClosePack={library.closePack}
+                onRefreshPack={library.refreshPack}
+                armed={library.armed}
+                onArm={library.arm}
+                onDisarm={library.disarm}
+                onCopyWandering={library.copyWandering}
+              />
+            </ResizablePanel>
+          </>
         )}
-        {forgeProject && forgeProjectId && selection?.kind === 'area' && (
-          <SourcePagesPane
-            projectId={forgeProjectId}
-            pages={
-              forgeProject.report.areas.find(
-                (record) => record.id === `${dungeonId}/${levelNumber}/${selection.areaId}`,
-              )?.source_pages ?? []
-            }
-          />
+        {sourcePages !== null && (
+          <>
+            <ResizableHandle />
+            <ResizablePanel
+              id="pane-source-pages"
+              defaultSize={paneWidth(paneWidths, 'source_pages')}
+              minSize={PANE_LIMITS.source_pages.min}
+              maxSize={PANE_LIMITS.source_pages.max}
+              groupResizeBehavior="preserve-pixel-size"
+              onResize={onPaneResize('source_pages')}
+            >
+              <SourcePagesPane projectId={sourcePages.projectId} pages={sourcePages.pages} />
+            </ResizablePanel>
+          </>
         )}
-      </div>
+      </ResizablePanelGroup>
 
       <AddDungeonDialog
         open={dialog === 'add-dungeon'}

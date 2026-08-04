@@ -48,6 +48,7 @@ def test_a_phase_one_sidecar_reads_clean() -> None:
         }
     )
     assert sidecar.view_state.active_dungeon_id is None
+    assert sidecar.view_state.pane_widths.inspector is None
     assert sidecar.notes == {}
     assert sidecar.review == ()
     assert sidecar.auto_reasons == ()
@@ -96,6 +97,7 @@ def test_patch_route_applies_and_answers_the_new_state(client: TestClient, tmp_p
                         "zoom_pan": {"dungeon:dungeon-1/level:1": {"zoom": 1.5, "pan_x": 10, "pan_y": -4}},
                         "review_selection": None,
                         "library_sources": ["/adventures/mill.osr", "stash-1"],
+                        "pane_widths": {"inspector": 420, "library": 360},
                     },
                 },
             ]
@@ -107,6 +109,13 @@ def test_patch_route_applies_and_answers_the_new_state(client: TestClient, tmp_p
     assert body["view_state"]["zoom_pan"]["dungeon:dungeon-1/level:1"]["zoom"] == 1.5
     # The content library's open-source list rides the view state like the cameras.
     assert body["view_state"]["library_sources"] == ["/adventures/mill.osr", "stash-1"]
+    # So does the dragged pane layout; the panes nobody dragged stay unset.
+    assert body["view_state"]["pane_widths"] == {
+        "nav": None,
+        "inspector": 420,
+        "library": 360,
+        "source_pages": None,
+    }
     # Persisted atomically; a later GET carries it.
     assert client.get(f"/api/projects/{state['id']}").json()["sidecar"]["notes"] == body["notes"]
     written = json.loads((tmp_path / "demo.osr" / "editor.json").read_text())
