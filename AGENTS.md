@@ -6,9 +6,9 @@ osr-editor is a local GUI application for creating and modifying adventure modul
 
 - `docs/spec.md` is the single source of truth. Read it before any implementation work. It is decision-complete: architecture, contracts, interaction models, and a phased roadmap. Implement in phase order.
 - `docs/backlog.md` records features cut from the spec and deferred indefinitely. It is not scope and never drives implementation; an item leaves it only when the owner puts it back on the roadmap. Read it when you need to know why a capability the spec once described is absent.
-- osrlib (checked out at `~/repos/osrlib-python`, published as `osrlib`) is the schema and rules authority. The adventure document *is* osrlib's pydantic models; loading, validation, and play go through `check_document`, `Adventure.model_validate`, and `validate_adventure`. Never re-implement or fork osrlib's rules or validation — the one sanctioned exception (the live structural lint) is pinned in the spec with rationale.
-- osr-forge (checked out at `~/repos/osr-forge`, published as `osr-forge`) is the conversion authority: workdir layout, `overrides.yaml` schema, report flag and finding vocabularies. When a forge-contract question comes up, its spec and code are the authority; verify against them rather than working from memory.
-- osr-web (checked out at `~/repos/osr-web`) is the reference consumer; "publish" means satisfying its `adventures/` discovery rules.
+- osrlib (a sibling checkout at `../osrlib-python`, published as `osrlib`) is the schema and rules authority. The adventure document *is* osrlib's pydantic models; loading, validation, and play go through `check_document`, `Adventure.model_validate`, and `validate_adventure`. Never re-implement or fork osrlib's rules or validation — the one sanctioned exception (the live structural lint) is pinned in the spec with rationale.
+- osr-forge (a sibling checkout at `../osr-forge`, published as `osr-forge`) is the conversion authority: workdir layout, `overrides.yaml` schema, report flag and finding vocabularies. When a forge-contract question comes up, its spec and code are the authority; verify against them rather than working from memory.
+- osr-web (a sibling checkout at `../osr-web`) is the reference consumer; "publish" means satisfying its `adventures/` discovery rules.
 - Frontend types under `frontend/src/types/generated/` are generated from the pydantic models. Never hand-edit them and never hand-write a TypeScript mirror of an osrlib schema.
 
 ## The phase loop
