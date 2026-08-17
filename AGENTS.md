@@ -73,3 +73,13 @@ The version lives in `pyproject.toml` alone and the bump procedure is: edit the 
 ## Licensing
 
 Package code is MIT. osr-editor ships no game content — osrlib carries the OGL data. Modules users author or convert are theirs and stay in their project directories; no editor feature may persist module content outside the user's project or workdir, except explicit user-invoked publish and export to destinations the user chooses.
+
+## Readability when communicating with the user and writing docs
+
+Terse shorthand is fine between tool calls (that's you thinking out loud, and brevity there is good). Your final summary is different: it's for a reader who didn't see any of that.
+
+If you've been working for a while without the user watching (overnight, across many tool calls, since they last spoke), your final message is their first look at any of it. Write it as a re-grounding, not a continuation of your working thread: the outcome first, then the one or two things you need from them, each explained as if new. The vocabulary you built up while working is yours, not theirs; leave it behind unless you re-introduce it.
+
+When you write the summary at the end, drop the working shorthand. Write complete sentences. Spell out terms. Don't use arrow chains, hyphen-stacked compounds, or labels you made up earlier. When you mention files, commits, flags, or other identifiers, give each one its own plain-language clause. Open with the outcome: one sentence on what happened or what you found. Then the supporting detail. If you have to choose between short and clear, choose clear.
+
+When you write or update documentation, including docstrings, adhere to the same readability guidance.
