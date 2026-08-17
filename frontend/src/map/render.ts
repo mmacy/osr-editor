@@ -2,8 +2,10 @@
 // (document level, view transform, selection, hover, findings, gesture).
 // Cream field, fine grid, pencil-weight walls, classic glyphs — door ticks,
 // "S" for secret doors, stair treads, arrows for one-way drops, the entrance
-// marker, area tints with key numbers; graphite-on-slate in dark mode. All
-// drawing happens in CSS px — the component scales the context for
+// marker, area tints with key numbers, and the gate diamond (one mark, both
+// carriers: beside a gated door's leaf — and beside the secret disc when both
+// apply — and beside a gated transition's glyph); graphite-on-slate in dark
+// mode. All drawing happens in CSS px — the component scales the context for
 // devicePixelRatio.
 import type { AreaSpec, Finding, LevelSpec, Position } from '@/types'
 import { edgeAt, parseEdgeKey, type Direction } from '@/map/edge-key'
@@ -159,6 +161,10 @@ export function drawLevel(ctx: CanvasRenderingContext2D, input: RenderInput): vo
 
   for (const transition of level.transitions) {
     drawTransitionGlyph(ctx, view, theme, transition.kind, transition.position)
+    if (transition.requires) {
+      const point = gridToCanvas(view, transition.position[0], transition.position[1])
+      drawGateDiamond(ctx, theme, point.x + size * 0.82, point.y + size * 0.18, size)
+    }
   }
   if (level.entrance) drawEntrance(ctx, view, theme, level.entrance)
 
@@ -342,15 +348,54 @@ function drawWallsAndDoors(ctx: CanvasRenderingContext2D, input: RenderInput): v
         continue
       }
       // A door: wall stubs at both ends, the leaf across the gap; secret
-      // doors draw as solid wall with the classic "S" in the gap.
+      // doors draw as solid wall with the classic "S" in the gap. A gate
+      // (door.requires) marks the door with a small solid diamond offset
+      // beside the leaf — the same mark a gated transition carries — sitting
+      // beside the secret disc when both apply.
       if (edge.door?.kind === 'secret') {
         strokeSegment(ctx, segment, theme.wall, wallWidth)
         drawSecretGlyph(ctx, segment, theme, size)
-        continue
+      } else {
+        drawDoor(ctx, segment, theme, size, wallWidth)
       }
-      drawDoor(ctx, segment, theme, size, wallWidth)
+      if (edge.door?.requires) {
+        const mid = lerp(segment.from, segment.to, 0.5)
+        const dx = segment.to.x - segment.from.x
+        const dy = segment.to.y - segment.from.y
+        const length = Math.hypot(dx, dy) || 1
+        const offset = size * 0.32
+        drawGateDiamond(
+          ctx,
+          theme,
+          mid.x + (-dy / length) * offset,
+          mid.y + (dx / length) * offset,
+          size,
+        )
+      }
     }
   }
+}
+
+// The gate badge: a small solid diamond in the pencil palette — one mark for
+// both carriers.
+function drawGateDiamond(
+  ctx: CanvasRenderingContext2D,
+  theme: MapTheme,
+  x: number,
+  y: number,
+  size: number,
+): void {
+  const radius = Math.max(2.5, size * 0.11)
+  ctx.save()
+  ctx.fillStyle = theme.ink
+  ctx.beginPath()
+  ctx.moveTo(x, y - radius)
+  ctx.lineTo(x + radius, y)
+  ctx.lineTo(x, y + radius)
+  ctx.lineTo(x - radius, y)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
 }
 
 function strokeSegment(

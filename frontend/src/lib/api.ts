@@ -21,6 +21,7 @@ import type {
   ExportResult,
   ImportedGeometry,
   ImporterListResponse,
+  ItemTemplate,
   MagicItemCatalogResponse,
   MonsterCatalogResponse,
   MonsterTemplate,
@@ -127,6 +128,8 @@ export const api = {
   getCatalogMonster: (id: string) =>
     request<MonsterTemplate>(`/api/catalogs/monsters/${encodeURIComponent(id)}`),
   getEquipmentCatalog: () => request<EquipmentCatalogResponse>('/api/catalogs/equipment'),
+  getCatalogItem: (id: string) =>
+    request<ItemTemplate>(`/api/catalogs/equipment/${encodeURIComponent(id)}`),
   getMagicItemCatalog: () => request<MagicItemCatalogResponse>('/api/catalogs/magic-items'),
   getTreasureTypeCatalog: () =>
     request<TreasureTypeCatalogResponse>('/api/catalogs/treasure-types'),

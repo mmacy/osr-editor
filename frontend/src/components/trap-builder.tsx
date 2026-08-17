@@ -141,9 +141,7 @@ export function TrapBuilder({
               id={`${idPrefix}-trigger`}
               className={SELECT_CLASS}
               value={trap.trigger}
-              onChange={(event) =>
-                onPatch({ trigger: event.target.value as TrapSpec['trigger'] })
-              }
+              onChange={(event) => onPatch({ trigger: event.target.value as TrapSpec['trigger'] })}
             >
               <option value="enter">enter</option>
               <option value="open">open</option>

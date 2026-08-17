@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, XIcon } from 'lucide-react'
 
 import { EncounterPreviewPanel, TreasurePreviewPanel } from '@/components/aid-previews'
-import { EquipmentPicker } from '@/components/equipment-picker'
+import { ItemPicker } from '@/components/item-picker'
 import { MagicItemPicker } from '@/components/magic-item-picker'
 import { MiniLevelPicker } from '@/components/mini-level-picker'
 import { MonsterPicker } from '@/components/monster-picker'
@@ -21,7 +21,13 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
-import { effectiveMonsterCatalog, loadMonsterCatalog, useCatalog } from '@/lib/catalogs'
+import {
+  effectiveMonsterCatalog,
+  itemNameFor,
+  loadEquipmentCatalog,
+  loadMonsterCatalog,
+  useCatalog,
+} from '@/lib/catalogs'
 import {
   FEATURE_KINDS,
   FEATURE_KIND_LABELS,
@@ -678,6 +684,9 @@ export function FeatureEditor({
   const [idError, setIdError] = useState<string | null>(null)
   const [pickingCell, setPickingCell] = useState(false)
   const level = findLevel(document, scope.dungeonId, scope.levelNumber)
+  // The cache rows resolve ids to names over the item domain — the document's
+  // bundle beside the shipped catalog, degrading to the raw id when dangling.
+  const shippedItems = useCatalog(loadEquipmentCatalog)
   const patch = (value: Partial<FeatureSpec>) => {
     void projectStore
       .getState()
@@ -829,9 +838,10 @@ export function FeatureEditor({
                     {feature.item_ids.map((itemId, index) => (
                       <li
                         key={`${itemId}-${index}`}
-                        className="bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs"
+                        className="bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 text-xs"
+                        title={itemId}
                       >
-                        {itemId}
+                        {itemNameFor(shippedItems, document.items, itemId)}
                         <button
                           type="button"
                           aria-label={`Remove ${itemId}`}
@@ -851,7 +861,8 @@ export function FeatureEditor({
                     ))}
                   </ul>
                 )}
-                <EquipmentPicker
+                <ItemPicker
+                  document={document}
                   onPick={(itemId) =>
                     update((committed) => ({ item_ids: [...committed.item_ids, itemId] }))
                   }

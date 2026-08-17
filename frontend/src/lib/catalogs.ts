@@ -11,6 +11,7 @@ import type {
   CatalogMonster,
   CatalogTreasureType,
   EncounterTable,
+  ItemTemplate,
   MonsterHitDice,
   MonsterTemplate,
 } from '@/types'
@@ -134,6 +135,59 @@ export function rankMonsters(
     .sort((a, b) => (recency.get(a.id) ?? 0) - (recency.get(b.id) ?? 0))
   const rest = matches.filter((monster) => !monster.bundled && !recency.has(monster.id))
   return [...bundled, ...recent, ...rest]
+}
+
+// One item entry as the pickers consume it — shipped and bundled shapes
+// merged to a common surface, the PickerMonster mirror.
+export interface PickerItem {
+  id: string
+  name: string
+  itemType: string
+  costGp: number
+  bundled: boolean
+}
+
+// The effective item catalog: the shipped equipment list plus the open
+// document's bundled templates, bundled entries ranked first under the
+// picker's "This adventure" group. A bundled id colliding with the shipped
+// catalog is skipped — osrlib's own first-occurrence-wins resolution, where
+// the base catalog is first.
+export function effectiveItemCatalog(
+  shipped: readonly CatalogItem[],
+  bundled: readonly ItemTemplate[],
+): PickerItem[] {
+  const shippedIds = new Set(shipped.map((item) => item.id))
+  const bundledEntries: PickerItem[] = bundled
+    .filter((template) => !shippedIds.has(template.id))
+    .map((template) => ({
+      id: template.id,
+      name: template.name,
+      itemType: template.item_type,
+      costGp: template.cost_gp,
+      bundled: true,
+    }))
+  const shippedEntries: PickerItem[] = shipped.map((item) => ({
+    id: item.id,
+    name: item.name,
+    itemType: item.item_type,
+    costGp: item.cost_gp,
+    bundled: false,
+  }))
+  return [...bundledEntries, ...shippedEntries]
+}
+
+// Item-name resolution for surfaces that render an id as a name: the
+// document's bundle beside the shipped catalog (shipped first — the
+// resolution order), degrading to the raw id for a dangling reference.
+export function itemNameFor(
+  shipped: readonly CatalogItem[] | null,
+  bundled: readonly ItemTemplate[],
+  itemId: string,
+): string {
+  const fromShipped = shipped?.find((item) => item.id === itemId)
+  if (fromShipped) return fromShipped.name
+  const fromBundle = bundled.find((template) => template.id === itemId)
+  return fromBundle?.name ?? itemId
 }
 
 // Equipment grouped by item_type for the picker's sections, catalog order

@@ -3,14 +3,17 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   bandTableForLevel,
   clearRecentMonsters,
+  effectiveItemCatalog,
   effectiveMonsterCatalog,
   groupEquipment,
   groupTreasureTypes,
+  itemNameFor,
   rankMonsters,
   recentMonsterIds,
   recordRecentMonster,
   type PickerMonster,
 } from '@/lib/catalogs'
+import { seedItemTemplate } from '@/lib/item-builders'
 import type { CatalogItem, CatalogMonster, EncounterTable, MonsterTemplate } from '@/types'
 
 const HIT_DICE = { count: 1, die: 8, modifier: 0, asterisks: 0, average_hp: null, fixed_hp: null }
@@ -63,6 +66,47 @@ describe('the effective monster catalog', () => {
     const merged = effectiveMonsterCatalog([shippedMonster('orc')], [bundledTemplate('orc')])
     expect(merged).toHaveLength(1)
     expect(merged[0].bundled).toBe(false)
+  })
+})
+
+const shippedItem = (id: string): CatalogItem => ({
+  id,
+  name: `The shipped ${id}`,
+  item_type: 'gear',
+  cost_gp: 3,
+})
+
+describe('the effective item catalog', () => {
+  test('bundled entries rank first, ahead of the kind groups', () => {
+    const merged = effectiveItemCatalog(
+      [shippedItem('torch')],
+      [seedItemTemplate('gear', 'brass-key', 'Brass key')],
+    )
+    expect(merged.map((item) => [item.id, item.bundled])).toEqual([
+      ['brass-key', true],
+      ['torch', false],
+    ])
+    expect(merged[0].name).toBe('Brass key')
+    expect(merged[0].itemType).toBe('gear')
+  })
+
+  test('a bundled id colliding with the shipped catalog is skipped — base wins', () => {
+    const merged = effectiveItemCatalog(
+      [shippedItem('torch')],
+      [seedItemTemplate('gear', 'torch', 'Shadow torch')],
+    )
+    expect(merged).toHaveLength(1)
+    expect(merged[0].bundled).toBe(false)
+  })
+})
+
+describe('item-name resolution', () => {
+  test('shipped first, then the bundle, then the raw id for a dangling reference', () => {
+    const bundle = [seedItemTemplate('gear', 'brass-key', 'Brass key')]
+    expect(itemNameFor([shippedItem('torch')], bundle, 'torch')).toBe('The shipped torch')
+    expect(itemNameFor([shippedItem('torch')], bundle, 'brass-key')).toBe('Brass key')
+    expect(itemNameFor([shippedItem('torch')], bundle, 'vorpal-spork')).toBe('vorpal-spork')
+    expect(itemNameFor(null, bundle, 'brass-key')).toBe('Brass key')
   })
 })
 

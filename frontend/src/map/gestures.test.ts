@@ -338,3 +338,21 @@ test('gesture begin and update track each tool shape', () => {
   // The select tool starts no drag gesture.
   expect(beginGesture('select', { kind: 'cell', cell: [1, 1] }, level)).toBeNull()
 })
+
+test('the auto-reciprocal stairs are born ungated — a gate guards one threshold', () => {
+  const gated: TransitionSpec = {
+    ...STAIRS,
+    requires: {
+      condition: { condition_type: 'has_item', item_id: 'toll-coin', consumes: true },
+      narrative: null,
+    },
+  }
+  const ops = transitionOps(gated, 'dungeon-1', 1, true, documentWithLevelTwo())
+  expect(ops).toHaveLength(2)
+  const first = ops[0]
+  const second = ops[1]
+  if (first.op !== 'add_transition' || second.op !== 'add_transition')
+    throw new Error('unexpected ops')
+  expect(first.transition.requires).toEqual(gated.requires)
+  expect(second.transition.requires).toBeUndefined()
+})
