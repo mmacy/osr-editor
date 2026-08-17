@@ -1151,7 +1151,7 @@ function TransitionBody({
           forge={forge}
           blockedAddress={cellAddress(dungeonId, levelNumber, sourceCell)}
           blockedOpCode="add_transition"
-          onCommit={setGate}
+          onCommit={(update) => setGate((current) => update(current))}
         />
         {stairs && !editing && (
           <label className="flex items-center gap-2 text-sm">

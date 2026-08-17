@@ -181,3 +181,50 @@ test('the forge review loop: flags to corrected, resolved, checked, published', 
       '    reason: level 1 edges redrawn\n',
   )
 })
+
+test('the authored layer is fenced in forge mode: the Items explanation, the gate block', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  const workspace = mkdtempSync(join(tmpdir(), 'osr-editor-forge-items-e2e-'))
+  const workdir = join(workspace, 'millstone.forge')
+  cpSync(FIXTURE, workdir, { recursive: true })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open project' }).click()
+  await page.getByLabel('Project directory').fill(workdir)
+  await page.getByRole('dialog').getByRole('button', { name: 'Open' }).click()
+  await expect(page.getByTestId('revision')).toHaveText('r1')
+
+  // The Items entry is present and clickable, and navigates to the honest
+  // explanation body — no list, since a forge-assembled document can never
+  // carry items; the gap is forge's recorded decision, with detach in place.
+  await page.getByRole('button', { name: 'Items', exact: true }).click()
+  await expect(page.getByText(/carries no bundled items/)).toBeVisible()
+  await expect(page.getByRole('link', { name: 'osr-forge#39' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Detach to a native project…' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'New item' })).toHaveCount(0)
+
+  // A gate gesture on a door lands in the blocked-op dialog client-side —
+  // nobody authors a gate just to be refused; the server's 422 stays the
+  // authority for any batch that arrives.
+  await page.getByRole('button', { name: 'Level 1', exact: true }).click()
+  await expect(page.getByTestId('map-canvas')).toBeVisible()
+  await page.getByRole('button', { name: 'Reset zoom' }).click()
+  await page.getByRole('button', { name: 'Wall and door tool' }).click()
+  const doorway = await edgePoint(page, [0, 0], [1, 0])
+  await page.mouse.click(doorway.x, doorway.y)
+  await expect(page.getByTestId('revision')).toHaveText('r2')
+  await page.getByRole('button', { name: 'Select tool' }).click()
+  await page.mouse.click(doorway.x, doorway.y)
+  const inspector = page.getByLabel('Inspector')
+  await expect(inspector.getByLabel('Kind', { exact: true })).toHaveValue('door')
+  await inspector.getByRole('button', { name: 'Add gate' }).click()
+  const blocked = page.getByRole('dialog')
+  await expect(blocked.getByText('This edit needs a native project')).toBeVisible()
+  await expect(blocked.getByText(/gates have no override kind/)).toBeVisible()
+  await expect(blocked.getByRole('button', { name: 'Detach…' })).toBeVisible()
+  await blocked.getByRole('button', { name: 'Cancel' }).click()
+  // Nothing committed: the revision stands where the door edit left it.
+  await expect(page.getByTestId('revision')).toHaveText('r2')
+})

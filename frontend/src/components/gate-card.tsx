@@ -23,6 +23,11 @@ import type { Adventure, ConditionSpec, GateSpec } from '@/types'
 // carrier.
 const GATE_BEATS = ['refusal', 'success'] as const
 
+// Commits are updates over the committed gate, applied by the host inside
+// its commit queue — the compute-in-the-queue discipline, so a narrative
+// beat committed behind an in-flight one merges instead of reverting it.
+export type GateUpdate = (committed: GateSpec | null) => GateSpec | null
+
 export function GateCard({
   gate,
   document,
@@ -40,12 +45,12 @@ export function GateCard({
   forge: boolean
   blockedAddress: string
   blockedOpCode: string
-  onCommit: (gate: GateSpec | null) => void
+  onCommit: (update: GateUpdate) => void
 }) {
   const [drafting, setDrafting] = useState(false)
   const commitCondition = (condition: ConditionSpec) => {
     setDrafting(false)
-    onCommit({ condition, narrative: gate?.narrative ?? null })
+    onCommit((committed) => ({ condition, narrative: committed?.narrative ?? null }))
   }
   if (!gate && !drafting) {
     return (
@@ -80,7 +85,7 @@ export function GateCard({
           className="text-muted-foreground text-xs underline underline-offset-2"
           onClick={() => {
             setDrafting(false)
-            if (gate) onCommit(null)
+            if (gate) onCommit(() => null)
           }}
         >
           Remove gate
@@ -98,7 +103,16 @@ export function GateCard({
           block={gate.narrative ?? null}
           beats={GATE_BEATS}
           idPrefix={idPrefix}
-          onCommit={(narrative) => onCommit({ condition: gate.condition, narrative })}
+          onCommit={(blockUpdate) =>
+            onCommit((committed) =>
+              committed
+                ? {
+                    condition: committed.condition,
+                    narrative: blockUpdate(committed.narrative ?? null),
+                  }
+                : committed,
+            )
+          }
         />
       )}
     </div>

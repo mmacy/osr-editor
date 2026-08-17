@@ -329,7 +329,9 @@ function EdgeInspector({
           />
           {/* The gate composes with locked/stuck rather than replacing them:
               the whole DoorSpec rides every set_edges value, so flag commits
-              preserve the gate and gate commits preserve the flags. */}
+              preserve the gate and gate commits preserve the flags. The gate
+              update applies against the committed door inside the queue —
+              never the render-time prop. */}
           <GateCard
             gate={edge.door.requires ?? null}
             document={document}
@@ -337,7 +339,27 @@ function EdgeInspector({
             forge={forge}
             blockedAddress={edgeAddress(dungeonId, levelNumber, edgeKey)}
             blockedOpCode="set_edges"
-            onCommit={(requires) => patchDoor({ requires })}
+            onCommit={(update) => {
+              void projectStore.getState().commit((current) => {
+                const level = findLevel(current, dungeonId, levelNumber)
+                const committed = level?.edges[edgeKey]
+                if (!level || committed?.kind !== 'door') return []
+                const door = committed.door ?? DEFAULT_DOOR
+                return [
+                  {
+                    op: 'set_edges',
+                    dungeon_id: dungeonId,
+                    level_number: levelNumber,
+                    edges: {
+                      [edgeKey]: {
+                        kind: 'door',
+                        door: { ...door, requires: update(door.requires ?? null) },
+                      },
+                    },
+                  },
+                ]
+              })
+            }}
           />
           <p className="text-muted-foreground text-xs">
             A gate composes with locked and stuck — a locked and gated door requires both.

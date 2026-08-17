@@ -12,11 +12,27 @@ function block(overrides: Partial<NarrativeBlock>): NarrativeBlock {
   return { ...emptyNarrativeBlock(), ...overrides }
 }
 
-function renderEditor(value: NarrativeBlock | null, onCommit = vi.fn()) {
+type BlockUpdate = (committed: NarrativeBlock | null) => NarrativeBlock | null
+
+function renderEditor(
+  value: NarrativeBlock | null,
+  onCommit = vi.fn<(update: BlockUpdate) => void>(),
+) {
   render(
     <NarrativeBlockEditor block={value} beats={GATE_BEATS} idPrefix="test" onCommit={onCommit} />,
   )
   return onCommit
+}
+
+// Commits are updates over the committed block — apply the last one to the
+// committed value the host would hand it.
+function applyLast(
+  onCommit: ReturnType<typeof vi.fn<(update: BlockUpdate) => void>>,
+  committed: NarrativeBlock | null,
+) {
+  const calls = onCommit.mock.calls
+  expect(calls.length).toBeGreaterThan(0)
+  return calls[calls.length - 1][0](committed)
 }
 
 test('the carrier declares its read beats; speaker and guidance render for every carrier', () => {
@@ -30,13 +46,15 @@ test('the carrier declares its read beats; speaker and guidance render for every
   expect(screen.queryByLabelText('Journal')).not.toBeInTheDocument()
 })
 
-test('a beat commit carries the whole block', () => {
+test('a beat commit merges into the *committed* block, not the render-time one', () => {
   const onCommit = renderEditor(block({ success: 'The key turns.' }))
   const refusal = screen.getByLabelText('Refusal')
   fireEvent.change(refusal, { target: { value: 'The lock refuses.' } })
   fireEvent.blur(refusal)
-  expect(onCommit).toHaveBeenCalledWith(
-    block({ refusal: 'The lock refuses.', success: 'The key turns.' }),
+  // Applied against the committed block — which may already carry a beat an
+  // in-flight commit just landed — the update merges rather than reverting.
+  expect(applyLast(onCommit, block({ success: 'The key turns.', speaker: 'The miller' }))).toEqual(
+    block({ refusal: 'The lock refuses.', success: 'The key turns.', speaker: 'The miller' }),
   )
 })
 
@@ -45,7 +63,7 @@ test('clearing the last non-empty field commits null, keeping unauthored gates c
   const refusal = screen.getByLabelText('Refusal')
   fireEvent.change(refusal, { target: { value: '' } })
   fireEvent.blur(refusal)
-  expect(onCommit).toHaveBeenCalledWith(null)
+  expect(applyLast(onCommit, block({ refusal: 'The lock refuses.' }))).toBeNull()
 })
 
 test('a non-empty beat outside the read set warns by name with a one-patch clear', () => {
@@ -56,7 +74,12 @@ test('a non-empty beat outside the read set warns by name with a one-patch clear
   expect(warning).toHaveTextContent('fired')
   expect(warning).toHaveTextContent('A voice a gate never speaks.')
   fireEvent.click(screen.getByRole('button', { name: 'Clear the fired text' }))
-  expect(onCommit).toHaveBeenCalledWith(block({ refusal: 'The lock refuses.' }))
+  expect(
+    applyLast(
+      onCommit,
+      block({ refusal: 'The lock refuses.', fired: 'A voice a gate never speaks.' }),
+    ),
+  ).toEqual(block({ refusal: 'The lock refuses.' }))
 })
 
 test('an authored block never warns about its own read beats', () => {

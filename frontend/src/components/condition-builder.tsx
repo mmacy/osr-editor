@@ -138,6 +138,7 @@ function HasItemControls({
         <label className="flex items-start gap-2 text-sm">
           <Checkbox
             className="mt-0.5"
+            aria-label="Consumes the item"
             checked={committed?.consumes ?? false}
             disabled={!committed}
             onCheckedChange={(next) =>

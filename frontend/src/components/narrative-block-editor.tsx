@@ -10,6 +10,11 @@
 // A block whose every field is empty commits as null rather than an empty
 // NarrativeBlock, keeping unauthored carriers canonical; an *arriving*
 // all-empty block is left alone until the card's next commit.
+//
+// Commits are *updates*, not values: each gesture emits a function over the
+// committed block, applied by the host inside its commit queue — the
+// compute-in-the-queue discipline, without which a second beat committed
+// behind an in-flight first would silently revert it.
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,6 +29,8 @@ import {
 } from '@/lib/narrative'
 import type { NarrativeBlock } from '@/types'
 
+export type NarrativeBlockUpdate = (committed: NarrativeBlock | null) => NarrativeBlock | null
+
 export function NarrativeBlockEditor({
   block,
   beats,
@@ -33,11 +40,13 @@ export function NarrativeBlockEditor({
   block: NarrativeBlock | null
   beats: readonly NarrativeBeat[]
   idPrefix: string
-  onCommit: (block: NarrativeBlock | null) => void
+  onCommit: (update: NarrativeBlockUpdate) => void
 }) {
   const current = block ?? emptyNarrativeBlock()
   const commitField = (field: keyof NarrativeBlock, value: string) => {
-    onCommit(normalizeBlock({ ...current, [field]: value }))
+    onCommit((committed) =>
+      normalizeBlock({ ...(committed ?? emptyNarrativeBlock()), [field]: value }),
+    )
   }
   const unreadBeats = DISPLAY_BEATS.filter((beat) => !beats.includes(beat) && current[beat] !== '')
   return (

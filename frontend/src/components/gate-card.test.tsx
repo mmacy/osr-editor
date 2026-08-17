@@ -56,7 +56,22 @@ const KEY_GATE: GateSpec = {
   narrative: { ...emptyBlock(), refusal: 'The lock refuses.' },
 }
 
-function renderCard(gate: GateSpec | null, forge = false, onCommit = vi.fn()) {
+type GateUpdate = (committed: GateSpec | null) => GateSpec | null
+
+function applyLast(
+  onCommit: ReturnType<typeof vi.fn<(update: GateUpdate) => void>>,
+  committed: GateSpec | null,
+) {
+  const calls = onCommit.mock.calls
+  expect(calls.length).toBeGreaterThan(0)
+  return calls[calls.length - 1][0](committed)
+}
+
+function renderCard(
+  gate: GateSpec | null,
+  forge = false,
+  onCommit = vi.fn<(update: GateUpdate) => void>(),
+) {
   render(
     <GateCard
       gate={gate}
@@ -85,7 +100,7 @@ test('the first complete condition commits the whole gate', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Add gate' }))
   fireEvent.click(screen.getByRole('button', { name: 'Pick item' }))
   fireEvent.click(await screen.findByText('Torch'))
-  expect(onCommit).toHaveBeenCalledWith({
+  expect(applyLast(onCommit, null)).toEqual({
     condition: { condition_type: 'has_item', item_id: 'torch', consumes: false },
     narrative: null,
   })
@@ -102,7 +117,7 @@ test('a gate shows the builder, the block editor with the gate beats, and Remove
 test('removing commits null', () => {
   const onCommit = renderCard(KEY_GATE)
   fireEvent.click(screen.getByRole('button', { name: 'Remove gate' }))
-  expect(onCommit).toHaveBeenCalledWith(null)
+  expect(applyLast(onCommit, KEY_GATE)).toBeNull()
 })
 
 test('a narrative commit preserves the condition', () => {
@@ -110,7 +125,9 @@ test('a narrative commit preserves the condition', () => {
   const success = screen.getByLabelText('Success')
   fireEvent.change(success, { target: { value: 'The key turns.' } })
   fireEvent.blur(success)
-  expect(onCommit).toHaveBeenCalledWith({
+  // Applied against the committed gate inside the host's queue — the
+  // condition and any in-flight beat both survive.
+  expect(applyLast(onCommit, KEY_GATE)).toEqual({
     condition: KEY_GATE.condition,
     narrative: { ...emptyBlock(), refusal: 'The lock refuses.', success: 'The key turns.' },
   })
