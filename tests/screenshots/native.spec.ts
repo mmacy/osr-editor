@@ -14,7 +14,7 @@ import { join } from 'node:path'
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
-import { cellCenter, createProject, drag, openMap } from '../e2e/helpers'
+import { cellCenter, createProject, drag, edgePoint, openMap } from '../e2e/helpers'
 import { repoRoot, shoot } from './capture'
 import { SHOTS_HOME } from './paths'
 
@@ -357,4 +357,122 @@ test('import, export, and publish', async ({ page }, testInfo) => {
   const publishDialog = page.getByRole('dialog')
   await expect(publishDialog.getByLabel('osr-web checkout')).toHaveValue('')
   await shoot(publishDialog, 'publish-dialog', testInfo)
+})
+
+test('the item editor and the gates', async ({ page }, testInfo) => {
+  test.setTimeout(120_000)
+  const projectDir = adventureDir(testInfo, 'item-demo.osr')
+
+  await freshProject(page, projectDir, 'The mill key')
+
+  // Clone a catalog gear item into the bundled key — "like a torch, but…",
+  // the item editor's own framing of clone-and-modify.
+  await page.getByRole('button', { name: 'Items', exact: true }).click()
+  await page.getByRole('button', { name: 'Clone catalog item' }).click()
+  await page.getByPlaceholder('Search items…').fill('torch')
+  await page
+    .getByRole('option', { name: /^Torch/ })
+    .first()
+    .click()
+  await page.getByLabel('Name').fill('The miller’s brass key')
+  await page.getByRole('button', { name: 'Add to the adventure' }).click()
+  await expect(page.getByTestId('item-detail-torch-1')).toBeVisible()
+  const idField = page.getByLabel('Id')
+  await idField.fill('millers-key')
+  await idField.press('Enter')
+  await expect(page.getByTestId('item-detail-millers-key')).toBeVisible()
+
+  // The section: the bundled list beside the per-kind detail form.
+  const items = page.getByRole('region', { name: 'Items' })
+  await expect(items.getByRole('list', { name: 'Bundled items' })).toBeVisible()
+  await shoot(items, 'items-section', testInfo)
+
+  // The detail form alone: the always-saved per-kind editor.
+  await shoot(page.getByTestId('item-detail-millers-key'), 'item-detail', testInfo)
+
+  // A room with a gated door and a gated transition. Drawn around the view
+  // centre, because the zoom buttons scale about it — which is what lets the
+  // badge shot magnify the diamonds without a pan gesture.
+  await openMap(page)
+  await page.getByRole('button', { name: 'Room tool' }).click()
+  await drag(page, await cellCenter(page, 10, 6), await cellCenter(page, 13, 8))
+  await drag(page, await cellCenter(page, 14, 6), await cellCenter(page, 16, 8))
+  await page.getByRole('button', { name: 'Wall and door tool' }).click()
+  const doorEdge = await edgePoint(page, [13, 7], [14, 7])
+  await page.mouse.click(doorEdge.x, doorEdge.y)
+  await page.mouse.click(doorEdge.x, doorEdge.y)
+  // The entrance moves into the first room so the pair is reachable and the
+  // badge shot carries no lint markers over its subject.
+  await page.getByRole('button', { name: 'Entrance tool' }).click()
+  const entranceCell = await cellCenter(page, 10, 8)
+  await page.mouse.click(entranceCell.x, entranceCell.y)
+
+  // The stairs need somewhere to go before their threshold can charge a toll.
+  await page.getByRole('button', { name: 'Add level' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Add level' }).click()
+  await page.getByTestId('map-editor').getByRole('button', { name: 'Level 1' }).click()
+  await page.getByRole('button', { name: 'Reset zoom' }).click()
+  await page.getByRole('button', { name: 'Transition tool' }).click()
+  const stairs = await cellCenter(page, 11, 7)
+  await page.mouse.click(stairs.x, stairs.y)
+  const transitionDialog = page.getByRole('dialog')
+  const picker = await page.getByTestId('mini-level-picker').boundingBox()
+  if (!picker) throw new Error('the mini level picker has no bounding box')
+  const pickerCell = picker.width / 30
+  await page.mouse.click(picker.x + pickerCell * 0.5, picker.y + pickerCell * 0.5)
+  await transitionDialog.getByRole('button', { name: 'Add gate' }).click()
+  await transitionDialog.getByRole('button', { name: 'Pick item' }).click()
+  await page.getByPlaceholder('Search items…').fill('torch')
+  await page
+    .getByRole('option', { name: /^Torch/ })
+    .first()
+    .click()
+  await transitionDialog.getByRole('checkbox', { name: 'Consumes the item' }).click()
+  await transitionDialog.getByRole('button', { name: 'Add transition' }).click()
+
+  // The gate card on the door inspector, condition and narrative authored.
+  // The card is tall, so the viewport grows to hold it in the inspector's
+  // scrollport — the content-card shots' own arrangement.
+  await page.setViewportSize({ width: 1280, height: 1500 })
+  await page.getByRole('button', { name: 'Select tool' }).click()
+  await page.mouse.click(doorEdge.x, doorEdge.y)
+  const inspector = page.getByLabel('Inspector')
+  await expect(inspector.getByLabel('Kind', { exact: true })).toHaveValue('door')
+  await inspector.getByRole('button', { name: 'Add gate' }).click()
+  await inspector.getByRole('button', { name: 'Pick item' }).click()
+  await page
+    .getByRole('option', { name: /brass key/ })
+    .first()
+    .click()
+  const refusal = inspector.getByLabel('Refusal')
+  await refusal.fill('The false wall holds. Behind it, something counts on its fingers and waits.')
+  await refusal.press('Tab')
+  const success = inspector.getByLabel('Success')
+  await success.fill('The brass key turns twice, and the counting stops.')
+  await success.press('Tab')
+  await expect(inspector.getByLabel('Refusal')).toHaveValue(/false wall/)
+  const gateCard = inspector.getByLabel('Gate')
+  await gateCard.evaluate((element) => {
+    element.scrollIntoView({ block: 'start' })
+  })
+  await page.mouse.move(0, 0)
+  const frame = await inspector.boundingBox()
+  const cardBox = await gateCard.boundingBox()
+  if (!frame || !cardBox || cardBox.y < frame.y || cardBox.y + cardBox.height > frame.y + frame.height) {
+    throw new Error('the gate card is not inside the captured frame')
+  }
+  await shoot(gateCard, 'door-gate-card', testInfo)
+  await page.setViewportSize({ width: 1280, height: 800 })
+
+  // The badges: the gate diamond beside the door leaf and beside the stairs
+  // glyph — one mark, both carriers. Zoomed about the centre the rooms were
+  // drawn around, with the selection parked on a cell outside the frame so
+  // nothing renders highlighted.
+  const parkCell = await cellCenter(page, 27, 14)
+  await page.mouse.click(parkCell.x, parkCell.y)
+  await page.getByRole('button', { name: 'Reset zoom' }).click()
+  for (let step = 0; step < 4; step += 1) {
+    await page.getByRole('button', { name: 'Zoom in' }).click()
+  }
+  await shoot(page.getByTestId('map-canvas'), 'gate-badges', testInfo)
 })
