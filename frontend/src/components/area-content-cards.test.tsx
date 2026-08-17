@@ -231,17 +231,29 @@ test('leaving the cache kind clears the contents with the trap — one batch, on
   ])
 })
 
-test('a room trap states its trigger and never offers one — only enter fires', () => {
+test('a room trap offers both live triggers and commits a change', async () => {
   renderCards(
     '1',
     { areaId: '1', card: 'trap', action: 'edit', token: 1 },
     { trap: emptyTrap('room') },
   )
   const builder = screen.getByLabelText('Trap')
-  expect(within(builder).getByText('Trigger')).toBeInTheDocument()
-  expect(within(builder).getByText('enter')).toBeInTheDocument()
-  // The dead value is gone with the select: an area has nothing to open.
-  expect(within(builder).queryByRole('option', { name: 'open' })).not.toBeInTheDocument()
+  const select = within(builder).getByLabelText('Trigger')
+  // Both values are live under osrlib 1.6: enter springs on a cell of the
+  // area, open on a door of the area swinging — either side.
+  expect(within(select).getByRole('option', { name: 'enter' })).toBeInTheDocument()
+  expect(within(select).getByRole('option', { name: 'open' })).toBeInTheDocument()
+  expect(builder).toHaveTextContent('Springs when the party steps onto a cell of the area.')
+  fireEvent.change(select, { target: { value: 'open' } })
+  await waitFor(() => expect(postOps).toHaveBeenCalledTimes(1))
+  const [, , ops] = postOps.mock.calls[0]
+  expect(ops).toEqual([
+    expect.objectContaining({
+      op: 'set_trap',
+      area_id: '1',
+      trap: expect.objectContaining({ kind: 'room', trigger: 'open' }),
+    }),
+  ])
 })
 
 test("a cache trap shows no trigger at all — the cache's own open springs it", () => {
@@ -255,29 +267,12 @@ test("a cache trap shows no trigger at all — the cache's own open springs it",
 
 const TRAP_INTENT: CardIntent = { areaId: '1', card: 'trap', action: 'edit', token: 1 }
 
-test('a room trap already carrying a dead trigger says so and repairs in one patch', async () => {
-  // The population earlier releases created: the select offered `open`, and
-  // removing it would strand every room trap an author set that way.
+test("a door-sprung room trap's help names its springing action, with no warning", () => {
   renderCards('1', TRAP_INTENT, { trap: { ...emptyTrap('room'), trigger: 'open' } })
-  const warning = screen.getByLabelText('Dead trigger')
-  expect(warning).toHaveTextContent(
-    'This trap never springs. A room trap fires only on enter, because an area has nothing to open.',
-  )
-  fireEvent.click(within(warning).getByRole('button', { name: 'Set the trigger to enter' }))
-  await waitFor(() => expect(postOps).toHaveBeenCalledTimes(1))
-  const [, , ops] = postOps.mock.calls[0]
-  expect(ops).toEqual([
-    expect.objectContaining({
-      op: 'set_trap',
-      area_id: '1',
-      trap: expect.objectContaining({ kind: 'room', trigger: 'enter' }),
-    }),
-  ])
-})
-
-test('a room trap triggered the way it fires stays quiet', () => {
-  renderCards('1', TRAP_INTENT, { trap: emptyTrap('room') })
-  expect(screen.getByLabelText('Trap')).toBeInTheDocument()
+  const builder = screen.getByLabelText('Trap')
+  expect(builder).toHaveTextContent('Springs when a door of the area is opened, from either side.')
+  // The pre-1.5 dead-trigger warning is gone: no representable room-trap
+  // trigger is dead, so there is nothing to warn about.
   expect(screen.queryByLabelText('Dead trigger')).not.toBeInTheDocument()
 })
 

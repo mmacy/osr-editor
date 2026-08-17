@@ -9,13 +9,11 @@ There are two kinds and the builder never asks which one you want:
 - A **room trap** is the area's own trap — the pit in the floor, the scything blade across the doorway. It's the trap card in the area panel.
 - A **treasure trap** guards a cache. It's the **Trap this cache** action inside a treasure cache [feature](features.md), and it protects that cache specifically.
 
-The kind follows from where you added it, and the models enforce the split, so a trap can never end up filed as the wrong sort. What differs between them is not the effect you build — both offer the same effect fields — but which engine path springs the trap, and that is why the trigger is decided for you as well.
+The kind follows from where you added it, and the models enforce the split, so a trap can never end up filed as the wrong sort. What differs between them is not the effect you build — both offer the same effect fields — but which engine path springs the trap.
 
 ## The trap's shape
 
-**Trigger** names the springing action, and the builder states it rather than asking. A room trap springs on `enter` — an area has nothing to open, so `enter` is the only trigger the engine acts on — and the field reads back as text with nothing to choose. A cache's trap springs when the cache is opened and the engine reads no trigger at all, so a treasure trap shows no trigger field.
-
-What it reads back is the document's own value rather than the one you'd like it to have. A room trap that arrived carrying anything but `enter` — from an earlier version of this editor, which let you choose, or from a converted module — says outright that it never springs and offers **Set the trigger to enter** to repair it, one undo step like any other edit. Nothing is repaired behind your back: an unopened trap is left exactly as the file has it.
+**Trigger** names the springing action, and a room trap offers the choice: `enter` springs when the party steps onto a cell of the area — the pit-in-the-floor construction — and `open` springs when a door of the area is opened, from either side, the blade that drops when the door swings. The help under the field states the chosen value's springing action. A cache's trap springs when the cache is opened and the engine reads no trigger at all, so a treasure trap shows no trigger field.
 
 A room trap also isn't certain to go off. Entering the cell springs it 2-in-6, the way B/X handles a party walking over a pit, and a trap the party has already found, removed, or sprung never fires again.
 
