@@ -239,20 +239,49 @@ export function itemTemplateUpdateOps(
   return itemTemplateSetOps(itemId, next)
 }
 
-// The per-kind patch form: type-safe over one kind's fields, skipping when
-// the committed template is no longer that kind (unreachable through the UI —
-// a template's kind is never editable — but the guard keeps the builder
-// honest under any queue).
+// The per-kind compute-in-the-queue form: `build` receives the *committed*
+// template, narrowed to the kind, and answers the patch — collection edits
+// (qualities, ranges, the combat facet, params) must compute their next value
+// here, or a payload built from the render-time template queued behind an
+// in-flight commit silently reverts it (the monsterTemplateUpdateOps rule).
+// A kind mismatch skips (unreachable through the UI — a template's kind is
+// never editable — but the guard keeps the builder honest under any queue).
+export function itemTemplateKindUpdateOps<K extends ItemTemplate['item_type']>(
+  document: Adventure,
+  itemId: string,
+  kind: K,
+  build: (
+    committed: Extract<ItemTemplate, { item_type: K }>,
+  ) => Partial<Extract<ItemTemplate, { item_type: K }>> | null,
+): AnyEditOp[] {
+  return itemTemplateUpdateOps(document, itemId, (committed) => {
+    if (committed.item_type !== kind) return null
+    const narrowed = committed as Extract<ItemTemplate, { item_type: K }>
+    const patch = build(narrowed)
+    return patch === null ? null : { ...narrowed, ...patch }
+  })
+}
+
+// The state-independent form: a patch whose values don't derive from the
+// current template (a scalar field, the armour-mode gesture, a rename).
 export function itemTemplatePatchOps<K extends ItemTemplate['item_type']>(
   document: Adventure,
   itemId: string,
   kind: K,
   patch: Partial<Extract<ItemTemplate, { item_type: K }>>,
 ): AnyEditOp[] {
-  return itemTemplateUpdateOps(document, itemId, (committed) => {
-    if (committed.item_type !== kind) return null
-    return { ...(committed as Extract<ItemTemplate, { item_type: K }>), ...patch }
-  })
+  return itemTemplateKindUpdateOps(document, itemId, kind, () => patch)
+}
+
+// One quality toggled in or out of a quality set — shared by the weapon form
+// and the gear combat facet, always over the committed tuple.
+export function toggledQualities(
+  qualities: readonly WeaponQuality[],
+  quality: WeaponQuality,
+  present: boolean,
+): WeaponQuality[] {
+  if (present) return qualities.includes(quality) ? [...qualities] : [...qualities, quality]
+  return qualities.filter((candidate) => candidate !== quality)
 }
 
 export function itemTemplateRemoveOps(itemId: string): AnyEditOp[] {

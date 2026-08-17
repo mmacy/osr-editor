@@ -5,7 +5,7 @@ import { beforeEach, expect, test, vi } from 'vitest'
 import { ItemsSection } from '@/components/items-section'
 import { api, ApiRequestError } from '@/lib/api'
 import { seedItemTemplate } from '@/lib/item-builders'
-import { projectStore } from '@/store/project-store'
+import { projectStore, type CommitOptions, type OpsInput } from '@/store/project-store'
 import { makeDocument, makeForgeState, makeProjectState } from '@/test/fixtures'
 import type { CatalogItem, ItemTemplate, OpBatchResult, ProjectState } from '@/types'
 
@@ -248,4 +248,31 @@ test('a navigation target selects its template', () => {
   const second = seedItemTemplate('gear', 'second', 'Second')
   renderSection(projectWithItems([first, second]), { itemId: 'second' })
   expect(screen.getByTestId('item-detail-second')).toBeInTheDocument()
+})
+
+test('collection gestures compute against the committed template, not the render-time one', () => {
+  // The compute-in-the-queue pin: the ops builder is resolved against a
+  // document whose committed template has drifted under an in-flight commit
+  // (another quality already landed), and the drifted quality must survive.
+  const weapon = seedItemTemplate('weapon', 'dull-blade', 'Dull blade')
+  const project = projectWithItems([weapon])
+  const commit = vi
+    .fn<(ops: OpsInput, options?: CommitOptions) => Promise<boolean>>()
+    .mockResolvedValue(true)
+  projectStore.setState({ project, commit })
+  render(<ItemsSection project={project} section={{}} focusToken={1} />)
+  fireEvent.click(screen.getByRole('checkbox', { name: 'blunt' }))
+  expect(commit).toHaveBeenCalledTimes(1)
+  const input = commit.mock.calls[0][0]
+  const drifted = makeDocument({
+    items: [{ ...weapon, qualities: ['melee', 'slow'] } as ItemTemplate],
+  })
+  const ops = typeof input === 'function' ? input(drifted) : input
+  expect(ops).toEqual([
+    {
+      op: 'set_item_template',
+      item_id: 'dull-blade',
+      template: expect.objectContaining({ qualities: ['melee', 'slow', 'blunt'] }),
+    },
+  ])
 })

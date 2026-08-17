@@ -58,12 +58,14 @@ import {
   armourModePatch,
   formatGearParam,
   itemReferenceCount,
+  itemTemplateKindUpdateOps,
   itemTemplatePatchOps,
   itemTemplateRemoveOps,
   missilePatch,
   neutralMissileRanges,
   parseGearParam,
   seedItemTemplate,
+  toggledQualities,
 } from '@/lib/item-builders'
 import { cloneId } from '@/lib/monster-builders'
 import { parseDice } from '@/lib/notation'
@@ -129,9 +131,10 @@ export function ItemsSection({
   const items = document.items
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [cloneSource, setCloneSource] = useState<ItemTemplate | null>(null)
-  const shippedEquipment = useCatalog(loadEquipmentCatalog)
-  const shippedMagic = useCatalog(loadMagicItemCatalog)
+  const [clone, setClone] = useState<{
+    source: ItemTemplate
+    takenIds: ReadonlySet<string>
+  } | null>(null)
 
   // Consume the navigation focus once per token — a diagnostics click selects
   // its template.
@@ -148,30 +151,38 @@ export function ItemsSection({
 
   const selected = items.find((template) => template.id === selectedId) ?? items[0] ?? null
 
-  const startClone = (picked: PickerItem) => {
-    if (picked.bundled) {
-      const source = items.find((template) => template.id === picked.id)
-      if (source) setCloneSource(source)
-      return
-    }
-    api.getCatalogItem(picked.id).then(
-      (source) => setCloneSource(source),
-      (error: unknown) => {
-        if (error instanceof ApiRequestError) {
-          toast.error(error.detail.message, { description: error.detail.remedy ?? undefined })
-        }
-      },
-    )
-  }
-
   // The clone prefill's scope is the full collision domain — shipped
   // equipment, shipped magic, and the bundle — so a prefill never lands on a
-  // rejection.
-  const takenIds = new Set([
-    ...(shippedEquipment ?? []).map((item) => item.id),
-    ...(shippedMagic ?? []).map((item) => item.id),
-    ...items.map((template) => template.id),
-  ])
+  // rejection. Computed from the *resolved* catalogs at pick time (the
+  // module-level caches, settled instantly after their first load), never
+  // from hook state a still-loading fetch could leave half-empty.
+  const startClone = (picked: PickerItem) => {
+    const open = (source: ItemTemplate) => {
+      void Promise.all([loadEquipmentCatalog(), loadMagicItemCatalog()]).then(
+        ([equipment, magic]) => {
+          setClone({
+            source,
+            takenIds: new Set([
+              ...equipment.map((item) => item.id),
+              ...magic.map((item) => item.id),
+              ...items.map((template) => template.id),
+            ]),
+          })
+        },
+        () => undefined,
+      )
+    }
+    if (picked.bundled) {
+      const source = items.find((template) => template.id === picked.id)
+      if (source) open(source)
+      return
+    }
+    api.getCatalogItem(picked.id).then(open, (error: unknown) => {
+      if (error instanceof ApiRequestError) {
+        toast.error(error.detail.message, { description: error.detail.remedy ?? undefined })
+      }
+    })
+  }
 
   return (
     <section aria-label="Items" className="flex min-h-0 gap-6">
@@ -217,9 +228,8 @@ export function ItemsSection({
       </div>
       <CreateItemDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={setSelectedId} />
       <CloneItemDialog
-        source={cloneSource}
-        takenIds={takenIds}
-        onOpenChange={(open) => !open && setCloneSource(null)}
+        clone={clone}
+        onOpenChange={(open) => !open && setClone(null)}
         onCreated={setSelectedId}
       />
     </section>
@@ -486,22 +496,20 @@ function CreateItemBody({
 }
 
 function CloneItemDialog({
-  source,
-  takenIds,
+  clone,
   onOpenChange,
   onCreated,
 }: {
-  source: ItemTemplate | null
-  takenIds: ReadonlySet<string>
+  clone: { source: ItemTemplate; takenIds: ReadonlySet<string> } | null
   onOpenChange: (open: boolean) => void
   onCreated: (id: string) => void
 }) {
   return (
-    <Dialog open={source !== null} onOpenChange={onOpenChange}>
-      {source && (
+    <Dialog open={clone !== null} onOpenChange={onOpenChange}>
+      {clone && (
         <CloneItemBody
-          source={source}
-          takenIds={takenIds}
+          source={clone.source}
+          takenIds={clone.takenIds}
           onOpenChange={onOpenChange}
           onCreated={onCreated}
         />
@@ -686,6 +694,13 @@ function WeaponForm({ template }: { template: WeaponTemplate }) {
       .getState()
       .commit((current) => itemTemplatePatchOps(current, template.id, 'weapon', value))
   }
+  // Collection edits (qualities, ranges) compute their next value from the
+  // committed template inside the queue — never from the render-time prop.
+  const update = (build: (committed: WeaponTemplate) => Partial<WeaponTemplate> | null) => {
+    void projectStore
+      .getState()
+      .commit((current) => itemTemplateKindUpdateOps(current, template.id, 'weapon', build))
+  }
   const missile = template.qualities.includes('missile')
   return (
     <div className="flex flex-col gap-3" aria-label="Weapon">
@@ -734,22 +749,29 @@ function WeaponForm({ template }: { template: WeaponTemplate }) {
         onToggle={(quality, next) => {
           // The missile quality travels with its ranges in one gesture — the
           // model's own coupling, unrepresentable to break through the form.
-          if (quality === 'missile') {
-            patch(missilePatch(template, next))
-            return
-          }
-          patch({
-            qualities: next
-              ? [...template.qualities, quality]
-              : template.qualities.filter((candidate) => candidate !== quality),
-          })
+          update((committed) =>
+            quality === 'missile'
+              ? missilePatch(committed, next)
+              : { qualities: toggledQualities(committed.qualities, quality, next) },
+          )
         }}
       />
       {missile && template.missile_ranges && (
         <RangesEditor
           idPrefix="weapon"
           ranges={template.missile_ranges}
-          onCommit={(missile_ranges) => patch({ missile_ranges })}
+          onCommit={(band, field, value) =>
+            update((committed) =>
+              committed.missile_ranges
+                ? {
+                    missile_ranges: {
+                      ...committed.missile_ranges,
+                      [band]: { ...committed.missile_ranges[band], [field]: value },
+                    },
+                  }
+                : null,
+            )
+          }
         />
       )}
     </div>
@@ -783,6 +805,11 @@ function QualitiesEditor({
 
 const BAND_LABELS = { short: 'Short', medium: 'Medium', long: 'Long' } as const
 
+type RangeBandKey = keyof MissileRanges
+
+// The editor emits one field of one band per commit; the owner merges it into
+// the *committed* ranges inside its queue, so two bands edited in quick
+// succession never revert each other.
 function RangesEditor({
   idPrefix,
   ranges,
@@ -790,7 +817,7 @@ function RangesEditor({
 }: {
   idPrefix: string
   ranges: MissileRanges
-  onCommit: (ranges: MissileRanges) => void
+  onCommit: (band: RangeBandKey, field: 'min_feet' | 'max_feet', value: number) => void
 }) {
   return (
     <div className="flex flex-col gap-2" aria-label="Missile ranges">
@@ -804,9 +831,7 @@ function RangesEditor({
             width="w-20"
             value={String(ranges[band].min_feet)}
             normalize={integerInRange(0)}
-            onCommit={(draft) =>
-              onCommit({ ...ranges, [band]: { ...ranges[band], min_feet: Number(draft) } })
-            }
+            onCommit={(draft) => onCommit(band, 'min_feet', Number(draft))}
           />
           <NumberField
             id={`${idPrefix}-${band}-max`}
@@ -814,9 +839,7 @@ function RangesEditor({
             width="w-20"
             value={String(ranges[band].max_feet)}
             normalize={integerInRange(0)}
-            onCommit={(draft) =>
-              onCommit({ ...ranges, [band]: { ...ranges[band], max_feet: Number(draft) } })
-            }
+            onCommit={(draft) => onCommit(band, 'max_feet', Number(draft))}
           />
         </div>
       ))}
@@ -922,6 +945,13 @@ function GearForm({ template }: { template: GearTemplate }) {
       .getState()
       .commit((current) => itemTemplatePatchOps(current, template.id, 'gear', value))
   }
+  // Collection edits (the combat facet, params) compute their next value from
+  // the committed template inside the queue — never from the render-time prop.
+  const update = (build: (committed: GearTemplate) => Partial<GearTemplate> | null) => {
+    void projectStore
+      .getState()
+      .commit((current) => itemTemplateKindUpdateOps(current, template.id, 'gear', build))
+  }
   return (
     <div className="flex flex-col gap-3" aria-label="Gear">
       <div className="flex items-end gap-3">
@@ -947,37 +977,46 @@ function GearForm({ template }: { template: GearTemplate }) {
           onCommit={(draft) => patch({ capacity_coins: draft === '' ? null : Number(draft) })}
         />
       </div>
-      <CombatFacetEditor template={template} onPatch={patch} />
-      <ParamsEditor template={template} onPatch={patch} />
+      <CombatFacetEditor facet={template.combat ?? null} onUpdate={update} />
+      <ParamsEditor params={template.params} onUpdate={update} />
     </div>
   )
 }
+
+type GearUpdate = (build: (committed: GearTemplate) => Partial<GearTemplate> | null) => void
 
 // The optional combat facet as a disclosure. The missile-quality↔ranges
 // gesture here is the editor's form shaping, not model parity: CombatFacet
 // carries only the damage-parse validator, so a foreign facet legally
 // carrying the missile quality with no ranges renders honestly and is never
-// repaired unasked.
+// repaired unasked. Every commit merges over the *committed* facet inside
+// the queue — never the render-time prop.
 function CombatFacetEditor({
-  template,
-  onPatch,
+  facet,
+  onUpdate,
 }: {
-  template: GearTemplate
-  onPatch: (value: Partial<GearTemplate>) => void
+  facet: CombatFacet | null
+  onUpdate: GearUpdate
 }) {
-  const facet = template.combat ?? null
+  const patchFacet = (build: (committedFacet: CombatFacet) => Partial<CombatFacet> | null) =>
+    onUpdate((committed) => {
+      if (!committed.combat) return null
+      const patch = build(committed.combat)
+      return patch === null ? null : { combat: { ...committed.combat, ...patch } }
+    })
   if (!facet) {
     return (
       <button
         type="button"
         className="text-muted-foreground self-start text-sm underline underline-offset-2"
-        onClick={() => onPatch({ combat: { damage: '1d6', qualities: [], missile_ranges: null } })}
+        onClick={() =>
+          onUpdate(() => ({ combat: { damage: '1d6', qualities: [], missile_ranges: null } }))
+        }
       >
         Add combat facet…
       </button>
     )
   }
-  const patchFacet = (value: Partial<CombatFacet>) => onPatch({ combat: { ...facet, ...value } })
   const missile = facet.qualities.includes('missile')
   return (
     <div className="flex flex-col gap-2 rounded-md border p-2" aria-label="Combat facet">
@@ -986,7 +1025,7 @@ function CombatFacetEditor({
         <button
           type="button"
           className="text-muted-foreground text-xs underline underline-offset-2"
-          onClick={() => onPatch({ combat: null })}
+          onClick={() => onUpdate(() => ({ combat: null }))}
         >
           Clear
         </button>
@@ -997,30 +1036,18 @@ function CombatFacetEditor({
           label="Damage"
           value={facet.damage}
           normalize={requiredDice}
-          onCommit={(draft) => patchFacet({ damage: draft })}
+          onCommit={(draft) => patchFacet(() => ({ damage: draft }))}
         />
       </div>
       <QualitiesEditor
         qualities={facet.qualities}
         onToggle={(quality, next) => {
-          if (quality === 'missile') {
-            patchFacet(
-              next
-                ? {
-                    qualities: [...facet.qualities, 'missile'],
-                    missile_ranges: neutralMissileRanges(),
-                  }
-                : {
-                    qualities: facet.qualities.filter((candidate) => candidate !== 'missile'),
-                    missile_ranges: null,
-                  },
-            )
-            return
-          }
-          patchFacet({
-            qualities: next
-              ? [...facet.qualities, quality]
-              : facet.qualities.filter((candidate) => candidate !== quality),
+          patchFacet((committedFacet) => {
+            const qualities = toggledQualities(committedFacet.qualities, quality, next)
+            if (quality === 'missile') {
+              return { qualities, missile_ranges: next ? neutralMissileRanges() : null }
+            }
+            return { qualities }
           })
         }}
       />
@@ -1028,7 +1055,18 @@ function CombatFacetEditor({
         <RangesEditor
           idPrefix="gear-combat"
           ranges={facet.missile_ranges}
-          onCommit={(missile_ranges) => patchFacet({ missile_ranges })}
+          onCommit={(band, field, value) =>
+            patchFacet((committedFacet) =>
+              committedFacet.missile_ranges
+                ? {
+                    missile_ranges: {
+                      ...committedFacet.missile_ranges,
+                      [band]: { ...committedFacet.missile_ranges[band], [field]: value },
+                    },
+                  }
+                : null,
+            )
+          }
         />
       )}
     </div>
@@ -1036,22 +1074,23 @@ function CombatFacetEditor({
 }
 
 // Params as key/value rows with JSON-typed values — the monster-ability
-// params precedent over gear's own value domain.
+// params precedent over gear's own value domain. Adds and removes merge over
+// the committed map inside the queue.
 function ParamsEditor({
-  template,
-  onPatch,
+  params,
+  onUpdate,
 }: {
-  template: GearTemplate
-  onPatch: (value: Partial<GearTemplate>) => void
+  params: GearTemplate['params']
+  onUpdate: GearUpdate
 }) {
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
-  const entries = Object.entries(template.params)
+  const entries = Object.entries(params)
   const addParam = () => {
     const key = newKey.trim()
     const value = parseGearParam(newValue)
     if (key === '' || value === null) return
-    onPatch({ params: { ...template.params, [key]: value } })
+    onUpdate((committed) => ({ params: { ...committed.params, [key]: value } }))
     setNewKey('')
     setNewValue('')
   }
@@ -1067,11 +1106,13 @@ function ParamsEditor({
               <button
                 type="button"
                 aria-label={`Remove ${key}`}
-                onClick={() => {
-                  const next = { ...template.params }
-                  delete next[key]
-                  onPatch({ params: next })
-                }}
+                onClick={() =>
+                  onUpdate((committed) => {
+                    const next = { ...committed.params }
+                    delete next[key]
+                    return { params: next }
+                  })
+                }
               >
                 <XIcon className="size-3" />
               </button>
