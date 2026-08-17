@@ -11,7 +11,8 @@ segment ships with the grammar (the inspector and hover refs use edge
 addressing) even though no phase 2 finding emits it — `edge_invalid`
 deliberately addresses the level. Phase 4 adds the top-level `monster:<id>`
 segment for bundled monster templates, finer than the bare `monsters` scope
-phase 1 pinned.
+phase 1 pinned; phase 15 adds `item:<id>` for bundled item templates beside
+it, with the bare `items` scope as its coarse degrade target.
 
 Three producers build addresses — the validation parser, the structural lint,
 and the `ResizeLevel` offender list — so the builders live here, in one place.
@@ -27,6 +28,7 @@ __all__ = [
     "dungeon_address",
     "edge_address",
     "encode_value",
+    "item_address",
     "level_address",
     "monster_address",
 ]
@@ -54,6 +56,18 @@ def monster_address(template_id: str) -> str:
         `monster:<id>`.
     """
     return f"monster:{encode_value(template_id)}"
+
+
+def item_address(item_id: str) -> str:
+    """Build a bundled-item-template address — a top-level segment kind, phase 15's.
+
+    Args:
+        item_id: The bundled template id.
+
+    Returns:
+        `item:<id>`.
+    """
+    return f"item:{encode_value(item_id)}"
 
 
 def dungeon_address(dungeon_id: str) -> str:

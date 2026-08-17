@@ -1124,6 +1124,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/catalogs/equipment/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Catalog Item
+         * @description Report one shipped equipment item's full template — the item clone-and-modify source.
+         *
+         *     Args:
+         *         item_id: The shipped equipment id.
+         *         user: The authenticated caller.
+         *
+         *     Returns:
+         *         The full template, verbatim from the shipped data.
+         */
+        get: operations["get_catalog_item_api_catalogs_equipment__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/catalogs/magic-items": {
         parameters: {
             query?: never;
@@ -1369,6 +1396,32 @@ export interface components {
             /** Area Id */
             area_id: string | null;
             feature: components["schemas"]["FeatureSpec"];
+        };
+        /**
+         * AddItemTemplate
+         * @description Add a bundled item template, appended to `Adventure.items` in authored order.
+         *
+         *     Adventure-scoped, the monster trio's shape over the four-kind
+         *     [`ItemTemplate`][osrlib.core.items.ItemTemplate] union — the kinds ride the
+         *     wire on `item_type`, and each kind's internal validity (the missile
+         *     quality ↔ ranges coupling, the body-armour XOR shield rule, dice grammars)
+         *     is the model's own, enforced at request parse. Invariants at apply: the id
+         *     non-empty and free across the full collision domain — shipped equipment
+         *     (all four lists), shipped magic items, and the rest of the bundle — the
+         *     exact seen-set osrlib's `_effective_equipment` seeds, so the editor
+         *     refuses at commit precisely what `validate_adventure` would flag. The op
+         *     never *introduces* a collision; a foreign document already carrying one
+         *     stays editable (see [`SetItemTemplate`][osreditor.ops.SetItemTemplate]'s
+         *     carry-through).
+         */
+        AddItemTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "add_item_template";
+            /** Template */
+            template: components["schemas"]["WeaponTemplate"] | components["schemas"]["ArmourTemplate"] | components["schemas"]["GearTemplate"] | components["schemas"]["AmmunitionTemplate"];
         };
         /**
          * AddLevel
@@ -4158,7 +4211,7 @@ export interface components {
             /** Revision */
             revision: string;
             /** Ops */
-            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["AddMonsterTemplate"] | components["schemas"]["SetMonsterTemplate"] | components["schemas"]["RemoveMonsterTemplate"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["SetEncounter"] | components["schemas"]["SetTrap"] | components["schemas"]["SetTreasure"] | components["schemas"]["AddFeature"] | components["schemas"]["SetFeature"] | components["schemas"]["RemoveFeature"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
+            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["AddMonsterTemplate"] | components["schemas"]["SetMonsterTemplate"] | components["schemas"]["RemoveMonsterTemplate"] | components["schemas"]["AddItemTemplate"] | components["schemas"]["SetItemTemplate"] | components["schemas"]["RemoveItemTemplate"] | components["schemas"]["SetLevelField"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["SetEncounter"] | components["schemas"]["SetTrap"] | components["schemas"]["SetTreasure"] | components["schemas"]["AddFeature"] | components["schemas"]["SetFeature"] | components["schemas"]["RemoveFeature"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
         };
         /**
          * OpBatchResult
@@ -4823,6 +4876,24 @@ export interface components {
             feature_id: string;
         };
         /**
+         * RemoveItemTemplate
+         * @description Remove one bundled item template; first-match among foreign duplicate ids.
+         *
+         *     Removal admits dangling references: cache `item_ids` naming the removed id
+         *     become `feature_unknown_item` diagnostics and gate conditions the gate
+         *     findings — legal while editing, gated at publish. The UI confirms first
+         *     when references exist, naming the count.
+         */
+        RemoveItemTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "remove_item_template";
+            /** Item Id */
+            item_id: string;
+        };
+        /**
          * RemoveLevel
          * @description Remove a level — never a dungeon's last one. Inbound transitions dangle as diagnostics.
          */
@@ -4944,10 +5015,13 @@ export interface components {
          *
          *     A rename means "same thing, new name", so references follow, atomically, in
          *     one undo step: the dungeon's `id`, the town's `travel_turns` key (order
-         *     preserved), and every `TransitionSpec.to_dungeon_id` naming it, across all
-         *     dungeons. Invariants at apply: `new_id` non-empty and not already taken.
-         *     Contrast [`RemoveDungeon`][osreditor.ops.RemoveDungeon], which deliberately
-         *     does not cascade.
+         *     preserved), every `TransitionSpec.to_dungeon_id` naming it across all
+         *     dungeons, and the authored-layer sites — location patterns
+         *     (`area_entered`, `level_entered`, `dungeon_entered`), `SetDoorState`
+         *     consequences, and `PlaceParty` locations. Invariants at apply: `new_id`
+         *     non-empty and not already taken. Contrast
+         *     [`RemoveDungeon`][osreditor.ops.RemoveDungeon], which deliberately does not
+         *     cascade.
          */
         RenameDungeon: {
             /**
@@ -4962,8 +5036,12 @@ export interface components {
         };
         /**
          * RenumberLevel
-         * @description Renumber a level, cascading every transition in the document targeting it.
+         * @description Renumber a level, cascading every reference in the document targeting it.
          *
+         *     The cascade covers every transition targeting the level and the
+         *     authored-layer sites naming its dungeon and old number — `area_entered`
+         *     and `level_entered` patterns, `SetDoorState` consequences, and
+         *     `PlaceParty` locations.
          *     Same rename-vs-remove logic as dungeons; per the no-reorder rule the level
          *     stays where it sits in the tuple (display order is sorted anyway, and
          *     moving it could change the stored-order entrance semantics). Invariant at
@@ -5171,8 +5249,10 @@ export interface components {
          *
          *     `id` is the re-key affordance (key numbers render on the map, so re-keying
          *     is a map concern): apply rejects empty and duplicate ids like
-         *     [`CreateArea`][osreditor.ops.CreateArea]. Nothing references area ids in
-         *     the document, so re-keying cascades nowhere. Phase 3 does not grow this
+         *     [`CreateArea`][osreditor.ops.CreateArea]. A re-key cascades over the one
+         *     reference kind that names area ids — authored-trigger and quest
+         *     `AreaEnteredPattern`s naming this area's whole triple — with the honest
+         *     whole-document delta when any rewrite lands. Phase 3 does not grow this
          *     literal — encounter, trap, and treasure have their own ops per the spec's
          *     vocabulary.
          */
@@ -5408,6 +5488,61 @@ export interface components {
             value: string | number | boolean;
         };
         /**
+         * SetItemTemplate
+         * @description Replace one bundled item template whole; a differing `template.id` is a rename.
+         *
+         *     Whole-value replacement at the item form's commit grain — the
+         *     [`SetMonsterTemplate`][osreditor.ops.SetMonsterTemplate] reasoning. A
+         *     rename falls under [`AddItemTemplate`][osreditor.ops.AddItemTemplate]'s id
+         *     rejections and cascades in the same commit over every in-document
+         *     reference: cache `item_ids` on area and level features, `has_item`
+         *     conditions inside door and transition gates, and the authored-layer sites
+         *     (`item_acquired` patterns, clause conditions, `GrantItem` consequences) —
+         *     with the honest whole-document delta. The collision invariant guards
+         *     **new or changed ids only**: a foreign template's unchanged colliding id
+         *     passes through untouched, so its other fields stay editable and the
+         *     finding stays a navigable diagnostic. Among foreign duplicate bundled ids,
+         *     the first match in authored order is the target.
+         */
+        SetItemTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_item_template";
+            /** Item Id */
+            item_id: string;
+            /** Template */
+            template: components["schemas"]["WeaponTemplate"] | components["schemas"]["ArmourTemplate"] | components["schemas"]["GearTemplate"] | components["schemas"]["AmmunitionTemplate"];
+        };
+        /**
+         * SetLevelField
+         * @description Set one plain level field — `guidance`, the one such field today.
+         *
+         *     The `SetAdventureField` shape at level scope; the `Literal` grows if a
+         *     later osrlib adds level fields. Guidance is ambient steering for a
+         *     narrating front end — per-level narrator direction, inert to the engine,
+         *     never shown to players verbatim.
+         */
+        SetLevelField: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_level_field";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /**
+             * Field
+             * @constant
+             */
+            field: "guidance";
+            /** Value */
+            value: string;
+        };
+        /**
          * SetMonsterRemap
          * @description Remap one extracted name to a catalog template — forge's `monsters:` kind.
          *
@@ -5438,10 +5573,11 @@ export interface components {
          *     field-grained op over `MonsterTemplate`'s 25 fields would need a value union
          *     undiscriminable on the wire. A rename falls under
          *     [`AddMonsterTemplate`][osreditor.ops.AddMonsterTemplate]'s id rejections and
-         *     cascades: every `KeyedMonster.template_id` and wandering-row monster id
-         *     naming the old id is rewritten in the same commit (the `RenameDungeon`
-         *     precedent — template ids are referenced in-document), with the honest
-         *     whole-document delta. The collision invariant guards **new or changed ids
+         *     cascades: every `KeyedMonster.template_id`, wandering-row monster id,
+         *     `monster_defeated` pattern, and `SpawnMonsters` consequence naming the old
+         *     id is rewritten in the same commit (the `RenameDungeon` precedent —
+         *     template ids are referenced in-document), with the honest whole-document
+         *     delta. The collision invariant guards **new or changed ids
          *     only**: a foreign template's unchanged colliding id passes through
          *     untouched, so its other fields stay editable and the finding stays a
          *     navigable diagnostic. Among foreign duplicate bundled ids, the first match
@@ -7886,6 +8022,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EquipmentCatalogResponse"];
+                };
+            };
+        };
+    };
+    get_catalog_item_api_catalogs_equipment__item_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeaponTemplate"] | components["schemas"]["ArmourTemplate"] | components["schemas"]["GearTemplate"] | components["schemas"]["AmmunitionTemplate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

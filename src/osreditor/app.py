@@ -28,6 +28,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from osrforge.contracts.run import Stage
+from osrlib.core.items import ItemTemplate
 from osrlib.core.monsters import MonsterTemplate
 from osrlib.crawl.adventure import Adventure
 from osrlib.errors import ContentValidationError, SaveVersionError
@@ -50,6 +51,7 @@ from osreditor.catalogs import (
     MagicItemCatalogResponse,
     MonsterCatalogResponse,
     TreasureTypeCatalogResponse,
+    catalog_item,
     catalog_monster,
     encounter_table_catalog,
     equipment_catalog,
@@ -84,6 +86,7 @@ from osreditor.documents import DocumentService, OpenProject, dump_adventure, fo
 from osreditor.errors import (
     AidTargetStockedError,
     ArtifactNotFoundError,
+    CatalogItemNotFoundError,
     CatalogMonsterNotFoundError,
     ConversionDestinationExistsError,
     ConversionDestinationInvalidError,
@@ -1572,6 +1575,20 @@ def get_equipment_catalog(user: CurrentUser) -> EquipmentCatalogResponse:
     return equipment_catalog()
 
 
+@router.get("/api/catalogs/equipment/{item_id}")
+def get_catalog_item(item_id: str, user: CurrentUser) -> ItemTemplate:
+    """Report one shipped equipment item's full template — the item clone-and-modify source.
+
+    Args:
+        item_id: The shipped equipment id.
+        user: The authenticated caller.
+
+    Returns:
+        The full template, verbatim from the shipped data.
+    """
+    return catalog_item(item_id)
+
+
 @router.get("/api/catalogs/magic-items")
 def get_magic_item_catalog(user: CurrentUser) -> MagicItemCatalogResponse:
     """Report the shipped magic items.
@@ -1846,6 +1863,12 @@ _ERROR_MAPPINGS: dict[type[Exception], tuple[int, str, str | None, Callable[[Exc
         404,
         "catalog_monster_not_found",
         "The shipped ids are the GET /api/catalogs/monsters list; bundled templates live in the document itself.",
+        _details_none,
+    ),
+    CatalogItemNotFoundError: (
+        404,
+        "catalog_item_not_found",
+        "The shipped ids are the GET /api/catalogs/equipment list; bundled templates live in the document itself.",
         _details_none,
     ),
     ImporterNotFoundError: (404, "importer_not_found", None, _details_none),

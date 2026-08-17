@@ -52,6 +52,30 @@ def test_monster_detail_route_404s_an_unknown_id_with_the_code_and_remedy(client
     assert "/api/catalogs/monsters" in error["remedy"]
 
 
+def test_item_detail_route_answers_a_shipped_template_verbatim(client: TestClient) -> None:
+    shipped = load_equipment().gear[0]
+    response = client.get(f"/api/catalogs/equipment/{shipped.id}")
+    assert response.status_code == 200
+    assert response.json() == shipped.model_dump(mode="json")
+
+
+def test_item_detail_route_404s_an_unknown_id_with_the_code_and_remedy(client: TestClient) -> None:
+    response = client.get("/api/catalogs/equipment/no-such-item")
+    assert response.status_code == 404
+    error = response.json()["error"]
+    assert error["code"] == "catalog_item_not_found"
+    assert "'no-such-item'" in error["message"]
+    assert "/api/catalogs/equipment" in error["remedy"]
+
+
+def test_item_detail_route_never_serves_magic_items(client: TestClient) -> None:
+    # A bundle is never magic, so magic items are not clone sources and the
+    # detail route resolves against equipment alone.
+    magic_id = load_magic_items().items[0].id
+    response = client.get(f"/api/catalogs/equipment/{magic_id}")
+    assert response.status_code == 404
+
+
 def test_equipment_catalog_serves_the_four_pickable_lists(client: TestClient) -> None:
     response = client.get("/api/catalogs/equipment")
     assert response.status_code == 200

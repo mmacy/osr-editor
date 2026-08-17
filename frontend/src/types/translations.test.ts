@@ -25,6 +25,7 @@ import type {
   CustomMonsterRecord,
   DamageKey,
   Diagnostics,
+  DoorSpec,
   Edge,
   EditorSidecar,
   Element,
@@ -37,14 +38,17 @@ import type {
   ConversionState,
   CostEstimate,
   CreateConversionRequest,
+  GateSpec,
   ImportedArea,
   ImportedGeometry,
   ImportedLevel,
+  ItemTemplate,
   KeyedEncounter,
   LevelSpec,
   LintFinding,
   MonsterSummary,
   MonsterTemplate,
+  NarrativeBlock,
   NumberAppearingValue,
   OpBatchResult,
   ProjectState,
@@ -121,6 +125,10 @@ test('the op vocabulary translations hold', () => {
     | 'add_monster_template'
     | 'set_monster_template'
     | 'remove_monster_template'
+    | 'add_item_template'
+    | 'set_item_template'
+    | 'remove_item_template'
+    | 'set_level_field'
   >()
   expectTypeOf<Extract<AnyEditOp, { op: 'set_adventure_field' }>>().toHaveProperty('field')
   expectTypeOf<Extract<AnyEditOp, { op: 'set_wandering' }>>().toHaveProperty('dungeon_id')
@@ -128,6 +136,26 @@ test('the op vocabulary translations hold', () => {
   expectTypeOf<
     Extract<AnyEditOp, { op: 'add_monster_template' }>['template']
   >().toEqualTypeOf<MonsterTemplate>()
+  expectTypeOf<Extract<AnyEditOp, { op: 'set_item_template' }>>().toHaveProperty('item_id')
+  expectTypeOf<
+    Extract<AnyEditOp, { op: 'add_item_template' }>['template']
+  >().toEqualTypeOf<ItemTemplate>()
+  expectTypeOf<Extract<AnyEditOp, { op: 'set_level_field' }>['field']>().toEqualTypeOf<'guidance'>()
+
+  // The item-template union discriminates on item_type over the four kinds.
+  expectTypeOf<ItemTemplate['item_type']>().toEqualTypeOf<
+    'weapon' | 'armour' | 'gear' | 'ammunition'
+  >()
+
+  // A door carries an optional gate, and a gate is one condition plus an
+  // optional narrative block whose fields default to empty strings.
+  expectTypeOf<NonNullable<DoorSpec['requires']>>().toEqualTypeOf<GateSpec>()
+  expectTypeOf<GateSpec['condition']['condition_type']>().toEqualTypeOf<
+    'has_item' | 'flag_equals' | 'effect_active'
+  >()
+  expectTypeOf<NonNullable<TransitionSpec['requires']>>().toEqualTypeOf<GateSpec>()
+  expectTypeOf<NarrativeBlock['refusal']>().toEqualTypeOf<string>()
+  expectTypeOf<NarrativeBlock['success']>().toEqualTypeOf<string>()
 
   // SetWandering carries the full WanderingSpec, inline table included.
   expectTypeOf<SetWandering['wandering']>().toEqualTypeOf<WanderingSpec>()

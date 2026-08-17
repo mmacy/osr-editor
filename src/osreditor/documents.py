@@ -46,7 +46,7 @@ from osrforge.contracts.report import ExtractionReport
 from osrforge.contracts.run import RunMeta
 from osrlib.core.tables import EncounterTableRow
 from osrlib.crawl.adventure import Adventure
-from osrlib.crawl.commands import ConsequenceCommand, PlaceParty, SetDoorState, SpawnMonsters
+from osrlib.crawl.commands import ConsequenceCommand, GrantItem, PlaceParty, SetDoorState, SpawnMonsters
 from osrlib.crawl.dungeon import (
     AreaSpec,
     DungeonSpec,
@@ -56,21 +56,29 @@ from osrlib.crawl.dungeon import (
     Position,
     TransitionSpec,
 )
-from osrlib.crawl.gates import ConditionSpec
+from osrlib.crawl.gates import ConditionSpec, GateSpec, HasItemCondition
 from osrlib.crawl.quests import ObjectiveSpec, QuestSpec, TriggerClause
 from osrlib.crawl.triggers import (
     AreaEnteredPattern,
     DungeonEnteredPattern,
+    ItemAcquiredPattern,
     LevelEnteredPattern,
     MonsterDefeatedPattern,
     TriggerPattern,
     TriggerSpec,
 )
-from osrlib.data import load_monsters
+from osrlib.data import load_equipment, load_magic_items, load_monsters
 from osrlib.versioning import check_document, stamp_document
 from pydantic import ValidationError
 
-from osreditor.addresses import area_address, cell_address, dungeon_address, level_address, monster_address
+from osreditor.addresses import (
+    area_address,
+    cell_address,
+    dungeon_address,
+    item_address,
+    level_address,
+    monster_address,
+)
 from osreditor.aids import (
     AidsStockRequest,
     AidsStockResponse,
@@ -97,6 +105,7 @@ from osreditor.forge import assemble_workdir, check_workdir, read_overrides_valu
 from osreditor.ops import (
     AddDungeon,
     AddFeature,
+    AddItemTemplate,
     AddLevel,
     AddMonsterTemplate,
     AddTransition,
@@ -109,6 +118,7 @@ from osreditor.ops import (
     RemoveArea,
     RemoveDungeon,
     RemoveFeature,
+    RemoveItemTemplate,
     RemoveLevel,
     RemoveMonsterTemplate,
     RemoveTransition,
@@ -123,6 +133,8 @@ from osreditor.ops import (
     SetEncounter,
     SetEntrance,
     SetFeature,
+    SetItemTemplate,
+    SetLevelField,
     SetMonsterTemplate,
     SetTownField,
     SetTrap,
@@ -1093,13 +1105,15 @@ def _snapshot_pair(entry: HistoryEntry) -> tuple[bytes, tuple[str, ...]]:
 def _remap_rules(op: AnyEditOp) -> list[tuple[str, str]]:
     """The address-prefix remaps a re-keying op implies for the sidecar's addressed maps.
 
-    The four re-keying ops are all native-mode ops (forge blocks every one),
+    The five re-keying ops are all native-mode ops (forge blocks every one),
     so the cascade never coincides with a forge commit.
     """
     if isinstance(op, RenameDungeon):
         return [(dungeon_address(op.old_id), dungeon_address(op.new_id))]
     if isinstance(op, SetMonsterTemplate) and op.template.id != op.template_id:
         return [(monster_address(op.template_id), monster_address(op.template.id))]
+    if isinstance(op, SetItemTemplate) and op.template.id != op.item_id:
+        return [(item_address(op.item_id), item_address(op.template.id))]
     if isinstance(op, RenumberLevel):
         return [
             (level_address(op.dungeon_id, op.old_number), level_address(op.dungeon_id, op.new_number)),
@@ -1142,6 +1156,14 @@ def _apply_op(adventure: Adventure, op: AnyEditOp, forge_mode: bool = False) -> 
         return _apply_set_monster_template(adventure, op)
     if isinstance(op, RemoveMonsterTemplate):
         return _apply_remove_monster_template(adventure, op)
+    if isinstance(op, AddItemTemplate):
+        return _apply_add_item_template(adventure, op)
+    if isinstance(op, SetItemTemplate):
+        return _apply_set_item_template(adventure, op)
+    if isinstance(op, RemoveItemTemplate):
+        return _apply_remove_item_template(adventure, op)
+    if isinstance(op, SetLevelField):
+        return _apply_level_field(adventure, op, op.field, op.value)
     if isinstance(op, SetWandering):
         return _apply_level_field(adventure, op, "wandering", op.wandering)
     if isinstance(op, SetEdges):
@@ -1252,6 +1274,142 @@ def _apply_remove_monster_template(adventure: Adventure, op: RemoveMonsterTempla
     index = _resolve_monster_template(adventure, op.template_id)
     monsters = (*adventure.monsters[:index], *adventure.monsters[index + 1 :])
     return adventure.model_copy(update={"monsters": monsters}), "/monsters"
+
+
+@cache
+def _shipped_item_ids() -> frozenset[str]:
+    """The item-collision domain's shipped half: the four equipment lists plus the magic-item catalog.
+
+    Exactly the seen-set osrlib's `_effective_equipment` seeds, cached like
+    its loaders.
+    """
+    equipment = load_equipment()
+    ids = {template.id for template in (*equipment.weapons, *equipment.armour, *equipment.gear, *equipment.ammunition)}
+    ids.update(template.id for template in load_magic_items().items)
+    return frozenset(ids)
+
+
+def _resolve_item_template(adventure: Adventure, item_id: str) -> int:
+    """Return the index of the first bundled item template with `item_id` (authored order)."""
+    for index, template in enumerate(adventure.items):
+        if template.id == item_id:
+            return index
+    raise OpTargetNotFoundError(f"the document bundles no item template {item_id!r}")
+
+
+def _require_item_id_free(adventure: Adventure, item_id: str) -> None:
+    """Reject an empty or colliding bundled-item id — the `AddItemTemplate` id rules.
+
+    The domain is the full collision width osrlib's `_effective_equipment`
+    seeds: shipped equipment (all four lists), shipped magic items, and the
+    rest of the bundle. The invariant is "no op ever *introduces* a
+    collision", so callers run it on new or changed ids only — a foreign
+    document's already-colliding id passes through untouched and stays a
+    navigable diagnostic.
+    """
+    if not item_id:
+        raise OpInvariantError("item template id must be non-empty")
+    if item_id in _shipped_item_ids():
+        raise OpInvariantError(
+            f"item template id {item_id!r} collides with the shipped catalog — "
+            "the shipped entry would shadow the bundled one"
+        )
+    if any(template.id == item_id for template in adventure.items):
+        raise OpInvariantError(f"the document already bundles an item template {item_id!r}")
+
+
+def _apply_add_item_template(adventure: Adventure, op: AddItemTemplate) -> tuple[Adventure, str]:
+    _require_item_id_free(adventure, op.template.id)
+    return adventure.model_copy(update={"items": (*adventure.items, op.template)}), "/items"
+
+
+def _apply_set_item_template(adventure: Adventure, op: SetItemTemplate) -> tuple[Adventure, str]:
+    index = _resolve_item_template(adventure, op.item_id)
+    if op.template.id != op.item_id:
+        # A rename, under AddItemTemplate's id rules; an unchanged id —
+        # colliding or not — carries through, so a foreign document's
+        # colliding template stays editable and its finding stays navigable.
+        _require_item_id_free(adventure, op.template.id)
+    items = (*adventure.items[:index], op.template, *adventure.items[index + 1 :])
+    adventure = adventure.model_copy(update={"items": items})
+    if op.template.id == op.item_id:
+        return adventure, "/items"
+    # The rename cascade, the monster trio's precedent: cache item_ids, door
+    # and transition gates, and every authored-layer site follow in the same
+    # commit, with the honest whole-document delta.
+    dungeons = tuple(_retarget_dungeon_items(dungeon, op.item_id, op.template.id) for dungeon in adventure.dungeons)
+    adventure = adventure.model_copy(update={"dungeons": dungeons})
+    return _cascade_item_rename(adventure, op.item_id, op.template.id), ""
+
+
+def _apply_remove_item_template(adventure: Adventure, op: RemoveItemTemplate) -> tuple[Adventure, str]:
+    index = _resolve_item_template(adventure, op.item_id)
+    items = (*adventure.items[:index], *adventure.items[index + 1 :])
+    return adventure.model_copy(update={"items": items}), "/items"
+
+
+def _retarget_gate(gate: GateSpec | None, old_id: str, new_id: str) -> GateSpec | None:
+    """A gate with its `has_item` condition retargeted; the same object when it does not name `old_id`."""
+    if gate is None or not isinstance(gate.condition, HasItemCondition) or gate.condition.item_id != old_id:
+        return gate
+    return gate.model_copy(update={"condition": gate.condition.model_copy(update={"item_id": new_id})})
+
+
+def _retarget_feature_items(feature: FeatureSpec, old_id: str, new_id: str) -> FeatureSpec:
+    """A feature with its cache `item_ids` retargeted; the same object when none names `old_id`."""
+    if old_id not in feature.item_ids:
+        return feature
+    item_ids = tuple(new_id if item_id == old_id else item_id for item_id in feature.item_ids)
+    return feature.model_copy(update={"item_ids": item_ids})
+
+
+def _retarget_level_items(level: LevelSpec, old_id: str, new_id: str) -> LevelSpec:
+    """Rewrite a level's cache `item_ids` and gate conditions naming `old_id`; the original when none do."""
+    changed = False
+    areas: list[AreaSpec] = []
+    for area in level.areas:
+        features = tuple(_retarget_feature_items(feature, old_id, new_id) for feature in area.features)
+        if not _same_items(features, area.features):
+            area = area.model_copy(update={"features": features})
+            changed = True
+        areas.append(area)
+    level_features = tuple(_retarget_feature_items(feature, old_id, new_id) for feature in level.features)
+    if not _same_items(level_features, level.features):
+        changed = True
+    edges: dict[str, object] = {}
+    for key, edge in level.edges.items():
+        door = edge.door
+        if door is not None:
+            gate = _retarget_gate(door.requires, old_id, new_id)
+            if gate is not door.requires:
+                edge = edge.model_copy(update={"door": door.model_copy(update={"requires": gate})})
+                changed = True
+        edges[key] = edge
+    transitions: list[TransitionSpec] = []
+    for transition in level.transitions:
+        gate = _retarget_gate(transition.requires, old_id, new_id)
+        if gate is not transition.requires:
+            transition = transition.model_copy(update={"requires": gate})
+            changed = True
+        transitions.append(transition)
+    if not changed:
+        return level
+    return level.model_copy(
+        update={
+            "areas": tuple(areas),
+            "features": level_features,
+            "edges": edges,
+            "transitions": tuple(transitions),
+        }
+    )
+
+
+def _retarget_dungeon_items(dungeon: DungeonSpec, old_id: str, new_id: str) -> DungeonSpec:
+    """Rebuild a dungeon with every item reference to `old_id` retargeted; the original when nothing matches."""
+    levels = tuple(_retarget_level_items(level, old_id, new_id) for level in dungeon.levels)
+    if _same_items(levels, dungeon.levels):
+        return dungeon
+    return dungeon.model_copy(update={"levels": levels})
 
 
 def _retarget_dungeon_monsters(dungeon: DungeonSpec, old_id: str, new_id: str) -> DungeonSpec:
@@ -1471,6 +1629,27 @@ def _cascade_monster_rename(adventure: Adventure, old_id: str, new_id: str) -> A
     return _rewrite_authored_layer(adventure, pattern=pattern, consequence=consequence)
 
 
+def _cascade_item_rename(adventure: Adventure, old_id: str, new_id: str) -> Adventure:
+    """Retarget every authored-layer item reference: acquisition patterns, `has_item` conditions, grants."""
+
+    def pattern(entry: TriggerPattern) -> TriggerPattern:
+        if isinstance(entry, ItemAcquiredPattern) and entry.item_id == old_id:
+            return entry.model_copy(update={"item_id": new_id})
+        return entry
+
+    def condition(entry: ConditionSpec) -> ConditionSpec:
+        if isinstance(entry, HasItemCondition) and entry.item_id == old_id:
+            return entry.model_copy(update={"item_id": new_id})
+        return entry
+
+    def consequence(entry: ConsequenceCommand) -> ConsequenceCommand:
+        if isinstance(entry, GrantItem) and entry.item_id == old_id:
+            return entry.model_copy(update={"item_id": new_id})
+        return entry
+
+    return _rewrite_authored_layer(adventure, pattern=pattern, condition=condition, consequence=consequence)
+
+
 def _resolve_dungeon(adventure: Adventure, dungeon_id: str) -> int:
     """Return the index of the dungeon with `dungeon_id`, or raise the targeting miss."""
     for index, dungeon in enumerate(adventure.dungeons):
@@ -1510,7 +1689,7 @@ def _replace_level(adventure: Adventure, dungeon_index: int, level_index: int, l
 
 
 def _apply_level_field(
-    adventure: Adventure, op: SetWandering | SetEntrance, field: str, value: object
+    adventure: Adventure, op: SetWandering | SetEntrance | SetLevelField, field: str, value: object
 ) -> tuple[Adventure, str]:
     """Replace one level field, answering the precise level-scoped pointer."""
     dungeon_index, level_index = _resolve_level(adventure, op.dungeon_id, op.level_number)

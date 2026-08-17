@@ -27,9 +27,13 @@ The address grammar, pinned by this first producer: `/`-joined `kind:value`
 segments, values percent-encoded (RFC 3986) so arbitrary osrlib ids can never
 make the grammar ambiguous — the builders live in
 [`osreditor.addresses`][osreditor.addresses]. Segments: `town`, `monsters`,
-`monster:<id>` (phase 4's finer bundled-template scope), `dungeon:<id>`,
+`monster:<id>` (phase 4's finer bundled-template scope), `items` and
+`item:<id>` (phase 15's bundled-item scopes), `dungeon:<id>`,
 `dungeon:<id>/level:<n>`, `dungeon:<id>/level:<n>/area:<id>`, plus the `cell:`
-and `edge:` geometry segments phase 2 added.
+and `edge:` geometry segments phase 2 added. Trigger- and quest-error strings
+from foreign documents degrade to `validation_unclassified` verbatim rows
+until phases 16-17 grow their addresses — visible, honest, never navigable
+lies.
 
 Every validation finding carries `severity="error"` — `validate_adventure`
 output gates publish, which is what error means here.
@@ -43,7 +47,15 @@ from osrlib.crawl.dungeon import LevelSpec
 from osrlib.data import load_equipment, load_monsters
 from osrlib.errors import ContentValidationError
 
-from osreditor.addresses import area_address, dungeon_address, level_address, monster_address
+from osreditor.addresses import (
+    area_address,
+    cell_address,
+    dungeon_address,
+    edge_address,
+    item_address,
+    level_address,
+    monster_address,
+)
 from osreditor.lint import lint_adventure
 from osreditor.ops import Diagnostics, Finding
 
@@ -157,7 +169,11 @@ def _classify_dungeon_scoped(line: str, adventure: Adventure) -> Finding | None:
 
 
 _BUNDLED_RE = re.compile(r"^bundled monster id .+ collides with the catalog$")
+_BUNDLED_ITEM_RE = re.compile(r"^bundled item id .+ collides with the catalog$")
 _TRAVEL_RE = re.compile(r"^town travel names unknown dungeon .+$")
+
+_DOOR_GATE_TAIL = re.compile(r"door .+ gate references unknown item .+")
+_TRANSITION_GATE_TAIL = re.compile(rf"transition at {_POSITION} gate references unknown item .+")
 
 
 def _classify_bundled_collision(line: str, adventure: Adventure) -> Finding:
@@ -180,6 +196,70 @@ def _classify_bundled_collision(line: str, adventure: Adventure) -> Finding:
     )
 
 
+def _classify_gate_dangling(line: str, adventure: Adventure) -> Finding | None:
+    """Classify the two gate-dangling shapes, the carrier confirmed by enumeration.
+
+    The dangling item id is unconfirmable by definition — it names nothing in
+    the document — so it stays message text; the *carrier* is what navigation
+    needs, and it is confirmed by rendering every edge key (or transition
+    position) the owning level holds into the line, exactly as osrlib renders
+    it. No single confirmation, no classification — the line falls through to
+    `validation_unclassified`, never a guessed address.
+    """
+    confirmed = _confirm_owner(adventure, line, _DOOR_GATE_TAIL)
+    if confirmed is not None:
+        dungeon_id, level_number = confirmed
+        level = next(d for d in adventure.dungeons if d.id == dungeon_id).level(level_number)
+        rest = line[len(f"{dungeon_id} level {level_number}: ") :]
+        edge_hits = [key for key in level.edges if rest.startswith(f"door {key} gate references unknown item ")]
+        if len(edge_hits) == 1:
+            return Finding(
+                source="validation",
+                code="door_gate_unknown_item",
+                severity="error",
+                message=line,
+                address=edge_address(dungeon_id, level_number, edge_hits[0]),
+            )
+    confirmed = _confirm_owner(adventure, line, _TRANSITION_GATE_TAIL)
+    if confirmed is not None:
+        dungeon_id, level_number = confirmed
+        level = next(d for d in adventure.dungeons if d.id == dungeon_id).level(level_number)
+        rest = line[len(f"{dungeon_id} level {level_number}: ") :]
+        # Foreign documents can stack transitions on one cell; identical
+        # positions render identical lines, so hits dedupe by position.
+        position_hits = {
+            transition.position
+            for transition in level.transitions
+            if rest.startswith(f"transition at {transition.position} gate references unknown item ")
+        }
+        if len(position_hits) == 1:
+            return Finding(
+                source="validation",
+                code="transition_gate_unknown_item",
+                severity="error",
+                message=line,
+                address=cell_address(dungeon_id, level_number, next(iter(position_hits))),
+            )
+    return None
+
+
+def _classify_bundled_item_collision(line: str, adventure: Adventure) -> Finding:
+    """Address an item-collision line to `item:<id>` — enumeration-confirmed, degrading to the coarse scope.
+
+    The monster classifier's mirror: each bundled item's id is rendered
+    exactly as osrlib reprs it and matched against the whole line; duplicate
+    bundled ids dedupe, and a line no distinct id renders degrades to the bare
+    `items` scope — always true, never a lie.
+    """
+    hits = {
+        template.id
+        for template in adventure.items
+        if line == f"bundled item id {template.id!r} collides with the catalog"
+    }
+    address = item_address(next(iter(hits))) if len(hits) == 1 else "items"
+    return Finding(source="validation", code="bundled_item_collision", severity="error", message=line, address=address)
+
+
 def _classify(line: str, adventure: Adventure) -> Finding:
     # Owner-confirmed shapes first: a hostile id embedding a static shape's
     # text inside an owner prefix classifies by its true, document-confirmed
@@ -187,11 +267,16 @@ def _classify(line: str, adventure: Adventure) -> Finding:
     finding = _classify_owner_scoped(line, adventure)
     if finding is not None:
         return finding
+    finding = _classify_gate_dangling(line, adventure)
+    if finding is not None:
+        return finding
     finding = _classify_dungeon_scoped(line, adventure)
     if finding is not None:
         return finding
     if _BUNDLED_RE.match(line):
         return _classify_bundled_collision(line, adventure)
+    if _BUNDLED_ITEM_RE.match(line):
+        return _classify_bundled_item_collision(line, adventure)
     if _TRAVEL_RE.match(line):
         return Finding(
             source="validation", code="travel_unknown_dungeon", severity="error", message=line, address="town"

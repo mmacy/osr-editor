@@ -1,30 +1,44 @@
 """The envelope models and the phase 1 op vocabulary: round-trips, pairing validators, frozen-ness."""
 
 import pytest
+from osrlib.core.items import GearTemplate
 from osrlib.core.monsters import MonsterTemplate
 from osrlib.crawl.dungeon import (
     AreaTreasureSpec,
+    Direction,
+    DoorSpec,
+    Edge,
+    EdgeKind,
     FeatureSpec,
     KeyedEncounter,
     KeyedMonster,
+    TransitionSpec,
     TrapEffect,
     TrapSpec,
     WanderingSpec,
 )
+from osrlib.crawl.gates import GateSpec, HasItemCondition
+from osrlib.crawl.narrative import NarrativeBlock
 from pydantic import BaseModel, ValidationError
 
 from osreditor.ops import (
     AddFeature,
+    AddItemTemplate,
     AddMonsterTemplate,
+    AddTransition,
     Diagnostics,
     Finding,
     OpBatch,
     OpBatchResult,
     RemoveFeature,
+    RemoveItemTemplate,
     RemoveMonsterTemplate,
     SetAdventureField,
+    SetEdges,
     SetEncounter,
     SetFeature,
+    SetItemTemplate,
+    SetLevelField,
     SetMonsterTemplate,
     SetTownField,
     SetTrap,
@@ -51,6 +65,29 @@ TEMPLATE = MonsterTemplate.model_validate(
         "xp": 10,
         "number_appearing": {"dungeon": {"dice": "1d6"}, "lair": {"dice": "1d6"}},
     }
+)
+
+ITEM_TEMPLATE = GearTemplate(id="brass-key", name="Brass key", cost_gp=0)
+
+GATED_DOOR = Edge(
+    kind=EdgeKind.DOOR,
+    door=DoorSpec(
+        kind="normal",
+        requires=GateSpec(
+            condition=HasItemCondition(item_id="brass-key"),
+            narrative=NarrativeBlock(refusal="The lock refuses.", success="The key turns."),
+        ),
+    ),
+)
+
+GATED_TRANSITION = TransitionSpec(
+    kind="stairs_down",
+    position=(1, 1),
+    to_dungeon_id="d",
+    to_level_number=2,
+    to_position=(0, 0),
+    to_facing=Direction.SOUTH,
+    requires=GateSpec(condition=HasItemCondition(item_id="toll-coin", consumes=True)),
 )
 
 FINDING = Finding(
@@ -112,6 +149,14 @@ RESULT = OpBatchResult(
         AddMonsterTemplate(template=TEMPLATE),
         SetMonsterTemplate(template_id="bespoke-1", template=TEMPLATE),
         RemoveMonsterTemplate(template_id="bespoke-1"),
+        AddItemTemplate(template=ITEM_TEMPLATE),
+        SetItemTemplate(item_id="brass-key", template=ITEM_TEMPLATE),
+        RemoveItemTemplate(item_id="brass-key"),
+        SetLevelField(dungeon_id="mill-caves", level_number=1, field="guidance", value="Slow, dripping dread."),
+        # Gates ride the existing geometry ops as values — the regenerated
+        # types carry `requires` transitively, and the wire round-trips it.
+        SetEdges(dungeon_id="mill-caves", level_number=1, edges={"1,1:north": GATED_DOOR}),
+        AddTransition(dungeon_id="mill-caves", level_number=1, transition=GATED_TRANSITION),
         OpBatch(revision="rev-1", ops=(SetAdventureField(field="description", value="…"),)),
         FINDING,
         Finding(source="lint", code="orphan_cell", severity="warning", message="cell (2, 1) is in no area"),
@@ -159,6 +204,14 @@ def test_op_batch_discriminates_on_op() -> None:
                     "template": TEMPLATE.model_dump(mode="json"),
                 },
                 {"op": "remove_monster_template", "template_id": "bespoke-1"},
+                {"op": "add_item_template", "template": ITEM_TEMPLATE.model_dump(mode="json")},
+                {
+                    "op": "set_item_template",
+                    "item_id": "brass-key",
+                    "template": ITEM_TEMPLATE.model_dump(mode="json"),
+                },
+                {"op": "remove_item_template", "item_id": "brass-key"},
+                {"op": "set_level_field", "dungeon_id": "d", "level_number": 1, "field": "guidance", "value": "…"},
             ],
         }
     )
@@ -175,6 +228,10 @@ def test_op_batch_discriminates_on_op() -> None:
         AddMonsterTemplate,
         SetMonsterTemplate,
         RemoveMonsterTemplate,
+        AddItemTemplate,
+        SetItemTemplate,
+        RemoveItemTemplate,
+        SetLevelField,
     ]
 
 
@@ -286,6 +343,18 @@ def test_op_batch_requires_at_least_one_op() -> None:
         OpBatch(revision="rev-1", ops=())
 
 
+def test_a_gated_trap_slide_is_unrepresentable_at_parse() -> None:
+    # TrapEffect rejects a transition carrying `requires`, so the trap
+    # builder's transition sub-form needs no gate control and gets none.
+    with pytest.raises(ValidationError):
+        SetTrap(
+            dungeon_id="d",
+            level_number=1,
+            area_id="1",
+            trap=TrapSpec(kind="room", trigger="enter", effect=TrapEffect(transition=GATED_TRANSITION)),
+        )
+
+
 def test_finding_rejects_unknown_source() -> None:
     with pytest.raises(ValidationError):
         Finding(source="vibes", code="x", severity="error", message="y")  # type: ignore[arg-type]
@@ -303,6 +372,10 @@ def test_finding_rejects_unknown_severity() -> None:
         AddMonsterTemplate(template=TEMPLATE),
         SetMonsterTemplate(template_id="bespoke-1", template=TEMPLATE),
         RemoveMonsterTemplate(template_id="bespoke-1"),
+        AddItemTemplate(template=ITEM_TEMPLATE),
+        SetItemTemplate(item_id="brass-key", template=ITEM_TEMPLATE),
+        RemoveItemTemplate(item_id="brass-key"),
+        SetLevelField(dungeon_id="d", level_number=1, field="guidance", value="X"),
         OpBatch(revision="rev-1", ops=(SetAdventureField(field="name", value="X"),)),
         FINDING,
         DIAGNOSTICS,
