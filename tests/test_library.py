@@ -205,7 +205,9 @@ def test_a_second_native_project_opens_through_the_store(service: DocumentServic
     assert state.habitat == "project"
     assert state.label == "The Mill on the Moor"
     assert [template.id for template in state.pack.monsters] == ["drowned-miller"]
-    assert state.findings == ()
+    # The one expected finding: the guard-post cache names the bundle-only
+    # miller's key, which packs (bundle-less by schema) cannot resolve.
+    assert [finding.code for finding in state.findings] == ["pack.feature.unknown_item"]
     # A source open is a read: no project registers, nothing is written.
     assert service.open_at(source_dir.resolve()) is None
     assert sorted(service.store.list_artifacts(str(source_dir))) == before
@@ -249,7 +251,12 @@ def test_source_open_route_answers_the_source_state(tmp_path: Path) -> None:
     assert body["habitat"] == "project"
     assert body["label"] == "The Mill on the Moor"
     assert [section["id"] for section in body["pack"]["sections"]] == [LEVEL_1, LEVEL_2]
-    assert body["findings"] == []
+    # The recorded phase 15 posture: packs carry no bundle, so a cache naming
+    # a bundle-only id (the miller's key) resolves against the shipped catalog
+    # alone and dangles as an honest pack finding — osrlib's decision to
+    # revisit if demand strikes, never shimmed here.
+    assert [finding["code"] for finding in body["findings"]] == ["pack.feature.unknown_item"]
+    assert "'millers-key'" in body["findings"][0]["message"]
 
 
 # --- the stash act -----------------------------------------------------------
