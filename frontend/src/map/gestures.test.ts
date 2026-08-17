@@ -29,6 +29,7 @@ function makeLevel(overrides: Partial<LevelSpec> = {}): LevelSpec {
     transitions: [],
     wandering: { chance_in_six: 1, interval_turns: 2, table: null },
     entrance: [0, 0],
+    guidance: '',
     ...overrides,
   }
 }
@@ -247,6 +248,7 @@ function documentWithLevelTwo() {
     transitions: [],
     wandering: { chance_in_six: 1, interval_turns: 2, table: null },
     entrance: null,
+    guidance: '',
   })
   return document
 }

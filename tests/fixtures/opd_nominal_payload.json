@@ -181,7 +181,8 @@
             "kind": "secret",
             "stuck": false,
             "locked": false,
-            "starts_open": false
+            "starts_open": false,
+            "requires": null
           }
         },
         "7,2:west": {
@@ -202,7 +203,8 @@
             "kind": "normal",
             "stuck": false,
             "locked": false,
-            "starts_open": false
+            "starts_open": false,
+            "requires": null
           }
         },
         "11,2:west": {
@@ -251,7 +253,8 @@
             "kind": "normal",
             "stuck": false,
             "locked": false,
-            "starts_open": false
+            "starts_open": false,
+            "requires": null
           }
         },
         "4,3:west": {

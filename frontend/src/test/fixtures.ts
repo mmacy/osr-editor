@@ -40,11 +40,15 @@ export function makeDocument(overrides: Partial<Adventure> = {}): Adventure {
             transitions: [],
             wandering: { chance_in_six: 1, interval_turns: 2, table: null },
             entrance: [0, 0],
+            guidance: '',
           },
         ],
       },
     ],
     monsters: [],
+    items: [],
+    triggers: [],
+    quests: [],
     ...overrides,
   }
 }

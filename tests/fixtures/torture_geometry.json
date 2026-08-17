@@ -1,7 +1,7 @@
 {
   "kind": "adventure",
-  "schema_version": 2,
-  "engine_version": "1.4.0",
+  "schema_version": 3,
+  "engine_version": "1.6.0",
   "payload": {
     "name": "The tannery vaults",
     "description": "The doors-and-transitions torture case: every door state, a stairs pair, a one-way chute.",
@@ -38,7 +38,8 @@
                   "kind": "normal",
                   "stuck": false,
                   "locked": false,
-                  "starts_open": false
+                  "starts_open": false,
+                  "requires": null
                 }
               },
               "4,0:west": {
@@ -63,7 +64,8 @@
                   "kind": "secret",
                   "stuck": false,
                   "locked": false,
-                  "starts_open": false
+                  "starts_open": false,
+                  "requires": null
                 }
               },
               "2,1:west": {
@@ -76,7 +78,8 @@
                   "kind": "normal",
                   "stuck": false,
                   "locked": false,
-                  "starts_open": true
+                  "starts_open": true,
+                  "requires": null
                 }
               },
               "4,1:north": {
@@ -85,7 +88,8 @@
                   "kind": "normal",
                   "stuck": true,
                   "locked": false,
-                  "starts_open": false
+                  "starts_open": false,
+                  "requires": null
                 }
               },
               "5,1:west": {
@@ -94,7 +98,8 @@
                   "kind": "normal",
                   "stuck": false,
                   "locked": true,
-                  "starts_open": false
+                  "starts_open": false,
+                  "requires": null
                 }
               },
               "4,2:north": {
@@ -244,7 +249,8 @@
                   0,
                   0
                 ],
-                "to_facing": "south"
+                "to_facing": "south",
+                "requires": null
               },
               {
                 "kind": "chute",
@@ -258,7 +264,8 @@
                   3,
                   2
                 ],
-                "to_facing": "north"
+                "to_facing": "north",
+                "requires": null
               }
             ],
             "wandering": {
@@ -269,7 +276,8 @@
             "entrance": [
               0,
               0
-            ]
+            ],
+            "guidance": ""
           },
           {
             "number": 2,
@@ -324,7 +332,8 @@
                   7,
                   0
                 ],
-                "to_facing": "east"
+                "to_facing": "east",
+                "requires": null
               }
             ],
             "wandering": {
@@ -332,11 +341,15 @@
               "interval_turns": 2,
               "table": null
             },
-            "entrance": null
+            "entrance": null,
+            "guidance": ""
           }
         ]
       }
     ],
-    "monsters": []
+    "monsters": [],
+    "items": [],
+    "triggers": [],
+    "quests": []
   }
 }

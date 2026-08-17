@@ -562,7 +562,7 @@ docs = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.139" },
     { name = "osr-forge", specifier = ">=0.1,<0.2" },
-    { name = "osrlib", git = "https://github.com/mmacy/osrlib-python?rev=a26c08cf1d93ef528e223ed40a1004a21d01d268" },
+    { name = "osrlib", specifier = ">=1.6,<2" },
     { name = "platformdirs", specifier = ">=4" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pyyaml", specifier = ">=6" },
@@ -606,10 +606,14 @@ wheels = [
 
 [[package]]
 name = "osrlib"
-version = "1.4.0"
-source = { git = "https://github.com/mmacy/osrlib-python?rev=a26c08cf1d93ef528e223ed40a1004a21d01d268#a26c08cf1d93ef528e223ed40a1004a21d01d268" }
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b0/cc/d353e202b88897e26af8fa0461fd55a9725a1fab908dfcae936423dbb32f/osrlib-1.6.0.tar.gz", hash = "sha256:269aa96fab2ac8d421b48f5f3da20ad772d8b84a1b56267889c0742781b3bbfd", size = 465945, upload-time = "2026-08-08T18:02:32.698Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ec/13/05f12673a6278794b5618d671438741600f5c2475f68c48b5900d9e1d47c/osrlib-1.6.0-py3-none-any.whl", hash = "sha256:3cef6284661b2f284f8df2196b9c69f9755a13d896bb1f98d643847070c06b87", size = 495339, upload-time = "2026-08-08T18:02:30.779Z" },
 ]
 
 [[package]]

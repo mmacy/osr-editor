@@ -1,7 +1,7 @@
 {
   "kind": "adventure",
-  "schema_version": 2,
-  "engine_version": "1.4.0",
+  "schema_version": 3,
+  "engine_version": "1.6.0",
   "payload": {
     "name": "The Mill on the Moor",
     "description": "A ruined mill above a wind-scoured hamlet hides the caves its miller dug, died in, and never left.",
@@ -56,7 +56,8 @@
                   "kind": "normal",
                   "stuck": false,
                   "locked": false,
-                  "starts_open": false
+                  "starts_open": false,
+                  "requires": null
                 }
               },
               "3,1:north": {
@@ -69,7 +70,8 @@
                   "kind": "secret",
                   "stuck": false,
                   "locked": false,
-                  "starts_open": false
+                  "starts_open": false,
+                  "requires": null
                 }
               },
               "4,1:north": {
@@ -285,7 +287,8 @@
                   0,
                   0
                 ],
-                "to_facing": "south"
+                "to_facing": "south",
+                "requires": null
               }
             ],
             "wandering": {
@@ -296,7 +299,8 @@
             "entrance": [
               0,
               0
-            ]
+            ],
+            "guidance": ""
           },
           {
             "number": 2,
@@ -392,7 +396,8 @@
                   0,
                   1
                 ],
-                "to_facing": "north"
+                "to_facing": "north",
+                "requires": null
               }
             ],
             "wandering": {
@@ -670,7 +675,8 @@
                 "overrides_applied": []
               }
             },
-            "entrance": null
+            "entrance": null,
+            "guidance": ""
           }
         ]
       }
@@ -783,6 +789,9 @@
         ],
         "overrides_applied": []
       }
-    ]
+    ],
+    "items": [],
+    "triggers": [],
+    "quests": []
   }
 }

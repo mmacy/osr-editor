@@ -77,7 +77,8 @@
             "kind": "normal",
             "stuck": false,
             "locked": true,
-            "starts_open": false
+            "starts_open": false,
+            "requires": null
           }
         },
         "2,3:north": {
@@ -146,7 +147,8 @@
             "kind": "normal",
             "stuck": false,
             "locked": false,
-            "starts_open": false
+            "starts_open": false,
+            "requires": null
           }
         },
         "1,5:west": {
@@ -215,7 +217,8 @@
             "kind": "secret",
             "stuck": false,
             "locked": false,
-            "starts_open": false
+            "starts_open": false,
+            "requires": null
           }
         },
         "2,7:north": {
@@ -240,7 +243,8 @@
             "kind": "normal",
             "stuck": false,
             "locked": false,
-            "starts_open": false
+            "starts_open": false,
+            "requires": null
           }
         },
         "7,6:west": {
@@ -353,7 +357,8 @@
             "kind": "normal",
             "stuck": false,
             "locked": false,
-            "starts_open": false
+            "starts_open": false,
+            "requires": null
           }
         },
         "2,11:north": {
@@ -378,7 +383,8 @@
             "kind": "normal",
             "stuck": false,
             "locked": true,
-            "starts_open": false
+            "starts_open": false,
+            "requires": null
           }
         },
         "7,10:west": {
@@ -758,7 +764,8 @@
             0,
             0
           ],
-          "to_facing": "north"
+          "to_facing": "north",
+          "requires": null
         }
       ],
       "notes": [

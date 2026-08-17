@@ -1447,6 +1447,39 @@ export interface components {
             transition: components["schemas"]["TransitionSpec"];
         };
         /**
+         * AdvanceTime
+         * @description Referee: advance the clock directly.
+         *
+         *     Referee commands are legal in every mode, terminal modes included — the clock
+         *     a revival window is measured in keeps running after the party falls. Time
+         *     passes with full bookkeeping — effect expiries, provisions on day boundaries —
+         *     but no wandering cadence: the referee controls encounters.
+         *
+         *     Modes:
+         *         `town`, `exploring`, `encounter`, `battle`, `game_over`, `victory`
+         *
+         *     Rejections:
+         *         None.
+         *
+         *     Events:
+         *         The span's bookkeeping events (effect expiries and their player-facing
+         *         light translations, provisions), then
+         *         [`TimeAdvancedEvent`][osrlib.crawl.events.TimeAdvancedEvent] with the
+         *         total.
+         */
+        AdvanceTime: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command_type: "advance_time";
+            /** Source */
+            source?: string | null;
+            /** N */
+            n: number;
+            unit: components["schemas"]["TimeUnit"];
+        };
+        /**
          * Adventure
          * @description An adventure: one or more dungeons plus the base town and metadata.
          *
@@ -1458,6 +1491,29 @@ export interface components {
          *     other — a collision is a validation error, never an override. The empty tuple
          *     is the universal default: an adventure that bundles nothing plays exactly as
          *     before.
+         *
+         *     `items` are the adventure's bundled custom
+         *     [`ItemTemplate`][osrlib.core.items.ItemTemplate]s — weapons, armour, gear, and
+         *     ammunition — under the same contract: they join the shipped equipment catalog
+         *     for this adventure's sessions everywhere the engine resolves authored item ids
+         *     (treasure caches, `GrantItem`, drop-pile recovery), and they ride every carry
+         *     surface (gives, equips, drops) through the templates their instances embed.
+         *     Bundled item ids must not collide with the equipment catalog, the magic-item
+         *     catalog, or each other — one item id names one thing per session. The town
+         *     shop is the one place they do not reach: it stocks the shipped equipment
+         *     lists.
+         *
+         *     `triggers` are the adventure's authored
+         *     [`TriggerSpec`][osrlib.crawl.triggers.TriggerSpec]s, and the tuple's order *is*
+         *     document order: triggers matching one event fire in it. A game plays them by
+         *     registering an [`Interpreter`][osrlib.crawl.interpreter.Interpreter] on its
+         *     session; an adventure that authors none plays exactly as one that never could.
+         *
+         *     `quests` are the adventure's authored
+         *     [`QuestSpec`][osrlib.crawl.quests.QuestSpec]s, in document order too: a session
+         *     seeds one state block per quest at construction, in this order, and every walk
+         *     over them follows it. Quest ids and trigger ids are separate namespaces — they
+         *     live in separate state blocks — so a quest and a trigger may share an id.
          */
         Adventure: {
             /** Name */
@@ -1480,6 +1536,21 @@ export interface components {
              * @default []
              */
             monsters: components["schemas"]["MonsterTemplate"][];
+            /**
+             * Items
+             * @default []
+             */
+            items: (components["schemas"]["WeaponTemplate"] | components["schemas"]["ArmourTemplate"] | components["schemas"]["GearTemplate"] | components["schemas"]["AmmunitionTemplate"])[];
+            /**
+             * Triggers
+             * @default []
+             */
+            triggers: components["schemas"]["TriggerSpec"][];
+            /**
+             * Quests
+             * @default []
+             */
+            quests: components["schemas"]["QuestSpec"][];
         };
         /**
          * AidsStockRequest
@@ -1528,6 +1599,65 @@ export interface components {
             /** Options */
             options: components["schemas"]["Alignment"][];
             usual?: components["schemas"]["Alignment"] | null;
+        };
+        /**
+         * AmmunitionTemplate
+         * @description An ammunition row.
+         *
+         *     Ammunition weight is always 0: the SRD's missile weapon weights already include
+         *     the ammunition and its container, and the ammunition table has no weight column.
+         *     Sling stones' printed cost of `Free` compiles to cost 0 with a purchase lot size
+         *     of 1.
+         */
+        AmmunitionTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            item_type: "ammunition";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Cost Gp */
+            cost_gp: number;
+            /**
+             * Lot Size
+             * @default 1
+             */
+            lot_size: number;
+            /**
+             * Weight Coins
+             * @default 0
+             */
+            weight_coins: number;
+            /** @default standard */
+            material: components["schemas"]["Material"];
+            /**
+             * Overrides Applied
+             * @default []
+             */
+            overrides_applied: string[];
+        };
+        /**
+         * AreaEnteredPattern
+         * @description The party entered a keyed area.
+         *
+         *     Area ids are level-scoped, so the pattern names the whole triple: an `id` of
+         *     `"crypt"` means nothing without the dungeon and level it belongs to.
+         */
+        AreaEnteredPattern: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            pattern_type: "area_entered";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** Area Id */
+            area_id: string;
         };
         /**
          * AreaGeometryOverride
@@ -1649,12 +1779,83 @@ export interface components {
             unguarded: boolean;
         };
         /**
+         * ArmourCategory
+         * @description Basic-encumbrance armour categories; unarmoured is the absence of worn armour.
+         * @enum {string}
+         */
+        ArmourCategory: "light" | "heavy";
+        /**
+         * ArmourTemplate
+         * @description An armour row: body armour with dual-format AC, or the shield with its bonus.
+         */
+        ArmourTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            item_type: "armour";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Cost Gp */
+            cost_gp: number;
+            /** Weight Coins */
+            weight_coins: number;
+            /** Ac */
+            ac?: number | null;
+            /** Ac Ascending */
+            ac_ascending?: number | null;
+            /** Ac Bonus */
+            ac_bonus?: number | null;
+            category?: components["schemas"]["ArmourCategory"] | null;
+            /**
+             * Overrides Applied
+             * @default []
+             */
+            overrides_applied: string[];
+        };
+        /**
          * AttackRoutine
          * @description One alternative attack routine — a monster acts with one routine per round.
          */
         AttackRoutine: {
             /** Attacks */
             attacks: components["schemas"]["MonsterAttack"][];
+        };
+        /**
+         * AwardXP
+         * @description Referee: apply an XP award to one character, outside the adventure award.
+         *
+         *     Referee commands are legal in every mode, terminal modes included — an
+         *     adventure's rewards land after the session has concluded. The award applies
+         *     the prime-requisite modifier and can trigger level gains.
+         *
+         *     Modes:
+         *         `town`, `exploring`, `encounter`, `battle`, `game_over`, `victory`
+         *
+         *     Rejections:
+         *         - `session.command.unknown_member` — `character_id` names no party member.
+         *
+         *     Events:
+         *         [`XpAwardedEvent`][osrlib.crawl.events.XpAwardedEvent] with the award, the
+         *         modified award, and the level after; when the award crosses a level
+         *         threshold, a
+         *         [`CharacterLeveledUpEvent`][osrlib.crawl.events.CharacterLeveledUpEvent]
+         *         follows with the levels, the hit points gained, and the new title.
+         */
+        AwardXP: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command_type: "award_xp";
+            /** Source */
+            source?: string | null;
+            /** Character Id */
+            character_id: string;
+            /** Amount */
+            amount: number;
         };
         /**
          * CatalogItem
@@ -1752,6 +1953,17 @@ export interface components {
              * @default 0
              */
             cp: number;
+        };
+        /**
+         * CombatFacet
+         * @description The combat statistics embedded in a gear item (torch, holy water, burning oil).
+         */
+        CombatFacet: {
+            /** Damage */
+            damage: string;
+            /** Qualities */
+            qualities: components["schemas"]["WeaponQuality"][];
+            missile_ranges?: components["schemas"]["MissileRanges"] | null;
         };
         /**
          * Condition
@@ -2292,6 +2504,17 @@ export interface components {
          *     `kind="secret"` doors are invisible until discovered (a successful secret-door
          *     search marks them in the state overlay). `stuck` and `locked` are the authored
          *     starting conditions; play mutates the overlay, never this spec.
+         *
+         *     `requires` is an optional authored gate — a stateless predicate
+         *     ([`GateSpec`][osrlib.crawl.gates.GateSpec]) evaluated whenever the party
+         *     attempts to open or force the door, after every mundane refusal. It is
+         *     orthogonal to `locked`: a door carrying both requires both,
+         *     [`PickLock`][osrlib.crawl.commands.PickLock] addresses only the lock, and
+         *     [`SetDoorState`][osrlib.crawl.commands.SetDoorState] rewrites the overlay
+         *     without ever touching the gate. A door standing open admits passage
+         *     unchecked — the gate guards the opening, not the doorway — so a door set open
+         *     lets the party through until it closes again, after which the gate applies
+         *     once more.
          */
         DoorSpec: {
             /**
@@ -2315,6 +2538,20 @@ export interface components {
              * @default false
              */
             starts_open: boolean;
+            requires?: components["schemas"]["GateSpec"] | null;
+        };
+        /**
+         * DungeonEnteredPattern
+         * @description The party crossed into a dungeon — from town, or from another dungeon.
+         */
+        DungeonEnteredPattern: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            pattern_type: "dungeon_entered";
+            /** Dungeon Id */
+            dungeon_id: string;
         };
         /**
          * DungeonSpec
@@ -2432,6 +2669,24 @@ export interface components {
             copies: {
                 [key: string]: components["schemas"]["CopyRecord"][];
             };
+        };
+        /**
+         * EffectActiveCondition
+         * @description An active effect of `kind` is attached to some party member.
+         *
+         *     Effect kinds are an open, data-driven vocabulary (`"fatigue"`, a custom
+         *     [`EffectDefinition.kind`][osrlib.core.effects.EffectDefinition]), so the field
+         *     is a free string. Effects attached to a location never count — the test is
+         *     what the party carries in its bones.
+         */
+        EffectActiveCondition: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            condition_type: "effect_active";
+            /** Kind */
+            kind: string;
         };
         /**
          * Element
@@ -2662,9 +2917,11 @@ export interface components {
          * @description A keyed feature: a treasure cache, a construction trick, or custom content.
          *
          *     Stairs are [`TransitionSpec`][osrlib.crawl.dungeon.TransitionSpec]'s alone — no
-         *     second home. Caches carry hand-placed contents — `item_ids` (any id from
+         *     second home. Caches carry hand-placed contents — `item_ids` (any id in the
+         *     session's effective equipment catalog: a shipped id from
          *     [`load_equipment`][osrlib.data.load_equipment], see
-         *     [the equipment id index][equipment-index]), `magic_item_ids` (any id from
+         *     [the equipment id index][equipment-index], or one bundled by the adventure's
+         *     `items`), `magic_item_ids` (any id from
          *     [`load_magic_items`][osrlib.data.load_magic_items], see
          *     [the magic item id index][magic-items-index]), and `coins` — plus an optional
          *     treasure trap, so a cache's contents can be dropped, found, and recovered like
@@ -2756,6 +3013,48 @@ export interface components {
             address?: string | null;
         };
         /**
+         * FlagEqualsCondition
+         * @description A session flag holds `value` — the lever that opens the portcullis.
+         *
+         *     The comparison is
+         *     [`flag_values_equal`][osrlib.crawl.gates.flag_values_equal] and it is strict: an
+         *     absent key equals nothing (`False` included), and a stored `True` never matches
+         *     an authored `1`.
+         */
+        FlagEqualsCondition: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            condition_type: "flag_equals";
+            /** Key */
+            key: string;
+            /** Value */
+            value: string | number | boolean;
+        };
+        /**
+         * FlagSetPattern
+         * @description A session flag was written — the edge, not the state.
+         *
+         *     The match is against the value the write carried, so a flag rewritten with the
+         *     value it already held still fires. `value=None` matches any written value, which
+         *     is unambiguous because a flag value is a `str`, an `int`, or a `bool` and never
+         *     `None`; an authored value compares through
+         *     [`flag_values_equal`][osrlib.crawl.gates.flag_values_equal], the same strict
+         *     comparison [`FlagEqualsCondition`][osrlib.crawl.gates.FlagEqualsCondition] uses.
+         */
+        FlagSetPattern: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            pattern_type: "flag_set";
+            /** Key */
+            key: string;
+            /** Value */
+            value?: string | number | boolean | null;
+        };
+        /**
          * ForgeOverridesRequest
          * @description A batch of override-level edits, computed against a named revision.
          */
@@ -2800,6 +3099,64 @@ export interface components {
             checked: boolean;
         };
         /**
+         * GateSpec
+         * @description A condition guarding an attempt, with the authored text for both outcomes.
+         *
+         *     The gate is the object the narrative hangs on: a refused attempt returns the
+         *     block's `refusal` beat in its rejection, and a successful one rides the
+         *     `success` beat on the command's event.
+         */
+        GateSpec: {
+            /** Condition */
+            condition: components["schemas"]["HasItemCondition"] | components["schemas"]["FlagEqualsCondition"] | components["schemas"]["EffectActiveCondition"];
+            narrative?: components["schemas"]["NarrativeBlock"] | null;
+        };
+        /**
+         * GearTemplate
+         * @description An adventuring gear item.
+         *
+         *     `lot_size` sizes the purchase lot bought at `cost_gp` — see
+         *     [`purchase`][osrlib.core.items.purchase] for exactly what a lot buys.
+         *     `capacity_coins` is container capacity where the SRD gives one (backpack, sacks);
+         *     `combat` is the embedded combat facet for the three dual-listed items. `params`
+         *     carries structured exploration mechanics from the SRD's gear table (a torch's
+         *     `burn_turns` and `light_radius_feet`, the tinder box's `light_chance_in_six`),
+         *     consumed by the crawl procedures.
+         */
+        GearTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            item_type: "gear";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Cost Gp */
+            cost_gp: number;
+            /**
+             * Lot Size
+             * @default 1
+             */
+            lot_size: number;
+            /** Capacity Coins */
+            capacity_coins?: number | null;
+            combat?: components["schemas"]["CombatFacet"] | null;
+            /**
+             * Params
+             * @default {}
+             */
+            params: {
+                [key: string]: number | string | boolean;
+            };
+            /**
+             * Overrides Applied
+             * @default []
+             */
+            overrides_applied: string[];
+        };
+        /**
          * GeometryOverride
          * @description Correct one level's geometry: area cells, edges, entrance, transitions.
          *
@@ -2831,10 +3188,99 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * GrantCoins
+         * @description Referee: place coins directly into a member's purse.
+         *
+         *     Referee commands are legal in every mode, terminal modes included.
+         *
+         *     Modes:
+         *         `town`, `exploring`, `encounter`, `battle`, `game_over`, `victory`
+         *
+         *     Rejections:
+         *         - `session.command.unknown_member` — `character_id` names no party member.
+         *
+         *     Events:
+         *         [`ItemAcquiredEvent`][osrlib.crawl.events.ItemAcquiredEvent] with the coin
+         *         value.
+         */
+        GrantCoins: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command_type: "grant_coins";
+            /** Source */
+            source?: string | null;
+            /** Character Id */
+            character_id: string;
+            coins: components["schemas"]["Coins"];
+        };
+        /**
+         * GrantItem
+         * @description Referee: place an item directly into a member's inventory.
+         *
+         *     Referee commands are legal in every mode, terminal modes included, and are
+         *     logged and replayed like any other.
+         *
+         *     Modes:
+         *         `town`, `exploring`, `encounter`, `battle`, `game_over`, `victory`
+         *
+         *     Rejections:
+         *         - `session.command.unknown_member` — `character_id` names no party member.
+         *         - `session.command.unknown_item` — `item_id` names no item in the session's
+         *           [`effective_equipment`][osrlib.crawl.session.GameSession.effective_equipment]
+         *           catalog: neither a shipped id nor one the adventure bundles.
+         *
+         *     Events:
+         *         [`ItemAcquiredEvent`][osrlib.crawl.events.ItemAcquiredEvent] with the
+         *         granted items.
+         */
+        GrantItem: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command_type: "grant_item";
+            /** Source */
+            source?: string | null;
+            /** Character Id */
+            character_id: string;
+            /** Item Id */
+            item_id: string;
+            /**
+             * Quantity
+             * @default 1
+             */
+            quantity: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HasItemCondition
+         * @description The party carries an item with `item_id` — equipment or magic item.
+         *
+         *     Any member's carried inventory satisfies it, equipped slots included: carrying
+         *     is the whole test. `consumes=True` makes the item a toll — one instance leaves
+         *     the first holder in marching order when the gated command succeeds, per
+         *     success, so a door that swings shut wants another key.
+         */
+        HasItemCondition: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            condition_type: "has_item";
+            /** Item Id */
+            item_id: string;
+            /**
+             * Consumes
+             * @default false
+             */
+            consumes: boolean;
         };
         /**
          * ImportedArea
@@ -2941,6 +3387,25 @@ export interface components {
             /** Path */
             path: string;
         };
+        /**
+         * ItemAcquiredPattern
+         * @description A party member acquired an item with `item_id`.
+         *
+         *     The id domain is the one `has_item` reads: the effective equipment catalog
+         *     (shipped ∪ adventure-bundled) or the magic-item catalog. Acquisitions report
+         *     mundane items by catalog id and magic items by their session-scoped instance id,
+         *     so a magic `item_id` matches by resolving that instance against the acquiring
+         *     character's inventory.
+         */
+        ItemAcquiredPattern: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            pattern_type: "item_acquired";
+            /** Item Id */
+            item_id: string;
+        };
         JsonValue: unknown;
         /**
          * KeyedEncounter
@@ -2987,6 +3452,25 @@ export interface components {
             count_dice?: string | null;
             /** Count Fixed */
             count_fixed?: number | null;
+        };
+        /**
+         * LevelEnteredPattern
+         * @description The party arrived on a dungeon level.
+         *
+         *     However it got there: a stair between levels and an entry from town both land
+         *     the party on the level, and both match. (The engine reports the coarser crossing
+         *     when a move changes dungeons, and a dungeon crossing is a level arrival too.)
+         */
+        LevelEnteredPattern: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            pattern_type: "level_entered";
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
         };
         /**
          * LevelSpec
@@ -3037,6 +3521,11 @@ export interface components {
                 number,
                 number
             ] | null;
+            /**
+             * Guidance
+             * @default
+             */
+            guidance: string;
         };
         /**
          * LintCheck
@@ -3098,6 +3587,21 @@ export interface components {
             quantity: number;
             /** Charges Remaining */
             charges_remaining?: number | null;
+        };
+        /**
+         * Material
+         * @description Weapon material — silver matters to the damage pipeline's immunity gate. Extensible.
+         * @enum {string}
+         */
+        Material: "standard" | "silver";
+        /**
+         * MissileRanges
+         * @description A missile weapon's short (+1 to hit), medium, and long (−1 to hit) range bands.
+         */
+        MissileRanges: {
+            short: components["schemas"]["RangeBand"];
+            medium: components["schemas"]["RangeBand"];
+            long: components["schemas"]["RangeBand"];
         };
         /**
          * ModuleInfo
@@ -3203,6 +3707,23 @@ export interface components {
         MonsterCatalogResponse: {
             /** Monsters */
             monsters: components["schemas"]["CatalogMonster"][];
+        };
+        /**
+         * MonsterDefeatedPattern
+         * @description A monster of `template_id` was defeated — slain, routed, or surrendered.
+         *
+         *     Every outcome is a defeat, so the pattern does not filter on one. Defeats are
+         *     reported at battle end, so the boss falling opens the portcullis after the
+         *     fighting stops, never mid-round.
+         */
+        MonsterDefeatedPattern: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            pattern_type: "monster_defeated";
+            /** Template Id */
+            template_id: string;
         };
         /**
          * MonsterEncounterEntry
@@ -3437,6 +3958,97 @@ export interface components {
             descriptor?: string | null;
         };
         /**
+         * NarrativeBlock
+         * @description Authored text for one mechanical object, in three audiences.
+         *
+         *     Every field is free prose defaulting to the empty string, which means
+         *     unauthored — a block with a refusal beat and nothing else is the normal shape.
+         *     Which display beats a block speaks depends on what it hangs on:
+         *
+         *     - `refusal`, `success` — a gate ([`GateSpec`][osrlib.crawl.gates.GateSpec]):
+         *       the line a refused attempt returns, and the line that rides the successful
+         *       command's event.
+         *     - `fired` — a trigger ([`TriggerSpec`][osrlib.crawl.triggers.TriggerSpec]), when
+         *       its consequences run. It rides a referee-visibility event, so it is the
+         *       referee's line about the wiring; `journal` is the players' line about the
+         *       same moment.
+         *     - `offer`, `completion` — a quest ([`QuestSpec`][osrlib.crawl.quests.QuestSpec]),
+         *       at its activation and at its own completion.
+         *     - `offer`, `progress` — an objective
+         *       ([`ObjectiveSpec`][osrlib.crawl.quests.ObjectiveSpec]), when it is revealed
+         *       (the objective presenting itself) and when it completes (the story advancing).
+         *
+         *     Per-objective beats need a per-objective carrier, which is why the objective
+         *     reads the same two field names for moments of its own. A quest's `progress` and
+         *     an objective's `completion` are read by nobody, and are silently unread rather
+         *     than rejected at parse — the same standing convention by which a gate leaves
+         *     `fired` alone and a trigger leaves `offer` alone.
+         *
+         *     `journal` is the written-record form (unread by the quest layer, which journals
+         *     the display text it showed), `guidance` the LLM steering that applies while the
+         *     carrier is in play, and `speaker` an attribution ("the bronze sentinel",
+         *     "Sister Halda") a renderer may put in front of a beat.
+         *
+         *     Examples:
+         *         ```python
+         *         from osrlib.crawl.narrative import NarrativeBlock
+         *
+         *         narrative = NarrativeBlock(
+         *             refusal="The sentinel's eyes stay dark. It wants the brass key.",
+         *             success="The key turns; the sentinel steps aside.",
+         *             speaker="the bronze sentinel",
+         *         )
+         *         assert narrative.offer == ""  # unauthored beats are empty, never None
+         *         ```
+         */
+        NarrativeBlock: {
+            /**
+             * Refusal
+             * @default
+             */
+            refusal: string;
+            /**
+             * Success
+             * @default
+             */
+            success: string;
+            /**
+             * Fired
+             * @default
+             */
+            fired: string;
+            /**
+             * Offer
+             * @default
+             */
+            offer: string;
+            /**
+             * Progress
+             * @default
+             */
+            progress: string;
+            /**
+             * Completion
+             * @default
+             */
+            completion: string;
+            /**
+             * Journal
+             * @default
+             */
+            journal: string;
+            /**
+             * Guidance
+             * @default
+             */
+            guidance: string;
+            /**
+             * Speaker
+             * @default
+             */
+            speaker: string;
+        };
+        /**
          * NpcPartyEncounterEntry
          * @description An NPC adventuring party cell (Basic/Expert Adventurers).
          *
@@ -3477,6 +4089,59 @@ export interface components {
              * @default false
              */
             see_below: boolean;
+        };
+        /**
+         * ObjectiveSpec
+         * @description One objective: what it is called, how it completes, whether it starts hidden, and its text.
+         *
+         *     Objectives are monotonic — hidden becomes revealed, incomplete becomes complete,
+         *     and neither goes back — because the quest vocabulary authors no repeat.
+         *
+         *     `name` is the objective's display label, the words a quest log shows beside its
+         *     checkbox. It defaults empty — a document written before the field existed loads
+         *     unchanged, additive within the schema version — and empty means unauthored:
+         *     everywhere a label is shown (the view, the lifecycle events, the default
+         *     formatter), an unauthored name falls back to the objective's id.
+         *
+         *     A hidden objective with no `reveal_when` is a normal shape: it surfaces when it
+         *     completes, because completing an objective reveals it. `reveal_when` on an
+         *     objective that starts visible is rejected at parse — a reveal clause for
+         *     something already on the list is authored dead weight.
+         *
+         *     `narrative` carries the objective's own beats: `offer` is the line its reveal
+         *     shows and journals, `progress` the line its completion shows and journals.
+         *
+         *     Examples:
+         *         ```python
+         *         from osrlib.crawl.narrative import NarrativeBlock
+         *         from osrlib.crawl.quests import ObjectiveSpec, TriggerClause
+         *         from osrlib.crawl.triggers import ItemAcquiredPattern
+         *
+         *         recover = ObjectiveSpec(
+         *             id="recover-idol",
+         *             name="Recover the flask",
+         *             when=TriggerClause(pattern=ItemAcquiredPattern(item_id="holy_water")),
+         *             narrative=NarrativeBlock(progress="The flask is yours; the shrine is quiet again."),
+         *         )
+         *         assert not recover.hidden and recover.reveal_when is None
+         *         ```
+         */
+        ObjectiveSpec: {
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            when: components["schemas"]["TriggerClause"];
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            reveal_when?: components["schemas"]["TriggerClause"] | null;
+            narrative?: components["schemas"]["NarrativeBlock"] | null;
         };
         /**
          * OpBatch
@@ -3640,6 +4305,27 @@ export interface components {
             source_pages?: number | null;
         };
         /**
+         * PartyLocation
+         * @description Where the party is: the base town, or a dungeon cell with facing.
+         */
+        PartyLocation: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "town" | "dungeon";
+            /** Dungeon Id */
+            dungeon_id?: string | null;
+            /** Level Number */
+            level_number?: number | null;
+            /** Position */
+            position?: [
+                number,
+                number
+            ] | null;
+            facing?: components["schemas"]["Direction"] | null;
+        };
+        /**
          * PickerLocation
          * @description One remembered picker location.
          */
@@ -3662,6 +4348,43 @@ export interface components {
             path: string;
             /** Scope */
             scope: string;
+        };
+        /**
+         * PlaceParty
+         * @description Referee: teleport the party to a location.
+         *
+         *     The party cannot be teleported out of an open encounter or battle. Placing
+         *     into a dungeon marks the cell explored and switches the session to
+         *     `exploring`; placing in town switches it to `town`. That switch is play
+         *     resuming, which is why this is the one referee command a concluded adventure
+         *     withholds: it is illegal in `victory`. It stays legal in `game_over`, where it
+         *     is the salvage door — carrying the fallen party to town is the first step of
+         *     the revival flow that ends at
+         *     [`PurchaseHealing`][osrlib.crawl.commands.PurchaseHealing]'s `raise_dead`.
+         *
+         *     Modes:
+         *         `town`, `exploring`, `encounter`, `battle`, `game_over`
+         *
+         *     Rejections:
+         *         - `session.command.encounter_in_progress` — an encounter or battle is
+         *           open.
+         *         - `session.command.unknown_location` — the location names no dungeon
+         *           level.
+         *         - `session.command.out_of_bounds` — the position is off the level's grid.
+         *
+         *     Events:
+         *         [`LocationEnteredEvent`][osrlib.crawl.events.LocationEnteredEvent] for the
+         *         destination.
+         */
+        PlaceParty: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command_type: "place_party";
+            /** Source */
+            source?: string | null;
+            location: components["schemas"]["PartyLocation"];
         };
         /**
          * PreviewLevel
@@ -3894,6 +4617,88 @@ export interface components {
              * @enum {string}
              */
             mode: "symlink" | "copy";
+        };
+        /**
+         * QuestSpec
+         * @description One authored quest: when it starts, what it asks for, and what it pays.
+         *
+         *     `activation` absent means the quest is active from session start — a standing
+         *     charge the party carries from round 0, with no activation beat to show, because
+         *     there is no command channel before the first command. An authored clause makes
+         *     activation an event the party crosses.
+         *
+         *     `completion` is `"all"` (every objective) or `"any"` (the first one to land).
+         *     `objectives` holds at least one: an objective-less quest under the all rule would
+         *     be born complete. `concludes_adventure=True` marks the quest whose completion
+         *     ends the adventure in `victory`
+         *     ([`CompleteQuest`][osrlib.crawl.commands.CompleteQuest]).
+         *
+         *     `rewards` are issued after the quest completes, in authored order, with the party
+         *     selectors expanded to the members they name; an authored `source` is rejected at
+         *     parse, because whoever issues a command stamps it.
+         *
+         *     `narrative` carries the quest's own beats: `offer` is the line its activation
+         *     shows and journals, `completion` the line its completion shows and journals.
+         *     Per-objective beats live on the objectives.
+         *
+         *     Examples:
+         *         ```python
+         *         from osrlib.crawl.commands import AwardXP
+         *         from osrlib.crawl.narrative import NarrativeBlock
+         *         from osrlib.crawl.quests import ObjectiveSpec, QuestSpec, TriggerClause
+         *         from osrlib.crawl.triggers import PARTY_SELECTOR, DungeonEnteredPattern, ItemAcquiredPattern
+         *
+         *         recover = ObjectiveSpec(id="recover", when=TriggerClause(pattern=ItemAcquiredPattern(item_id="holy_water")))
+         *         errand = QuestSpec(
+         *             id="the-flask",
+         *             name="The Stolen Reliquary",
+         *             activation=TriggerClause(pattern=DungeonEnteredPattern(dungeon_id="barrow")),
+         *             objectives=(recover,),
+         *             rewards=(AwardXP(character_id=PARTY_SELECTOR, amount=200),),
+         *             concludes_adventure=True,
+         *             narrative=NarrativeBlock(
+         *                 offer="Sister Halda wants the reliquary back, and she is not asking twice.",
+         *                 completion="The flask returns to its niche. The temple bells answer.",
+         *             ),
+         *         )
+         *         assert errand.completion == "all"
+         *         ```
+         */
+        QuestSpec: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            activation?: components["schemas"]["TriggerClause"] | null;
+            /** Objectives */
+            objectives: components["schemas"]["ObjectiveSpec"][];
+            /**
+             * Rewards
+             * @default []
+             */
+            rewards: (components["schemas"]["GrantItem"] | components["schemas"]["GrantCoins"] | components["schemas"]["AwardXP"] | components["schemas"]["SetFlag"] | components["schemas"]["SpawnMonsters"] | components["schemas"]["SpawnNpcParty"] | components["schemas"]["SetDoorState"] | components["schemas"]["PlaceParty"] | components["schemas"]["AdvanceTime"])[];
+            /**
+             * Completion
+             * @default all
+             * @enum {string}
+             */
+            completion: "all" | "any";
+            /**
+             * Concludes Adventure
+             * @default false
+             */
+            concludes_adventure: boolean;
+            narrative?: components["schemas"]["NarrativeBlock"] | null;
+        };
+        /**
+         * RangeBand
+         * @description One missile range band in feet, as the SRD prints it (`5'–80'`).
+         */
+        RangeBand: {
+            /** Min Feet */
+            min_feet: number;
+            /** Max Feet */
+            max_feet: number;
         };
         /**
          * ReactionResult
@@ -4392,6 +5197,51 @@ export interface components {
             value: string;
         };
         /**
+         * SetDoorState
+         * @description Referee: rewrite a door's overlay anywhere (`None` fields stay unchanged).
+         *
+         *     Referee commands are legal in every mode, terminal modes included; the door
+         *     may be on any level of any dungeon, not just under the party.
+         *
+         *     Modes:
+         *         `town`, `exploring`, `encounter`, `battle`, `game_over`, `victory`
+         *
+         *     Rejections:
+         *         - `session.command.unknown_location` — `dungeon_id` or `level_number`
+         *           resolves to nothing.
+         *         - `session.command.no_door` — no door edge at that cell and direction.
+         *
+         *     Events:
+         *         A referee-visibility [`DoorEvent`][osrlib.crawl.events.DoorEvent] when the
+         *         open state actually changes; otherwise none.
+         */
+        SetDoorState: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command_type: "set_door_state";
+            /** Source */
+            source?: string | null;
+            /** Dungeon Id */
+            dungeon_id: string;
+            /** Level Number */
+            level_number: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            direction: components["schemas"]["Direction"];
+            /** Open */
+            open?: boolean | null;
+            /** Wedged */
+            wedged?: boolean | null;
+            /** Discovered */
+            discovered?: boolean | null;
+            /** Unlocked */
+            unlocked?: boolean | null;
+        };
+        /**
          * SetDungeonField
          * @description Set one dungeon field — `name`, the one plain settable field.
          *
@@ -4524,6 +5374,38 @@ export interface components {
             /** Feature Id */
             feature_id: string;
             feature: components["schemas"]["FeatureSpec"];
+        };
+        /**
+         * SetFlag
+         * @description Referee: set a session flag (content wiring: the lever opens the portcullis).
+         *
+         *     Referee commands are legal in every mode, terminal modes included. Flags
+         *     serialize into saves; game code and listeners read them back, and authored
+         *     content reads them through
+         *     [`FlagEqualsCondition`][osrlib.crawl.gates.FlagEqualsCondition] — the gate on a
+         *     door or stair that opens when the lever has been pulled.
+         *
+         *     Modes:
+         *         `town`, `exploring`, `encounter`, `battle`, `game_over`, `victory`
+         *
+         *     Rejections:
+         *         None.
+         *
+         *     Events:
+         *         [`FlagSetEvent`][osrlib.crawl.events.FlagSetEvent] with the key and value.
+         */
+        SetFlag: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command_type: "set_flag";
+            /** Source */
+            source?: string | null;
+            /** Key */
+            key: string;
+            /** Value */
+            value: string | number | boolean;
         };
         /**
          * SetMonsterRemap
@@ -4811,6 +5693,92 @@ export interface components {
             pack: components["schemas"]["ContentPack"];
             /** Findings */
             findings: components["schemas"]["PackFinding"][];
+        };
+        /**
+         * SpawnMonsters
+         * @description Referee: spawn monsters and open an encounter at a distance.
+         *
+         *     The party must be standing in a dungeon with no encounter already open —
+         *     encounters live on the dungeon grid. Spawning is the one referee power a
+         *     terminal session withholds: an encounter is play, and a session that has
+         *     ended opens no new play state, so this is illegal in `game_over` and
+         *     `victory` alike. Exactly one of `count_dice` or `count_fixed` is required.
+         *
+         *     Modes:
+         *         `town`, `exploring`, `encounter`, `battle`
+         *
+         *     Rejections:
+         *         - `session.command.unknown_monster` — `template_id` names no monster.
+         *         - `session.command.encounter_in_progress` — an encounter or battle is
+         *           already open.
+         *         - `session.command.not_in_dungeon` — the party is not on a dungeon cell.
+         *
+         *     Events:
+         *         [`MonstersSpawnedEvent`][osrlib.crawl.events.MonstersSpawnedEvent], then
+         *         the encounter opening —
+         *         [`SurpriseRolledEvent`][osrlib.crawl.events.SurpriseRolledEvent]s,
+         *         [`EncounterStartedEvent`][osrlib.crawl.events.EncounterStartedEvent], the
+         *         reaction roll and
+         *         [`StanceChangedEvent`][osrlib.crawl.events.StanceChangedEvent]; an attacks
+         *         stance opens battle at once.
+         */
+        SpawnMonsters: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command_type: "spawn_monsters";
+            /** Source */
+            source?: string | null;
+            /** Template Id */
+            template_id: string;
+            /** Count Dice */
+            count_dice?: string | null;
+            /** Count Fixed */
+            count_fixed?: number | null;
+            /** Distance Feet */
+            distance_feet: number;
+        };
+        /**
+         * SpawnNpcParty
+         * @description Referee: generate an NPC adventuring party and open an encounter.
+         *
+         *     `count_dice=None` rolls the compiled composition dice (Basic 1d4+4, Expert
+         *     1d6+3) — the surface for keyed content, quest listeners, and tests. The party
+         *     must be standing in a dungeon with no encounter already open, and, like
+         *     [`SpawnMonsters`][osrlib.crawl.commands.SpawnMonsters], the command is illegal
+         *     in a terminal mode: a concluded session opens no new encounter.
+         *
+         *     Modes:
+         *         `town`, `exploring`, `encounter`, `battle`
+         *
+         *     Rejections:
+         *         - `session.command.encounter_in_progress` — an encounter or battle is
+         *           already open.
+         *         - `session.command.not_in_dungeon` — the party is not on a dungeon cell.
+         *
+         *     Events:
+         *         [`NpcPartySpawnedEvent`][osrlib.crawl.events.NpcPartySpawnedEvent] (the
+         *         referee-visibility roster), then the encounter opening as with
+         *         [`SpawnMonsters`][osrlib.crawl.commands.SpawnMonsters].
+         */
+        SpawnNpcParty: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command_type: "spawn_npc_party";
+            /** Source */
+            source?: string | null;
+            /**
+             * Party Kind
+             * @enum {string}
+             */
+            party_kind: "basic" | "expert";
+            /** Count Dice */
+            count_dice?: string | null;
+            /** Distance Feet */
+            distance_feet: number;
         };
         /**
          * Stage
@@ -5144,6 +6112,20 @@ export interface components {
             output_tokens: number;
         };
         /**
+         * TownEnteredPattern
+         * @description The party arrived in the base town, however it got there.
+         *
+         *     An adventure has one town, so the pattern needs no fields: the homecoming beat
+         *     fires on the return trip and on a referee's placement alike.
+         */
+        TownEnteredPattern: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            pattern_type: "town_entered";
+        };
+        /**
          * TownOverride
          * @description Replace base-town metadata fields ([`TownSpec`][osrlib.crawl.adventure.TownSpec] fields).
          */
@@ -5196,6 +6178,17 @@ export interface components {
          *
          *     The destination is `(dungeon_id, level_number, position, facing)`. Chutes are
          *     one-way — `UseStairs` rejects on arrival cells that have no transition back.
+         *
+         *     `requires` is an optional authored gate ([`GateSpec`][osrlib.crawl.gates.GateSpec])
+         *     on a transition the party *takes*: [`UseStairs`][osrlib.crawl.commands.UseStairs]
+         *     evaluates it after the no-transition-here refusal and before the party moves,
+         *     which is what makes a toll payable at the threshold. A transition inside a
+         *     trap effect is a forced relocation rather than an attempt and may carry no
+         *     gate at all — [`TrapEffect`][osrlib.crawl.dungeon.TrapEffect] rejects one that
+         *     does. The gate's `success` beat rides the arrival's
+         *     [`LocationEnteredEvent`][osrlib.crawl.events.LocationEnteredEvent], so a
+         *     transition whose destination is its own level (which crosses no boundary and
+         *     emits no such event) has nowhere to display one.
          */
         TransitionSpec: {
             /**
@@ -5218,6 +6211,7 @@ export interface components {
                 number
             ];
             to_facing: components["schemas"]["Direction"];
+            requires?: components["schemas"]["GateSpec"] | null;
         };
         /**
          * TrapEffect
@@ -5225,10 +6219,14 @@ export interface components {
          *
          *     `damage_dice` rolls once; `volley_dice` is the darts form (1d6 projectiles,
          *     each rolling `damage_dice` — a count-times-damage form the dice grammar alone
-         *     can't say). `save` gates the whole effect (`negates` or `half` damage).
-         *     `kills` marks save-or-die forms (poison gas). `condition` with its duration is
-         *     the blindness form; `fall_feet` is the pit's falling damage; `transition`
-         *     drops the victim elsewhere (slides). `manual` keeps prose for the rest.
+         *     can't say). `save` gates the effect: `negates` spares a passer outright, and
+         *     a passed save always spares the victim from `kills` and `condition`, whatever
+         *     `on_save` says — `on_save` scales damage only, because half of a kill or of a
+         *     blindness isn't a thing B/X expresses. `half` halves damage, rolled and
+         *     falling alike. `kills` marks save-or-die forms (poison gas). `condition` with
+         *     its duration is the blindness form; `fall_feet` is the pit's falling damage;
+         *     `transition` drops the victim elsewhere (slides). `manual` keeps prose for
+         *     the rest.
          */
         TrapEffect: {
             /** Damage Dice */
@@ -5257,9 +6255,12 @@ export interface components {
          * TrapSpec
          * @description A trap: room (over an area) or treasure (on a feature).
          *
-         *     `trigger` names the springing action (`enter` a cell of the trapped area,
-         *     `open` a trapped cache). `affects` defaults to the triggerer; `party` covers
-         *     forms like poison gas filling the room.
+         *     `trigger` names the springing action. A room trap springs on `enter` — a
+         *     cell of the trapped area — or on `open` — a door of the area, either side:
+         *     the blade that drops when the door swings. A treasure trap always springs on
+         *     `open`, the cache it guards; there is nothing to enter, so `enter` is
+         *     rejected. `affects` defaults to the triggerer; `party` covers forms like
+         *     poison gas filling the room.
          */
         TrapSpec: {
             /**
@@ -5394,6 +6395,96 @@ export interface components {
         TreasureTypeCatalogResponse: {
             /** Treasure Types */
             treasure_types: components["schemas"]["CatalogTreasureType"][];
+        };
+        /**
+         * TriggerClause
+         * @description One matching clause: the observable, and what must hold when it happens.
+         *
+         *     `conditions` all have to hold: the tuple is an AND with no combinators, each
+         *     condition evaluated live against session state at the moment of the match,
+         *     through [`condition_holds`][osrlib.crawl.gates.condition_holds]. The field is
+         *     `pattern` rather than `when`, so an objective's completion clause reads
+         *     `objective.when.pattern`.
+         *
+         *     Examples:
+         *         ```python
+         *         from osrlib.crawl.gates import HasItemCondition
+         *         from osrlib.crawl.quests import TriggerClause
+         *         from osrlib.crawl.triggers import TownEnteredPattern
+         *
+         *         walked_home_carrying_it = TriggerClause(
+         *             pattern=TownEnteredPattern(),
+         *             conditions=(HasItemCondition(item_id="holy_water"),),
+         *         )
+         *         assert walked_home_carrying_it.pattern.pattern_type == "town_entered"
+         *         ```
+         */
+        TriggerClause: {
+            /** Pattern */
+            pattern: components["schemas"]["AreaEnteredPattern"] | components["schemas"]["LevelEnteredPattern"] | components["schemas"]["DungeonEnteredPattern"] | components["schemas"]["TownEnteredPattern"] | components["schemas"]["ItemAcquiredPattern"] | components["schemas"]["MonsterDefeatedPattern"] | components["schemas"]["FlagSetPattern"];
+            /**
+             * Conditions
+             * @default []
+             */
+            conditions: (components["schemas"]["HasItemCondition"] | components["schemas"]["FlagEqualsCondition"] | components["schemas"]["EffectActiveCondition"])[];
+        };
+        /**
+         * TriggerSpec
+         * @description One authored trigger: when it fires, what must hold, and what happens.
+         *
+         *     A spec is inert data; the [`Interpreter`][osrlib.crawl.interpreter.Interpreter]
+         *     is the shipped listener that plays it.
+         *
+         *     Once-only by default — the fired-mark that
+         *     [`MarkTriggerFired`][osrlib.crawl.commands.MarkTriggerFired] writes is session
+         *     state, so once-only survives a save, a load, and a replay. `repeatable=True` is
+         *     the authored opt-in for a trigger that fires every time its pattern matches.
+         *
+         *     `conditions` all have to hold: the tuple is an AND with no combinators, each
+         *     condition evaluated live at the moment of the match. `consequences` may be empty
+         *     — a trigger whose whole job is its journal beat is a normal shape.
+         *
+         *     Examples:
+         *         ```python
+         *         from osrlib.crawl.commands import SetDoorState
+         *         from osrlib.crawl.dungeon import Direction
+         *         from osrlib.crawl.narrative import NarrativeBlock
+         *         from osrlib.crawl.triggers import FlagSetPattern, TriggerSpec
+         *
+         *         portcullis = SetDoorState(dungeon_id="crypt", level_number=1, x=2, y=0, direction=Direction.SOUTH, open=True)
+         *         trigger = TriggerSpec(
+         *             id="portcullis-rises",
+         *             when=FlagSetPattern(key="crypt.lever", value="pulled"),
+         *             consequences=(portcullis,),
+         *             narrative=NarrativeBlock(
+         *                 fired="The counterweight drops somewhere in the wall.",
+         *                 journal="The east lever gives; below, a portcullis grinds upward.",
+         *             ),
+         *         )
+         *         assert not trigger.repeatable
+         *         ```
+         */
+        TriggerSpec: {
+            /** Id */
+            id: string;
+            /** When */
+            when: components["schemas"]["AreaEnteredPattern"] | components["schemas"]["LevelEnteredPattern"] | components["schemas"]["DungeonEnteredPattern"] | components["schemas"]["TownEnteredPattern"] | components["schemas"]["ItemAcquiredPattern"] | components["schemas"]["MonsterDefeatedPattern"] | components["schemas"]["FlagSetPattern"];
+            /**
+             * Conditions
+             * @default []
+             */
+            conditions: (components["schemas"]["HasItemCondition"] | components["schemas"]["FlagEqualsCondition"] | components["schemas"]["EffectActiveCondition"])[];
+            /**
+             * Repeatable
+             * @default false
+             */
+            repeatable: boolean;
+            /**
+             * Consequences
+             * @default []
+             */
+            consequences: (components["schemas"]["GrantItem"] | components["schemas"]["GrantCoins"] | components["schemas"]["AwardXP"] | components["schemas"]["SetFlag"] | components["schemas"]["SpawnMonsters"] | components["schemas"]["SpawnNpcParty"] | components["schemas"]["SetDoorState"] | components["schemas"]["PlaceParty"] | components["schemas"]["AdvanceTime"])[];
+            narrative?: components["schemas"]["NarrativeBlock"] | null;
         };
         /**
          * UndismissFlag
@@ -5538,6 +6629,43 @@ export interface components {
              */
             interval_turns: number;
             table?: components["schemas"]["EncounterTable"] | null;
+        };
+        /**
+         * WeaponQuality
+         * @description The SRD's weapon qualities, consumed by combat resolution.
+         * @enum {string}
+         */
+        WeaponQuality: "blunt" | "brace" | "charge" | "melee" | "missile" | "reload" | "slow" | "splash" | "two_handed";
+        /**
+         * WeaponTemplate
+         * @description A mundane weapon from the SRD's Weapon Combat Stats table.
+         */
+        WeaponTemplate: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            item_type: "weapon";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Cost Gp */
+            cost_gp: number;
+            /** Weight Coins */
+            weight_coins: number;
+            /** Damage */
+            damage: string;
+            /** Qualities */
+            qualities: components["schemas"]["WeaponQuality"][];
+            missile_ranges?: components["schemas"]["MissileRanges"] | null;
+            /** @default standard */
+            material: components["schemas"]["Material"];
+            /**
+             * Overrides Applied
+             * @default []
+             */
+            overrides_applied: string[];
         };
         /**
          * XpNote
