@@ -50,6 +50,66 @@ interface MonsterPickerProps {
   triggerLabel?: string
 }
 
+// The bare-id variant over the same effective catalog and ranking — the
+// trigger surface's picker (a monster_defeated pattern and a spawn's
+// template name a monster; their counts, when any, are the form's own
+// control, not the pick's).
+export function MonsterIdPicker({
+  bundled,
+  onPick,
+  triggerLabel = 'Pick monster',
+}: {
+  bundled: readonly MonsterTemplate[]
+  onPick: (templateId: string) => void
+  triggerLabel?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const shipped = useCatalog(loadMonsterCatalog)
+  const monsters = useMemo(
+    () => (shipped ? effectiveMonsterCatalog(shipped, bundled) : []),
+    [shipped, bundled],
+  )
+  const ranked = useMemo(() => rankMonsters(monsters, recentMonsterIds(), query), [monsters, query])
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm">
+          {triggerLabel}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Search monsters…" value={query} onValueChange={setQuery} />
+          <CommandList>
+            <CommandEmpty>{shipped ? 'No monster matches.' : 'Loading the catalog…'}</CommandEmpty>
+            <CommandGroup>
+              {ranked.map((monster) => (
+                <CommandItem
+                  key={monster.id}
+                  value={monster.id}
+                  onSelect={() => {
+                    recordRecentMonster(monster.id)
+                    onPick(monster.id)
+                    setOpen(false)
+                    setQuery('')
+                  }}
+                >
+                  <span className="truncate">{monster.name}</span>
+                  {monster.bundled && <Badge variant="secondary">bundled</Badge>}
+                  <span className="text-muted-foreground ml-auto font-mono text-xs">
+                    HD {formatHitDice(monster.hitDice)}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export function MonsterPicker({
   bundled,
   onPick,

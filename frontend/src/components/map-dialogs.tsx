@@ -33,6 +33,12 @@ import {
   replacedContentTally,
 } from '@/lib/level-content'
 import { defaultKind, defaultTargetLevel, FACING_LABELS, KIND_LABELS } from '@/lib/transitions'
+import {
+  TRIGGER_BLOCKED_MESSAGE,
+  addTriggerOps,
+  levelTriggersFor,
+  seedLevelTrigger,
+} from '@/lib/trigger-builders'
 import { replaceTransitionOps, transitionOps } from '@/map/gestures'
 import { projectStore, useProjectStore } from '@/store/project-store'
 import type {
@@ -515,6 +521,8 @@ export function LevelPropertiesDialog({
   levelNumber,
   onOpenResize,
   onOpenRenumber,
+  forge = false,
+  onNavigate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -523,6 +531,8 @@ export function LevelPropertiesDialog({
   levelNumber: number
   onOpenResize: () => void
   onOpenRenumber: () => void
+  forge?: boolean
+  onNavigate?: (target: NavTarget) => void
 }) {
   const dungeon = document.dungeons.find((candidate) => candidate.id === dungeonId)
   const level = dungeon?.levels.find((candidate) => candidate.number === levelNumber)
@@ -584,6 +594,16 @@ export function LevelPropertiesDialog({
             wandering={level.wandering}
           />
           <GuidanceForm dungeonId={dungeonId} levelNumber={levelNumber} guidance={level.guidance} />
+          <LevelTriggersBlock
+            document={document}
+            dungeonId={dungeonId}
+            levelNumber={levelNumber}
+            forge={forge}
+            onNavigate={(target) => {
+              onOpenChange(false)
+              onNavigate?.(target)
+            }}
+          />
           <LevelFeaturesSection
             document={document}
             dungeonId={dungeonId}
@@ -722,6 +742,75 @@ function ClearLevelContentBody({
         </Button>
       </DialogFooter>
     </DialogContent>
+  )
+}
+
+// The level's triggers: level triggers hang on the level itself, so its
+// level_entered triggers list here by id (click navigates to the Quests
+// panel) with an add action minting one bound to the level — exactly the
+// area gesture at level scope. Forge mode routes the add to the blocked-op
+// dialog client-side; the server's 422 stays the authority.
+function LevelTriggersBlock({
+  document,
+  dungeonId,
+  levelNumber,
+  forge,
+  onNavigate,
+}: {
+  document: Adventure
+  dungeonId: string
+  levelNumber: number
+  forge: boolean
+  onNavigate: (target: NavTarget) => void
+}) {
+  const triggers = levelTriggersFor(document, dungeonId, levelNumber)
+  const addTrigger = () => {
+    if (forge) {
+      projectStore.getState().setBlockedOp({
+        op: 'add_trigger',
+        address: 'triggers',
+        message: TRIGGER_BLOCKED_MESSAGE,
+      })
+      return
+    }
+    let mintedId = ''
+    void projectStore
+      .getState()
+      .commit((current) => {
+        const trigger = seedLevelTrigger(current, dungeonId, levelNumber)
+        mintedId = trigger.id
+        return addTriggerOps(trigger)
+      })
+      .then((committed) => {
+        if (committed && mintedId) onNavigate({ kind: 'quests', triggerId: mintedId })
+      })
+  }
+  return (
+    <div className="flex flex-col gap-2" aria-label="Level triggers">
+      <div className="flex items-center justify-between">
+        <Label>Triggers</Label>
+        <Button variant="outline" size="sm" onClick={addTrigger}>
+          Add level trigger
+        </Button>
+      </div>
+      {triggers.length === 0 ? (
+        <p className="text-muted-foreground text-xs">No trigger fires on entering this level.</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {triggers.map((trigger) => (
+            <li key={trigger.id}>
+              <button
+                type="button"
+                className="font-mono text-xs underline underline-offset-2"
+                onClick={() => onNavigate({ kind: 'quests', triggerId: trigger.id })}
+              >
+                {trigger.id}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 

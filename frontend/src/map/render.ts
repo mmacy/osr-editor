@@ -77,6 +77,10 @@ export interface RenderInput {
   // an entry drag, highlighted so the drop's landing zone reads before the
   // click or release commits it.
   placementAreaId?: string | null
+  // The area ids any area_entered trigger targets on this level — the trigger
+  // glyph's input, derived by the caller (triggers are adventure-scope, so
+  // the set is computed, never stored). Presence, not count.
+  triggerAreaIds?: ReadonlySet<string>
 }
 
 const DIMMED_ALPHA = 0.3
@@ -189,7 +193,7 @@ export function drawLevel(ctx: CanvasRenderingContext2D, input: RenderInput): vo
       ctx.lineWidth = 1
       ctx.strokeText(area.id, center.x, center.y)
     }
-    drawContentGlyphs(ctx, view, theme, area, center)
+    drawContentGlyphs(ctx, view, theme, area, center, input.triggerAreaIds?.has(area.id) ?? false)
     ctx.restore()
   }
 
@@ -225,7 +229,8 @@ function drawPlacementHighlight(
 
 // The content glyphs beside the key number, pencil-weight: crossed lines for
 // an encounter, an open triangle for a trap (an area trap or any trapped
-// cache), an open circle for treasure (an area treasure or any cache). Skipped
+// cache), an open circle for treasure (an area treasure or any cache), and a
+// lightning bolt when any area_entered trigger targets the area. Skipped
 // below readable size.
 function drawContentGlyphs(
   ctx: CanvasRenderingContext2D,
@@ -233,6 +238,7 @@ function drawContentGlyphs(
   theme: MapTheme,
   area: AreaSpec,
   center: { x: number; y: number },
+  hasTrigger: boolean,
 ): void {
   const size = cellSizePx(view)
   if (size < 16) return
@@ -265,6 +271,9 @@ function drawContentGlyphs(
       ctx.stroke()
     })
   }
+  if (hasTrigger) {
+    active.push((x, y, r) => drawTriggerGlyph(ctx, x, y, r))
+  }
   if (active.length === 0) return
   ctx.save()
   ctx.strokeStyle = theme.ink
@@ -275,6 +284,18 @@ function drawContentGlyphs(
   const baseY = center.y - size * 0.26
   active.forEach((draw, index) => draw(baseX + index * step, baseY, radius))
   ctx.restore()
+}
+
+// The trigger glyph: a small pencil-weight lightning bolt joining the
+// presence-glyph row — presence, not count; documented in the guides like
+// every glyph (the editor has no in-app legend).
+function drawTriggerGlyph(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  ctx.beginPath()
+  ctx.moveTo(x + r * 0.5, y - r)
+  ctx.lineTo(x - r * 0.6, y + r * 0.2)
+  ctx.lineTo(x + r * 0.1, y + r * 0.2)
+  ctx.lineTo(x - r * 0.5, y + r)
+  ctx.stroke()
 }
 
 function fillCell(ctx: CanvasRenderingContext2D, view: ViewTransform, cell: Position): void {

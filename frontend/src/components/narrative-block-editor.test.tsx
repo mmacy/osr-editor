@@ -82,6 +82,26 @@ test('a non-empty beat outside the read set warns by name with a one-patch clear
   ).toEqual(block({ refusal: 'The lock refuses.' }))
 })
 
+test('driven with the trigger beats, fired and journal render and a foreign offer warns by name', () => {
+  const onCommit = vi.fn()
+  render(
+    <NarrativeBlockEditor
+      block={block({ fired: 'The counterweight drops.', offer: 'A stray quest beat.' })}
+      beats={['fired', 'journal']}
+      idPrefix="trigger"
+      onCommit={onCommit}
+    />,
+  )
+  expect(screen.getByLabelText('Fired')).toBeInTheDocument()
+  expect(screen.getByLabelText('Journal')).toBeInTheDocument()
+  expect(screen.queryByLabelText('Refusal')).not.toBeInTheDocument()
+  // The foreign beat warns by name with the one-patch clear — never silently
+  // rewritten, never hidden.
+  const warning = screen.getByLabelText('Unread beat')
+  expect(warning).toHaveTextContent('offer')
+  expect(warning).toHaveTextContent('A stray quest beat.')
+})
+
 test('an authored block never warns about its own read beats', () => {
   renderEditor(block({ refusal: 'The lock refuses.', success: 'The key turns.' }))
   expect(screen.queryByLabelText('Unread beat')).not.toBeInTheDocument()

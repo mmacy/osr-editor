@@ -1500,6 +1500,30 @@ export interface components {
             transition: components["schemas"]["TransitionSpec"];
         };
         /**
+         * AddTrigger
+         * @description Add an authored trigger, appended to `Adventure.triggers`.
+         *
+         *     Adventure-scoped, the item trio's shape over the whole
+         *     [`TriggerSpec`][osrlib.crawl.triggers.TriggerSpec]. Appending is the only
+         *     insertion: authored order is firing order (the interpreter walks the tuple
+         *     in document order), and a misplaced trigger moves after the fact with
+         *     [`MoveTrigger`][osreditor.ops.MoveTrigger]. The spec's internal validity —
+         *     the never-consuming conditions, the no-authored-source rule, the closed
+         *     nine-command consequence union, each command's own validators — is the
+         *     model's own, enforced at request parse. Invariant at apply: the id free
+         *     among the rest of `Adventure.triggers`. No shipped catalog exists to
+         *     collide with, and quest ids are a separate namespace that imposes nothing;
+         *     an empty id rejects at parse (`TriggerSpec.id` carries `min_length=1`).
+         */
+        AddTrigger: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "add_trigger";
+            trigger: components["schemas"]["TriggerSpec"];
+        };
+        /**
          * AdvanceTime
          * @description Referee: advance the clock directly.
          *
@@ -3996,6 +4020,31 @@ export interface components {
             condition: string;
         };
         /**
+         * MoveTrigger
+         * @description Move one trigger to a new position in `Adventure.triggers`.
+         *
+         *     Order is semantics twice over — the interpreter fires matching triggers in
+         *     document order, each firing's changes visible to later conditions — so
+         *     reorder is a first-class edit, not a display concern. `index` is the
+         *     trigger's 0-based position in the reordered list: splice out, insert at
+         *     `index`. An out-of-range index is rejected as `op_invariant` naming the
+         *     valid range — the reject-don't-clamp posture `ResizeLevel` set. A
+         *     same-position move applies as a harmless no-change batch; the UI never
+         *     posts one (the arrows disable at the ends). First-match among foreign
+         *     duplicate ids.
+         */
+        MoveTrigger: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "move_trigger";
+            /** Trigger Id */
+            trigger_id: string;
+            /** Index */
+            index: number;
+        };
+        /**
          * MovementMode
          * @description One movement mode: rate per turn, encounter rate per round, and a descriptor.
          *
@@ -4211,7 +4260,7 @@ export interface components {
             /** Revision */
             revision: string;
             /** Ops */
-            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["AddMonsterTemplate"] | components["schemas"]["SetMonsterTemplate"] | components["schemas"]["RemoveMonsterTemplate"] | components["schemas"]["AddItemTemplate"] | components["schemas"]["SetItemTemplate"] | components["schemas"]["RemoveItemTemplate"] | components["schemas"]["SetLevelField"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["SetEncounter"] | components["schemas"]["SetTrap"] | components["schemas"]["SetTreasure"] | components["schemas"]["AddFeature"] | components["schemas"]["SetFeature"] | components["schemas"]["RemoveFeature"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
+            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["AddMonsterTemplate"] | components["schemas"]["SetMonsterTemplate"] | components["schemas"]["RemoveMonsterTemplate"] | components["schemas"]["AddItemTemplate"] | components["schemas"]["SetItemTemplate"] | components["schemas"]["RemoveItemTemplate"] | components["schemas"]["AddTrigger"] | components["schemas"]["SetTrigger"] | components["schemas"]["MoveTrigger"] | components["schemas"]["RemoveTrigger"] | components["schemas"]["SetLevelField"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["SetEncounter"] | components["schemas"]["SetTrap"] | components["schemas"]["SetTreasure"] | components["schemas"]["AddFeature"] | components["schemas"]["SetFeature"] | components["schemas"]["RemoveFeature"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
         };
         /**
          * OpBatchResult
@@ -5010,6 +5059,24 @@ export interface components {
             ];
         };
         /**
+         * RemoveTrigger
+         * @description Remove one trigger; first-match among foreign duplicate ids.
+         *
+         *     Nothing in the document references a trigger id, so removal dangles
+         *     nothing; the one external consequence — an existing save's fired-mark for
+         *     the id orphans — is osrlib's own posture (`MarkTriggerFired.trigger_id` is
+         *     an open domain). The UI's two-step row confirm is the only guard.
+         */
+        RemoveTrigger: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "remove_trigger";
+            /** Trigger Id */
+            trigger_id: string;
+        };
+        /**
          * RenameDungeon
          * @description Rename a dungeon, cascading every reference to it.
          *
@@ -5734,6 +5801,32 @@ export interface components {
             /** Area Id */
             area_id: string;
             treasure: components["schemas"]["AreaTreasureSpec"] | null;
+        };
+        /**
+         * SetTrigger
+         * @description Replace one trigger whole; a differing `trigger.id` is a rename.
+         *
+         *     Whole-value replacement at the detail editor's commit grain — the
+         *     [`SetMonsterTemplate`][osreditor.ops.SetMonsterTemplate] reasoning, and the
+         *     grain that carries consequence order without a reorder op of its own. A
+         *     rename falls under [`AddTrigger`][osreditor.ops.AddTrigger]'s id rule but
+         *     cascades nowhere in the document: no document field references a trigger
+         *     id (fired-marks live in saves, `source` stamps are runtime), so only the
+         *     sidecar's `trigger:<id>` note key moves and the delta pointer stays
+         *     `/triggers` even on rename. The uniqueness invariant guards **new or
+         *     changed ids only**: a foreign document's duplicate ids open, edit, and
+         *     navigate, resolved first-match in authored order, flagged by the
+         *     `trigger_id_not_unique` diagnostic, never locked.
+         */
+        SetTrigger: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_trigger";
+            /** Trigger Id */
+            trigger_id: string;
+            trigger: components["schemas"]["TriggerSpec"];
         };
         /**
          * SetViewState

@@ -22,6 +22,8 @@ import type {
   AreaTreasureSpec,
   CatalogMonster,
   Condition,
+  ConditionSpec,
+  ConsequenceCommand,
   CustomMonsterRecord,
   DamageKey,
   Diagnostics,
@@ -51,6 +53,7 @@ import type {
   NarrativeBlock,
   NumberAppearingValue,
   OpBatchResult,
+  PartyLocation,
   ProjectState,
   PublishResult,
   ProviderFieldStatus,
@@ -74,6 +77,8 @@ import type {
   TimeUnit,
   TransitionSpec,
   TrapSpec,
+  TriggerPattern,
+  TriggerSpec,
   WanderingSpec,
 } from '@/types'
 
@@ -128,6 +133,10 @@ test('the op vocabulary translations hold', () => {
     | 'add_item_template'
     | 'set_item_template'
     | 'remove_item_template'
+    | 'add_trigger'
+    | 'set_trigger'
+    | 'move_trigger'
+    | 'remove_trigger'
     | 'set_level_field'
   >()
   expectTypeOf<Extract<AnyEditOp, { op: 'set_adventure_field' }>>().toHaveProperty('field')
@@ -141,6 +150,9 @@ test('the op vocabulary translations hold', () => {
     Extract<AnyEditOp, { op: 'add_item_template' }>['template']
   >().toEqualTypeOf<ItemTemplate>()
   expectTypeOf<Extract<AnyEditOp, { op: 'set_level_field' }>['field']>().toEqualTypeOf<'guidance'>()
+  expectTypeOf<Extract<AnyEditOp, { op: 'add_trigger' }>['trigger']>().toEqualTypeOf<TriggerSpec>()
+  expectTypeOf<Extract<AnyEditOp, { op: 'set_trigger' }>>().toHaveProperty('trigger_id')
+  expectTypeOf<Extract<AnyEditOp, { op: 'move_trigger' }>['index']>().toEqualTypeOf<number>()
 
   // The item-template union discriminates on item_type over the four kinds.
   expectTypeOf<ItemTemplate['item_type']>().toEqualTypeOf<
@@ -189,6 +201,48 @@ test('the content op translations hold', () => {
   // The trap split and effect enums keep osrlib's exact wire values.
   expectTypeOf<TrapSpec['kind']>().toEqualTypeOf<'room' | 'treasure'>()
   expectTypeOf<TrapSpec['trigger']>().toEqualTypeOf<'enter' | 'open'>()
+})
+
+test('the trigger translations hold', () => {
+  // The pattern union discriminates on pattern_type over all seven kinds.
+  expectTypeOf<TriggerPattern['pattern_type']>().toEqualTypeOf<
+    | 'area_entered'
+    | 'level_entered'
+    | 'dungeon_entered'
+    | 'town_entered'
+    | 'item_acquired'
+    | 'monster_defeated'
+    | 'flag_set'
+  >()
+  expectTypeOf<Extract<TriggerPattern, { pattern_type: 'area_entered' }>>().toHaveProperty(
+    'area_id',
+  )
+  expectTypeOf<Extract<TriggerPattern, { pattern_type: 'flag_set' }>['value']>().toEqualTypeOf<
+    string | number | boolean | null | undefined
+  >()
+
+  // The consequence union is exactly the closed nine-command sub-union.
+  expectTypeOf<ConsequenceCommand['command_type']>().toEqualTypeOf<
+    | 'grant_item'
+    | 'grant_coins'
+    | 'award_xp'
+    | 'set_flag'
+    | 'spawn_monsters'
+    | 'spawn_npc_party'
+    | 'set_door_state'
+    | 'place_party'
+    | 'advance_time'
+  >()
+  expectTypeOf<Extract<ConsequenceCommand, { command_type: 'grant_item' }>>().toHaveProperty(
+    'character_id',
+  )
+  expectTypeOf<
+    Extract<ConsequenceCommand, { command_type: 'place_party' }>['location']
+  >().toEqualTypeOf<PartyLocation>()
+
+  // A trigger's conditions ride the same gate condition union.
+  expectTypeOf<TriggerSpec['conditions']>().toEqualTypeOf<ConditionSpec[]>()
+  expectTypeOf<TriggerSpec['repeatable']>().toEqualTypeOf<boolean>()
 })
 
 test('the catalog and publish translations hold', () => {

@@ -15,6 +15,7 @@ import { MonstersSection } from '@/components/monsters-section'
 import { PipelinePanel } from '@/components/pipeline-panel'
 import { ProviderSettingsButton } from '@/components/provider-dialog'
 import { PublishDialog } from '@/components/publish-dialog'
+import { QuestsSection } from '@/components/quests-section'
 import { ReviewQueue } from '@/components/review-queue'
 import { AdventureForm, TownForm } from '@/components/forms'
 import { MapEditor } from '@/components/map-editor'
@@ -258,6 +259,11 @@ export function ProjectScreen() {
                 active={section.kind === 'items'}
                 onClick={() => setSection({ kind: 'items' })}
               />
+              <SectionButton
+                label="Quests"
+                active={section.kind === 'quests'}
+                onClick={() => setSection({ kind: 'quests' })}
+              />
               {project.document.dungeons.map((dungeon) => (
                 <div key={dungeon.id} className="mt-2 flex flex-col gap-0.5">
                   <span className="truncate px-2 text-xs font-medium text-muted-foreground">
@@ -310,6 +316,9 @@ export function ProjectScreen() {
             )}
             {section.kind === 'items' && (
               <ItemsSection project={project} section={section} focusToken={focusToken} />
+            )}
+            {section.kind === 'quests' && (
+              <QuestsSection project={project} section={section} focusToken={focusToken} />
             )}
             {section.kind === 'level' && (
               <MapEditor

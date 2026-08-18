@@ -141,7 +141,7 @@ describe('key order and the walk', () => {
 })
 
 describe('the stocking menu builder', () => {
-  test('an empty area offers description, roll-stocking, three adds, and add feature', () => {
+  test('an empty area offers description, roll-stocking, three adds, add feature, and add trigger', () => {
     expect(stockingMenuEntries(area('1')).map((entry) => entry.id)).toEqual([
       'description',
       'roll-stocking',
@@ -149,6 +149,7 @@ describe('the stocking menu builder', () => {
       'add-treasure',
       'add-trap',
       'add-feature',
+      'add-trigger',
     ])
   })
 
@@ -164,6 +165,29 @@ describe('the stocking menu builder', () => {
       'edit-trap',
       'remove-trap',
       'add-feature',
+      'add-trigger',
+    ])
+  })
+
+  test('each area_entered trigger targeting the area gets an edit row below the add entry', () => {
+    const entries = stockingMenuEntries(area('1'), ['wheel-lever', 'trigger-2'])
+    const triggerEntries = entries.filter((entry) => entry.card === 'trigger')
+    expect(triggerEntries).toEqual([
+      { id: 'add-trigger', label: 'Add trigger', card: 'trigger', action: 'add' },
+      {
+        id: 'edit-trigger-wheel-lever',
+        label: "Edit trigger 'wheel-lever'",
+        card: 'trigger',
+        action: 'edit',
+        triggerId: 'wheel-lever',
+      },
+      {
+        id: 'edit-trigger-trigger-2',
+        label: "Edit trigger 'trigger-2'",
+        card: 'trigger',
+        action: 'edit',
+        triggerId: 'trigger-2',
+      },
     ])
   })
 

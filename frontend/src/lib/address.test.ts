@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 
-import { itemAddress, monsterAddress, navTargetFor } from '@/lib/address'
+import { itemAddress, monsterAddress, navTargetFor, triggerAddress } from '@/lib/address'
 import { seedItemTemplate } from '@/lib/item-builders'
 import { seedMonsterTemplate } from '@/lib/monster-builders'
 import { makeDocument } from '@/test/fixtures'
@@ -57,6 +57,30 @@ test('the items scope and an item address land on the Items section', () => {
 
 test('an item address the document no longer bundles stays unnavigable', () => {
   expect(navTargetFor('item:gone', documentWithGeometry())).toBeNull()
+})
+
+test('the triggers scope and a trigger address land on the Quests section', () => {
+  const document = documentWithGeometry()
+  document.triggers = [
+    {
+      id: 'wheel-lever',
+      when: { pattern_type: 'town_entered' },
+      conditions: [],
+      repeatable: false,
+      consequences: [],
+      narrative: null,
+    },
+  ]
+  expect(navTargetFor('triggers', document)).toEqual({ kind: 'quests' })
+  expect(navTargetFor('trigger:wheel-lever', document)).toEqual({
+    kind: 'quests',
+    triggerId: 'wheel-lever',
+  })
+  expect(triggerAddress('the lever')).toBe('trigger:the%20lever')
+})
+
+test('a trigger address the document no longer carries stays unnavigable', () => {
+  expect(navTargetFor('trigger:gone', documentWithGeometry())).toBeNull()
 })
 
 test('a percent-encoded monster id decodes before resolution', () => {

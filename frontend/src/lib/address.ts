@@ -26,6 +26,10 @@ export type NavTarget =
   // scope's landing and an `item:<id>` finding's landing with that template
   // selected.
   | { kind: 'items'; itemId?: string; create?: boolean }
+  // The always-present Quests section (its trigger surface first): the
+  // `triggers` scope's landing and a `trigger:<id>` finding's landing with
+  // that trigger open. No `create` flag — nothing anywhere picks a trigger.
+  | { kind: 'quests'; triggerId?: string }
   // The forge review surfaces — nav sections, never address-mapped (the
   // grammar's producers stay validation, lint, and the forge tier).
   | { kind: 'review' }
@@ -103,6 +107,10 @@ export function itemAddress(itemId: string): string {
   return `item:${encodeURIComponent(itemId)}`
 }
 
+export function triggerAddress(triggerId: string): string {
+  return `trigger:${encodeURIComponent(triggerId)}`
+}
+
 export function navTargetFor(
   address: string | null | undefined,
   document: Adventure,
@@ -111,6 +119,7 @@ export function navTargetFor(
   if (address === 'town') return { kind: 'town' }
   if (address === 'monsters') return { kind: 'monsters' }
   if (address === 'items') return { kind: 'items' }
+  if (address === 'triggers') return { kind: 'quests' }
 
   const segments = address.split('/')
   const templateId = segmentValue(segments[0], 'monster')
@@ -129,6 +138,15 @@ export function navTargetFor(
     if (segments.length !== 1) return null
     return document.items.some((template) => template.id === itemId)
       ? { kind: 'items', itemId }
+      : null
+  }
+  const triggerId = segmentValue(segments[0], 'trigger')
+  if (triggerId !== null) {
+    // The `trigger:<id>` mirror: the Quests section with the trigger open; an
+    // id the document no longer carries stays unnavigable.
+    if (segments.length !== 1) return null
+    return document.triggers.some((trigger) => trigger.id === triggerId)
+      ? { kind: 'quests', triggerId }
       : null
   }
   const dungeonId = segmentValue(segments[0], 'dungeon')
