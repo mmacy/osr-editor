@@ -27,6 +27,7 @@ import {
   FIRST_LIVING_SELECTOR,
   PARTY_SELECTOR,
   SELECTOR_LABELS,
+  canonicalDoorRef,
   doorRefKey,
   doorRefsAt,
   type DoorRef,
@@ -738,11 +739,18 @@ function DoorEdgePicker({
   const dungeon = document.dungeons.find((candidate) => candidate.id === draftDungeon) ?? null
   const level: LevelSpec | null =
     dungeon?.levels.find((candidate) => String(candidate.number) === draftLevel) ?? null
+  // The committed triple canonicalized for display: a foreign south/east-form
+  // value names the same door in osrlib's own reading, so the picker shows
+  // the storage-form triple — the stored value is never rewritten unasked.
+  const committedRef: DoorRef | null = committed
+    ? canonicalDoorRef({ x: committed.x, y: committed.y, direction: committed.direction })
+    : null
   const selectedCell: Position | null =
+    committedRef &&
     committed &&
     committed.dungeon_id === draftDungeon &&
     String(committed.level_number) === draftLevel
-      ? [committed.x, committed.y]
+      ? [committedRef.x, committedRef.y]
       : null
   const pickCell = (cell: Position) => {
     if (!dungeon || !level) return
@@ -806,9 +814,9 @@ function DoorEdgePicker({
               ))}
           </select>
         </div>
-        {committed && (
+        {committedRef && (
           <p className="pb-2 font-mono text-xs" data-testid="door-ref">
-            ({committed.x}, {committed.y}) {committed.direction}
+            ({committedRef.x}, {committedRef.y}) {committedRef.direction}
           </p>
         )}
       </div>

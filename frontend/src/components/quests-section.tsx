@@ -116,8 +116,24 @@ export function QuestsSection({
                 document={document}
                 selected={selected === trigger}
                 onSelect={() => setSelectedId(trigger.id)}
-                onMove={(nextIndex) => {
-                  void projectStore.getState().commit(moveTriggerOps(trigger.id, nextIndex))
+                onMove={(delta) => {
+                  // Computed in the queue against the committed document, so
+                  // a click racing an in-flight move never posts a stale
+                  // index — a same-position or out-of-range step skips.
+                  void projectStore.getState().commit((current) => {
+                    const position = current.triggers.findIndex(
+                      (candidate) => candidate.id === trigger.id,
+                    )
+                    const destination = position + delta
+                    if (
+                      position === -1 ||
+                      destination < 0 ||
+                      destination >= current.triggers.length
+                    ) {
+                      return []
+                    }
+                    return moveTriggerOps(trigger.id, destination)
+                  })
                 }}
                 onRemove={() => {
                   void projectStore.getState().commit(removeTriggerOps(trigger.id))
@@ -214,7 +230,7 @@ function TriggerRow({
   document: Adventure
   selected: boolean
   onSelect: () => void
-  onMove: (index: number) => void
+  onMove: (delta: 1 | -1) => void
   onRemove: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
@@ -250,7 +266,7 @@ function TriggerRow({
           size="icon-sm"
           aria-label={`Move ${trigger.id} up`}
           disabled={index === 0}
-          onClick={() => onMove(index - 1)}
+          onClick={() => onMove(-1)}
         >
           <ArrowUpIcon />
         </Button>
@@ -259,7 +275,7 @@ function TriggerRow({
           size="icon-sm"
           aria-label={`Move ${trigger.id} down`}
           disabled={index === count - 1}
-          onClick={() => onMove(index + 1)}
+          onClick={() => onMove(1)}
         >
           <ArrowDownIcon />
         </Button>

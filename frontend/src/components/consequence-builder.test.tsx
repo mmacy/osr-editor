@@ -234,6 +234,29 @@ function stubPickerBox(canvas: HTMLElement) {
     }) as DOMRect
 }
 
+test('a foreign south-form door value displays as its canonical triple, stored value untouched', () => {
+  // osrlib reads (1, 0, south) and (1, 1, north) as the same door; the picker
+  // shows the storage-form triple while edits keep the stored triple as-is —
+  // never repaired unasked.
+  const onCommit = vi.fn()
+  const committed: ConsequenceCommand = {
+    command_type: 'set_door_state',
+    dungeon_id: 'dungeon-1',
+    level_number: 1,
+    x: 1,
+    y: 0,
+    direction: 'south',
+    open: null,
+    wedged: null,
+    discovered: null,
+    unlocked: null,
+  }
+  renderBuilder(committed, onCommit, documentWithDoors())
+  expect(screen.getByTestId('door-ref')).toHaveTextContent('(1, 1) north')
+  fireEvent.change(screen.getByLabelText('open'), { target: { value: 'true' } })
+  expect(onCommit).toHaveBeenCalledWith({ ...committed, open: true })
+})
+
 test('the door picker offers doors alone and emits the canonical form', () => {
   const onCommit = renderBuilder(null, vi.fn(), documentWithDoors())
   fireEvent.change(screen.getByLabelText('Command'), { target: { value: 'set_door_state' } })
