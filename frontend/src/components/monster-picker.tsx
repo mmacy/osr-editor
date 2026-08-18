@@ -50,30 +50,105 @@ interface MonsterPickerProps {
   triggerLabel?: string
 }
 
+// The shared searchable list over the effective catalog and its ranking —
+// both pickers render exactly this body, so the domain and the ordering can
+// never drift between them. A pick records recency and answers the bare id;
+// what the id becomes (a keyed line with a count, a pattern's template) is
+// the host's business.
+function MonsterCommandList({
+  bundled,
+  disabled = false,
+  onSelect,
+}: {
+  bundled: readonly MonsterTemplate[]
+  disabled?: boolean
+  onSelect: (templateId: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const shipped = useCatalog(loadMonsterCatalog)
+  const monsters = useMemo(
+    () => (shipped ? effectiveMonsterCatalog(shipped, bundled) : []),
+    [shipped, bundled],
+  )
+  const ranked = useMemo(() => rankMonsters(monsters, recentMonsterIds(), query), [monsters, query])
+  return (
+    <Command shouldFilter={false}>
+      <CommandInput placeholder="Search monsters…" value={query} onValueChange={setQuery} />
+      <CommandList>
+        <CommandEmpty>{shipped ? 'No monster matches.' : 'Loading the catalog…'}</CommandEmpty>
+        <CommandGroup>
+          {ranked.map((monster) => (
+            <CommandItem
+              key={monster.id}
+              value={monster.id}
+              disabled={disabled}
+              onSelect={() => {
+                recordRecentMonster(monster.id)
+                onSelect(monster.id)
+              }}
+            >
+              <span className="truncate">{monster.name}</span>
+              {monster.bundled && <Badge variant="secondary">bundled</Badge>}
+              <span className="text-muted-foreground ml-auto font-mono text-xs">
+                HD {formatHitDice(monster.hitDice)}
+              </span>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      </CommandList>
+    </Command>
+  )
+}
+
+// The bare-id variant over the same effective catalog and ranking — the
+// trigger surface's picker (a monster_defeated pattern and a spawn's
+// template name a monster; their counts, when any, are the form's own
+// control, not the pick's).
+export function MonsterIdPicker({
+  bundled,
+  onPick,
+  triggerLabel = 'Pick monster',
+}: {
+  bundled: readonly MonsterTemplate[]
+  onPick: (templateId: string) => void
+  triggerLabel?: string
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm">
+          {triggerLabel}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="start">
+        <MonsterCommandList
+          bundled={bundled}
+          onSelect={(templateId) => {
+            onPick(templateId)
+            setOpen(false)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export function MonsterPicker({
   bundled,
   onPick,
   triggerLabel = 'Add monster',
 }: MonsterPickerProps) {
   const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
   const [count, setCount] = useState('1')
-  const shipped = useCatalog(loadMonsterCatalog)
   const forge = useProjectStore((state) => state.project?.forge != null)
-  const monsters = useMemo(
-    () => (shipped ? effectiveMonsterCatalog(shipped, bundled) : []),
-    [shipped, bundled],
-  )
-  const ranked = useMemo(() => rankMonsters(monsters, recentMonsterIds(), query), [monsters, query])
   const countInvalid = countToKeyedMonster('x', count) === null
 
   const pick = (templateId: string) => {
     const line = countToKeyedMonster(templateId, count)
     if (!line) return
-    recordRecentMonster(templateId)
     onPick(line)
     setOpen(false)
-    setQuery('')
   }
 
   // The create shortcut: "like an orc, but…" starts where stocking happens.
@@ -81,7 +156,6 @@ export function MonsterPicker({
   // routes to the blocked-op dialog, which names detach as what unlocks it.
   const createMonster = () => {
     setOpen(false)
-    setQuery('')
     if (forge) {
       projectStore.getState().setBlockedOp({
         op: 'add_monster_template',
@@ -114,28 +188,7 @@ export function MonsterPicker({
           />
           {countInvalid && <span className="text-destructive text-xs">dice or a number</span>}
         </div>
-        <Command shouldFilter={false}>
-          <CommandInput placeholder="Search monsters…" value={query} onValueChange={setQuery} />
-          <CommandList>
-            <CommandEmpty>{shipped ? 'No monster matches.' : 'Loading the catalog…'}</CommandEmpty>
-            <CommandGroup>
-              {ranked.map((monster) => (
-                <CommandItem
-                  key={monster.id}
-                  value={monster.id}
-                  disabled={countInvalid}
-                  onSelect={() => pick(monster.id)}
-                >
-                  <span className="truncate">{monster.name}</span>
-                  {monster.bundled && <Badge variant="secondary">bundled</Badge>}
-                  <span className="text-muted-foreground ml-auto font-mono text-xs">
-                    HD {formatHitDice(monster.hitDice)}
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+        <MonsterCommandList bundled={bundled} disabled={countInvalid} onSelect={pick} />
         <div className="border-t p-1">
           <Button
             variant="ghost"

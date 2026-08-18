@@ -46,6 +46,7 @@ from osreditor.addresses import (
     item_address,
     level_address,
     monster_address,
+    trigger_address,
 )
 from osreditor.errors import OpTargetNotFoundError, OpUnsupportedForgeError
 from osreditor.ops import (
@@ -55,8 +56,10 @@ from osreditor.ops import (
     AddLevel,
     AddMonsterTemplate,
     AddTransition,
+    AddTrigger,
     AnyEditOp,
     CreateArea,
+    MoveTrigger,
     RemoveArea,
     RemoveDungeon,
     RemoveFeature,
@@ -64,6 +67,7 @@ from osreditor.ops import (
     RemoveLevel,
     RemoveMonsterTemplate,
     RemoveTransition,
+    RemoveTrigger,
     RenameDungeon,
     RenumberLevel,
     ResizeLevel,
@@ -81,6 +85,7 @@ from osreditor.ops import (
     SetTownField,
     SetTrap,
     SetTreasure,
+    SetTrigger,
     SetWandering,
 )
 
@@ -154,6 +159,10 @@ _BUNDLED_ITEM_BLOCKED = (
 
 _GATE_BLOCKED = "gates have no override kind — the overrides vocabulary has no authored-layer surface"
 
+# Mirrored verbatim by the frontend's TRIGGER_BLOCKED_MESSAGE
+# (lib/trigger-builders.ts) — a rewording here should carry over.
+_TRIGGER_BLOCKED = "triggers have no override kind — the overrides vocabulary has no authored-layer surface"
+
 _BLOCKED_MESSAGES: dict[type, str] = {
     SetWandering: "wandering-monster parameters have no override kind",
     SetDungeonField: "dungeon fields have no override kind",
@@ -170,6 +179,10 @@ _BLOCKED_MESSAGES: dict[type, str] = {
     AddItemTemplate: _BUNDLED_ITEM_BLOCKED,
     SetItemTemplate: _BUNDLED_ITEM_BLOCKED,
     RemoveItemTemplate: _BUNDLED_ITEM_BLOCKED,
+    AddTrigger: _TRIGGER_BLOCKED,
+    SetTrigger: _TRIGGER_BLOCKED,
+    MoveTrigger: _TRIGGER_BLOCKED,
+    RemoveTrigger: _TRIGGER_BLOCKED,
     SetLevelField: "level guidance has no override kind",
 }
 
@@ -184,6 +197,10 @@ def _blocked_address(op: AnyEditOp) -> str:
         return item_address(op.template.id)
     if isinstance(op, SetItemTemplate | RemoveItemTemplate):
         return item_address(op.item_id)
+    if isinstance(op, AddTrigger):
+        return trigger_address(op.trigger.id)
+    if isinstance(op, SetTrigger | MoveTrigger | RemoveTrigger):
+        return trigger_address(op.trigger_id)
     if isinstance(op, SetDungeonField | RemoveDungeon):
         return dungeon_address(op.dungeon_id)
     if isinstance(op, AddDungeon):

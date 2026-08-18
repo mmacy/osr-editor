@@ -211,6 +211,31 @@ export type SetItemTemplate = components['schemas']['SetItemTemplate']
 export type RemoveItemTemplate = components['schemas']['RemoveItemTemplate']
 export type SetLevelField = components['schemas']['SetLevelField']
 
+// Phase 16: triggers — the spec, its seven patterns, the nine consequence
+// commands, and the placement location, riding the generated types.
+export type TriggerSpec = components['schemas']['TriggerSpec']
+export type AreaEnteredPattern = components['schemas']['AreaEnteredPattern']
+export type LevelEnteredPattern = components['schemas']['LevelEnteredPattern']
+export type DungeonEnteredPattern = components['schemas']['DungeonEnteredPattern']
+export type TownEnteredPattern = components['schemas']['TownEnteredPattern']
+export type ItemAcquiredPattern = components['schemas']['ItemAcquiredPattern']
+export type MonsterDefeatedPattern = components['schemas']['MonsterDefeatedPattern']
+export type FlagSetPattern = components['schemas']['FlagSetPattern']
+export type GrantItem = components['schemas']['GrantItem']
+export type GrantCoins = components['schemas']['GrantCoins']
+export type AwardXP = components['schemas']['AwardXP']
+export type SetFlag = components['schemas']['SetFlag']
+export type SpawnMonsters = components['schemas']['SpawnMonsters']
+export type SpawnNpcParty = components['schemas']['SpawnNpcParty']
+export type SetDoorState = components['schemas']['SetDoorState']
+export type PlaceParty = components['schemas']['PlaceParty']
+export type AdvanceTime = components['schemas']['AdvanceTime']
+export type PartyLocation = components['schemas']['PartyLocation']
+export type AddTrigger = components['schemas']['AddTrigger']
+export type SetTrigger = components['schemas']['SetTrigger']
+export type MoveTrigger = components['schemas']['MoveTrigger']
+export type RemoveTrigger = components['schemas']['RemoveTrigger']
+
 // The discriminated aid unions, composed from their members (the route bodies
 // and responses carry the union, not a named schema — the AnyEditOp pattern).
 export type AidsPreviewRequest =
@@ -244,6 +269,14 @@ export type ItemTemplate = Adventure['items'][number]
 // The gate condition union, as a gate actually carries it — discriminates on
 // condition_type.
 export type ConditionSpec = GateSpec['condition']
+
+// The trigger pattern union, as a spec actually carries it — discriminates on
+// pattern_type.
+export type TriggerPattern = TriggerSpec['when']
+
+// The consequence union, as a spec actually carries it — the closed
+// nine-command sub-union; discriminates on command_type.
+export type ConsequenceCommand = TriggerSpec['consequences'][number]
 
 // The cell address shared by every geometry surface: a two-tuple, as osrlib
 // serializes Position.

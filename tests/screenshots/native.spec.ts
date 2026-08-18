@@ -87,6 +87,7 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   await expect(page.getByRole('button', { name: 'Adventure', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Town' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Monsters', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Quests', exact: true })).toBeVisible()
   await shoot(page, 'project-chrome', testInfo)
 
   await openMap(page)
@@ -126,6 +127,7 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   const menu = page.getByRole('menu')
   await expect(menu.getByRole('menuitem', { name: 'Add encounter' })).toBeVisible()
   await expect(menu.getByRole('menuitem', { name: 'Add treasure' })).toBeVisible()
+  await expect(menu.getByRole('menuitem', { name: 'Add trigger' })).toBeVisible()
   await shoot(menu, 'stocking-context-menu', testInfo)
 
   // Stock it: an encounter, then treasure and a trap on the same area, so the
@@ -179,6 +181,21 @@ test('the project chrome, the map editor, and the stocking surfaces', async ({ p
   await shoot(page.getByTestId('map-canvas'), 'area-hover-card', testInfo)
   await page.getByRole('button', { name: 'Unstocked filter' }).hover()
   await expect(hoverCard).toBeHidden()
+
+  // A trigger on the stocked room, so the key-glyphs shot shows the grown
+  // glyph vocabulary — the add gesture lands in the Quests panel, so the map
+  // is reopened before the shutter. The nav-scoped locator matters: the
+  // trigger row's own summary contains "level 1", so a bare Level 1 lookup
+  // would be ambiguous.
+  await page.mouse.click(guardCell.x, guardCell.y, { button: 'right' })
+  await page.getByRole('menuitem', { name: 'Add trigger' }).click()
+  await expect(page.getByTestId('trigger-detail-trigger-1')).toBeVisible()
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('button', { name: 'Level 1' })
+    .click()
+  await expect(page.getByTestId('map-canvas')).toBeVisible()
+  await page.getByRole('button', { name: 'Reset zoom' }).click()
 
   // The map's own reading: a stocked key number beside a hollow one, with the
   // unstocked filter dimming what is done.
@@ -357,6 +374,107 @@ test('import, export, and publish', async ({ page }, testInfo) => {
   const publishDialog = page.getByRole('dialog')
   await expect(publishDialog.getByLabel('osr-web checkout')).toHaveValue('')
   await shoot(publishDialog, 'publish-dialog', testInfo)
+})
+
+test('the quests section and the trigger surfaces', async ({ page }, testInfo) => {
+  test.setTimeout(120_000)
+  const projectDir = adventureDir(testInfo, 'trigger-demo.osr')
+
+  await freshProject(page, projectDir, 'The wheel room')
+
+  // A room drawn around the view centre — the gate-badges arrangement, so the
+  // glyph shot can magnify the lightning bolt without a pan gesture.
+  await openMap(page)
+  await page.getByRole('button', { name: 'Room tool' }).click()
+  await drag(page, await cellCenter(page, 10, 6), await cellCenter(page, 13, 8))
+  // The entrance sits in the far corner so its triangle never crowds the key
+  // number the glyph shot is about.
+  await page.getByRole('button', { name: 'Entrance tool' }).click()
+  const entranceCell = await cellCenter(page, 13, 8)
+  await page.mouse.click(entranceCell.x, entranceCell.y)
+  await page.getByRole('button', { name: 'Select tool' }).click()
+
+  // Stock the room so the glyph row has company: an encounter beside the bolt.
+  const leverCell = await cellCenter(page, 11, 7)
+  await page.mouse.click(leverCell.x, leverCell.y, { button: 'right' })
+  await page.getByRole('menuitem', { name: 'Add encounter' }).click()
+  const inspector = page.getByLabel('Inspector')
+  await inspector.getByRole('button', { name: 'Add monster' }).click()
+  await page.getByPlaceholder('Search monsters…').fill('orc')
+  await page
+    .getByRole('option', { name: /^Orc/ })
+    .first()
+    .click()
+  await expect(inspector.getByLabel('Monster lines')).toContainText('Orc')
+
+  // The trigger, from the area context menu — the one-gesture placement that
+  // lands in the Quests panel with the pattern already bound.
+  await page.mouse.click(leverCell.x, leverCell.y, { button: 'right' })
+  await page.getByRole('menuitem', { name: 'Add trigger' }).click()
+  await expect(page.getByTestId('trigger-detail-trigger-1')).toBeVisible()
+
+  // Complete it: a condition, the flag-writing consequence, and both voices —
+  // the builders the detail shot is a picture of. The condition is a carried
+  // shipped item, so the shot's document stays lint-clean.
+  await page.getByRole('button', { name: 'Add condition' }).click()
+  await page.getByRole('button', { name: 'Pick item' }).click()
+  await page.getByPlaceholder('Search items…').fill('torch')
+  await page
+    .getByRole('option', { name: /^Torch/ })
+    .first()
+    .click()
+  await expect(page.getByTestId('condition-item')).toContainText('torch')
+  await page.getByRole('button', { name: 'Add consequence' }).click()
+  await expect(page.getByLabel('Command')).toHaveValue('set_flag')
+  const consequenceKey = page.getByLabel('Flag key')
+  await consequenceKey.fill('wheel.lever')
+  await consequenceKey.press('Tab')
+  const fired = page.getByLabel('Fired')
+  await fired.fill('The counterweight drops; iron rises somewhere east.')
+  await fired.press('Tab')
+  const journal = page.getByLabel('Journal')
+  await journal.fill('A worn lever moved under our hands, and a portcullis answered.')
+  await journal.press('Tab')
+  await expect(journal).toHaveValue(
+    'A worn lever moved under our hands, and a portcullis answered.',
+  )
+
+  // A second trigger, so the list reads as the ordered surface it is.
+  await page.getByRole('button', { name: 'New trigger' }).click()
+  const createDialog = page.getByRole('dialog')
+  await createDialog.getByLabel('Fires').selectOption('town_entered')
+  await createDialog.getByRole('button', { name: 'Create' }).click()
+  await expect(page.getByTestId('trigger-detail-trigger-2')).toBeVisible()
+
+  // The section list: the numbered rows in firing order. The list pane alone
+  // is the subject — the whole section's box is its scroll extent, which
+  // stitches the diagnostics bar into the frame.
+  await page.getByTestId('trigger-row-trigger-1').getByRole('button').first().click()
+  await expect(page.getByTestId('trigger-detail-trigger-1')).toBeVisible()
+  await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
+  await shoot(page.getByTestId('trigger-list-pane'), 'quests-triggers', testInfo)
+
+  // The detail editor alone, tall enough to hold the three builders in frame.
+  await page.setViewportSize({ width: 1280, height: 1700 })
+  await shoot(page.getByTestId('trigger-detail-trigger-1'), 'trigger-detail', testInfo)
+  await page.setViewportSize({ width: 1280, height: 800 })
+
+  // The glyph: back on the map (the nav-scoped locator, because the trigger
+  // row's summary contains "level 1"), zoomed about the centre the room was
+  // drawn around, the selection parked off-frame so nothing renders highlighted.
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('button', { name: 'Level 1' })
+    .click()
+  await expect(page.getByTestId('map-canvas')).toBeVisible()
+  await page.getByRole('button', { name: 'Reset zoom' }).click()
+  const parkCell = await cellCenter(page, 27, 14)
+  await page.mouse.click(parkCell.x, parkCell.y)
+  await page.getByRole('button', { name: 'Reset zoom' }).click()
+  for (let step = 0; step < 4; step += 1) {
+    await page.getByRole('button', { name: 'Zoom in' }).click()
+  }
+  await shoot(page.getByTestId('map-canvas'), 'trigger-glyph', testInfo)
 })
 
 test('the item editor and the gates', async ({ page }, testInfo) => {

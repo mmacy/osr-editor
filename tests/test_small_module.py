@@ -14,7 +14,13 @@ publish suites cover `Adventure.monsters` permanently); and the authored layer
 item — the miller's key — cached in room 1's strongbox, the treasure-room
 secret door gated on carrying it with authored refusal, success, and speaker,
 the stairs down gated on a toll that consumes a torch, and level 1 guidance
-prose. Town, hooks, and
+prose; and the trigger layer (phase 16's growth, the milestone's
+lever-opens-portcullis pairing): a once-only `area_entered` trigger on the
+wheel room whose one consequence writes the portcullis flag, with authored
+fired and journal beats and a speaker, and the portcullis door into the tail
+race gated `flag_equals` on that key with authored refusal and success text —
+so the flag has a writer by construction and the advisory lints stay silent.
+Town, hooks, and
 services filled. Validation-clean, and lint-clean except the one finding it is
 built to carry: the secret-only treasure room *is* the `secret_only_access`
 trigger — the spec's own publish rule ("secret-only access is sometimes the
@@ -47,6 +53,7 @@ from osrlib.core.monsters import (
 from osrlib.core.spells import SaveSpec
 from osrlib.core.tables import ReactionResult
 from osrlib.crawl.adventure import Adventure, TownSpec, validate_adventure
+from osrlib.crawl.commands import SetFlag
 from osrlib.crawl.dungeon import (
     AreaSpec,
     AreaTreasureSpec,
@@ -65,8 +72,9 @@ from osrlib.crawl.dungeon import (
     ValuableSpec,
     WanderingSpec,
 )
-from osrlib.crawl.gates import GateSpec, HasItemCondition
+from osrlib.crawl.gates import FlagEqualsCondition, GateSpec, HasItemCondition
 from osrlib.crawl.narrative import NarrativeBlock
+from osrlib.crawl.triggers import AreaEnteredPattern, TriggerSpec
 from osrlib.data import load_encounter_tables, load_equipment, load_monsters
 from osrlib.errors import ContentValidationError
 
@@ -109,6 +117,24 @@ TOLL_GATE = GateSpec(
     narrative=NarrativeBlock(
         refusal="The dark below drinks unlit steps. It wants fire.",
         success="You feed a torch to the dark; it gutters somewhere below, and the way is open.",
+    ),
+)
+
+PORTCULLIS_FLAG = "mill-caves.wheel-lever"
+
+# The portcullis: the milestone's flag-gated half. The lever trigger writes
+# the flag; this door reads it — a writer exists by construction, so the
+# flag_read_no_writer advisory stays silent on the shipped fixture.
+PORTCULLIS_DOOR = Edge(
+    kind=EdgeKind.DOOR,
+    door=DoorSpec(
+        requires=GateSpec(
+            condition=FlagEqualsCondition(key=PORTCULLIS_FLAG, value="pulled"),
+            narrative=NarrativeBlock(
+                refusal="The portcullis holds fast — somewhere above, machinery waits to be convinced.",
+                success="Chains rattle overhead and the portcullis stands raised; the tail race lies open.",
+            ),
+        ),
     ),
 )
 
@@ -195,6 +221,25 @@ def _level_one() -> LevelSpec:
             ),
         ),
     )
+    wheel_room = AreaSpec(
+        id="6",
+        name="The wheel room",
+        description=(
+            "The mill's great wheel lies on its side, half-sunk in silt. A counterweighted "
+            "lever juts from the hub, worn smooth by hands that were not always hands."
+        ),
+        cells=((2, 1),),
+    )
+    tail_race = AreaSpec(
+        id="7",
+        name="The tail race",
+        description=(
+            "A brick-lined channel where the spent water once ran, dry now but for a black "
+            "trickle. Silt banks glitter with what the current dropped."
+        ),
+        cells=((2, 2),),
+        treasure=AreaTreasureSpec(unguarded=True),
+    )
     return LevelSpec(
         number=1,
         width=8,
@@ -205,12 +250,14 @@ def _level_one() -> LevelSpec:
             "1,1:north": OPEN,
             "1,1:west": OPEN,
             "2,0:west": OPEN,
+            "2,1:north": OPEN,
+            "2,2:north": PORTCULLIS_DOOR,
             "3,0:west": DOOR,
             "3,1:north": OPEN,
             "4,0:west": GATED_SECRET_DOOR,
             "4,1:north": OPEN,
         },
-        areas=(guard_room, pit_room, treasure_room),
+        areas=(guard_room, pit_room, treasure_room, wheel_room, tail_race),
         features=(
             FeatureSpec(
                 id="feature-2",
@@ -384,6 +431,23 @@ def build_small_module() -> Adventure:
                 id="millers-key",
                 name="The miller's brass key",
                 cost_gp=0,
+            ),
+        ),
+        triggers=(
+            # The milestone's lever half: once-only (the default), entering
+            # the wheel room writes the flag the portcullis door reads.
+            TriggerSpec(
+                id="wheel-lever",
+                when=AreaEnteredPattern(dungeon_id="mill-caves", level_number=1, area_id="6"),
+                consequences=(SetFlag(key=PORTCULLIS_FLAG, value="pulled"),),
+                narrative=NarrativeBlock(
+                    fired="The lever gives; the counterweight drops and the tail-race portcullis ratchets up.",
+                    journal=(
+                        "In the wheel room a worn lever moved under our hands, and somewhere east "
+                        "iron rose grinding from its groove."
+                    ),
+                    speaker="The drowned miller",
+                ),
             ),
         ),
     )

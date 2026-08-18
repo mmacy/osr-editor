@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 from osrlib.crawl.adventure import Adventure, TownSpec, validate_adventure
+from osrlib.crawl.commands import SetFlag, SpawnMonsters
 from osrlib.crawl.dungeon import (
     AreaSpec,
     Direction,
@@ -12,9 +13,14 @@ from osrlib.crawl.dungeon import (
     DungeonSpec,
     Edge,
     EdgeKind,
+    KeyedEncounter,
+    KeyedMonster,
     LevelSpec,
     TransitionSpec,
 )
+from osrlib.crawl.gates import FlagEqualsCondition, GateSpec
+from osrlib.crawl.quests import ObjectiveSpec, QuestSpec, TriggerClause
+from osrlib.crawl.triggers import AreaEnteredPattern, FlagSetPattern, TownEnteredPattern, TriggerSpec
 from osrlib.data import load_equipment, load_monsters
 
 from osreditor.diagnostics import compute_diagnostics
@@ -171,6 +177,9 @@ def test_severity_table_matches_forge() -> None:
         "secret_only_access": "warning",
         "transition_unpaired": "warning",
         "area_overlap": "warning",
+        "flag_read_no_writer": "warning",
+        "trigger_cycle": "warning",
+        "trigger_spawn_collision": "warning",
     }
 
 
@@ -421,6 +430,245 @@ def test_a_doctored_non_canonical_key_is_the_one_error_only_foreign_documents_pr
     assert findings[0].message == "edge key '0,1:south' is never consulted — osrlib's canonical form is '0,2:north'"
     assert findings[0].address == "dungeon:tannery-vaults/level:1"
     assert codes(findings[1:]) == ["orphan_cell", "orphan_cell", "secret_only_access", "area_overlap"]
+
+
+# --- the phase 16 advisory class ---------------------------------------------------
+# Warning severity by construction — never escalating, never gating.
+
+
+def flag_trigger(trigger_id: str, key: str, **overrides: object) -> TriggerSpec:
+    """A trigger writing `key` — the advisory suites' writer-side building block."""
+    values: dict[str, object] = {
+        "id": trigger_id,
+        "when": TownEnteredPattern(),
+        "consequences": (SetFlag(key=key, value=True),),
+    }
+    values.update(overrides)
+    return TriggerSpec.model_validate(values)
+
+
+def flag_gate(key: str, value: str | int | bool = True) -> GateSpec:
+    return GateSpec(condition=FlagEqualsCondition(key=key, value=value))
+
+
+def authored(
+    *dungeons: DungeonSpec, triggers: tuple[TriggerSpec, ...] = (), quests: tuple[QuestSpec, ...] = ()
+) -> Adventure:
+    return Adventure(
+        name="Lint fixture",
+        town=TownSpec(name=""),
+        dungeons=dungeons or (DungeonSpec(id="d", levels=(level(),)),),
+        triggers=triggers,
+        quests=quests,
+    )
+
+
+def test_flag_read_no_writer_addresses_each_reading_site() -> None:
+    gated_door = Edge(kind=EdgeKind.DOOR, door=DoorSpec(requires=flag_gate("unwritten")))
+    toll = transition(requires=flag_gate("unwritten"), to_level_number=1)
+    reader = TriggerSpec(
+        id="watcher",
+        when=FlagSetPattern(key="unwritten"),
+        conditions=(FlagEqualsCondition(key="unwritten", value=True),),
+    )
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": gated_door}, transitions=(toll,)),)),
+        triggers=(reader,),
+    )
+    findings = [finding for finding in lint_adventure(fixture) if finding.code == "flag_read_no_writer"]
+    assert [finding.address for finding in findings] == [
+        "dungeon:d/level:1/edge:1,1:north",
+        "dungeon:d/level:1/cell:0,0",
+        "trigger:watcher",
+        "trigger:watcher",
+    ]
+    assert all(finding.severity == "warning" for finding in findings)
+    assert all("'unwritten'" in finding.message for finding in findings)
+
+
+def test_a_trigger_consequence_writer_silences_the_read() -> None:
+    gated_door = Edge(kind=EdgeKind.DOOR, door=DoorSpec(requires=flag_gate("wired")))
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": gated_door}),)),
+        triggers=(flag_trigger("lever", "wired"),),
+    )
+    assert "flag_read_no_writer" not in codes(lint_adventure(fixture))
+
+
+def test_a_quest_reward_writer_silences_the_read() -> None:
+    # The writer set includes quests even before their authoring surface
+    # exists — a foreign document's reward-written flag must not lint falsely.
+    gated_door = Edge(kind=EdgeKind.DOOR, door=DoorSpec(requires=flag_gate("earned")))
+    quest = QuestSpec(
+        id="q",
+        name="The quest",
+        objectives=(ObjectiveSpec(id="o", when=TriggerClause(pattern=TownEnteredPattern())),),
+        rewards=(SetFlag(key="earned", value=True),),
+    )
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": gated_door}),)),
+        quests=(quest,),
+    )
+    assert "flag_read_no_writer" not in codes(lint_adventure(fixture))
+
+
+def test_the_match_is_key_level_and_value_blind() -> None:
+    # The gate wants True but the writer writes "open": still silent — a
+    # value mismatch is a different and rarer mistake, and strict-typed
+    # matching across an open domain invites false positives.
+    gated_door = Edge(kind=EdgeKind.DOOR, door=DoorSpec(requires=flag_gate("wired", value=True)))
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": gated_door}),)),
+        triggers=(
+            TriggerSpec(id="lever", when=TownEnteredPattern(), consequences=(SetFlag(key="wired", value="open"),)),
+        ),
+    )
+    assert "flag_read_no_writer" not in codes(lint_adventure(fixture))
+
+
+def test_quest_owned_readers_are_visible_at_address_none() -> None:
+    quest = QuestSpec(
+        id="q",
+        name="The quest",
+        activation=TriggerClause(pattern=FlagSetPattern(key="unwritten")),
+        objectives=(
+            ObjectiveSpec(
+                id="o",
+                when=TriggerClause(
+                    pattern=TownEnteredPattern(), conditions=(FlagEqualsCondition(key="unwritten", value=1),)
+                ),
+            ),
+        ),
+    )
+    findings = [
+        finding for finding in lint_adventure(authored(quests=(quest,))) if finding.code == "flag_read_no_writer"
+    ]
+    assert len(findings) == 2
+    assert all(finding.address is None for finding in findings)
+
+
+def test_trigger_cycle_yields_one_finding_per_loop() -> None:
+    # a → b → a: one row, members in document order, addressed to the first.
+    a = TriggerSpec(id="a", when=FlagSetPattern(key="k-b"), consequences=(SetFlag(key="k-a", value=True),))
+    b = TriggerSpec(id="b", when=FlagSetPattern(key="k-a"), consequences=(SetFlag(key="k-b", value=True),))
+    findings = [finding for finding in lint_adventure(authored(triggers=(a, b))) if finding.code == "trigger_cycle"]
+    assert len(findings) == 1
+    assert findings[0].address == "trigger:a"
+    assert "'a', 'b'" in findings[0].message
+    assert findings[0].severity == "warning"
+
+
+def test_a_three_trigger_loop_is_one_row_not_three() -> None:
+    a = TriggerSpec(id="a", when=FlagSetPattern(key="k-c"), consequences=(SetFlag(key="k-a", value=True),))
+    b = TriggerSpec(id="b", when=FlagSetPattern(key="k-a"), consequences=(SetFlag(key="k-b", value=True),))
+    c = TriggerSpec(id="c", when=FlagSetPattern(key="k-b"), consequences=(SetFlag(key="k-c", value=True),))
+    findings = [finding for finding in lint_adventure(authored(triggers=(a, b, c))) if finding.code == "trigger_cycle"]
+    assert len(findings) == 1
+    assert findings[0].address == "trigger:a"
+
+
+def test_a_self_loop_is_a_cycle() -> None:
+    selfloop = TriggerSpec(id="ouro", when=FlagSetPattern(key="k"), consequences=(SetFlag(key="k", value=1),))
+    findings = [
+        finding for finding in lint_adventure(authored(triggers=(selfloop,))) if finding.code == "trigger_cycle"
+    ]
+    assert len(findings) == 1
+    assert findings[0].address == "trigger:ouro"
+
+
+def test_a_value_mismatched_edge_does_not_link() -> None:
+    # flag_values_equal is strict: a written 1 never satisfies an authored
+    # True, so the loop never closes.
+    a = TriggerSpec(id="a", when=FlagSetPattern(key="k-b", value=True), consequences=(SetFlag(key="k-a", value=1),))
+    b = TriggerSpec(id="b", when=FlagSetPattern(key="k-a", value=True), consequences=(SetFlag(key="k-b", value=True),))
+    assert "trigger_cycle" not in codes(lint_adventure(authored(triggers=(a, b))))
+
+
+def test_an_any_value_pattern_links_any_write() -> None:
+    a = TriggerSpec(id="a", when=FlagSetPattern(key="k-b"), consequences=(SetFlag(key="k-a", value="anything"),))
+    b = TriggerSpec(id="b", when=FlagSetPattern(key="k-a"), consequences=(SetFlag(key="k-b", value=42),))
+    assert "trigger_cycle" in codes(lint_adventure(authored(triggers=(a, b))))
+
+
+def test_a_chain_without_a_loop_is_silent() -> None:
+    a = TriggerSpec(id="a", when=TownEnteredPattern(), consequences=(SetFlag(key="k-a", value=True),))
+    b = TriggerSpec(id="b", when=FlagSetPattern(key="k-a"), consequences=(SetFlag(key="k-b", value=True),))
+    assert "trigger_cycle" not in codes(lint_adventure(authored(triggers=(a, b))))
+
+
+def spawn_trigger(area_id: str) -> TriggerSpec:
+    return TriggerSpec(
+        id="ambush",
+        when=AreaEnteredPattern(dungeon_id="d", level_number=1, area_id=area_id),
+        consequences=(SpawnMonsters(template_id="orc", count_fixed=2, distance_feet=30),),
+    )
+
+
+def test_trigger_spawn_collision_names_the_area() -> None:
+    stocked = AreaSpec(
+        id="1",
+        cells=((1, 1),),
+        encounter=KeyedEncounter(monsters=(KeyedMonster(template_id="orc", count_fixed=1),)),
+    )
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(areas=(stocked,)),)),
+        triggers=(spawn_trigger("1"),),
+    )
+    findings = [finding for finding in lint_adventure(fixture) if finding.code == "trigger_spawn_collision"]
+    assert len(findings) == 1
+    assert findings[0].address == "trigger:ambush"
+    assert "area '1'" in findings[0].message
+    assert findings[0].severity == "warning"
+
+
+def test_a_spawn_into_an_encounterless_area_is_silent() -> None:
+    empty = AreaSpec(id="1", cells=((1, 1),))
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(areas=(empty,)),)),
+        triggers=(spawn_trigger("1"),),
+    )
+    assert "trigger_spawn_collision" not in codes(lint_adventure(fixture))
+
+
+def test_a_spawn_into_a_dangling_area_is_validations_territory() -> None:
+    fixture = authored(triggers=(spawn_trigger("ghost"),))
+    assert "trigger_spawn_collision" not in codes(lint_adventure(fixture))
+
+
+def test_the_advisory_groups_follow_area_overlap_in_order() -> None:
+    overlapping = (
+        AreaSpec(id="1", cells=((1, 1),)),
+        AreaSpec(
+            id="2",
+            cells=((1, 1),),
+            encounter=KeyedEncounter(monsters=(KeyedMonster(template_id="orc", count_fixed=1),)),
+        ),
+    )
+    gated_door = Edge(kind=EdgeKind.DOOR, door=DoorSpec(requires=flag_gate("unwritten")))
+    loop = TriggerSpec(id="ouro", when=FlagSetPattern(key="k"), consequences=(SetFlag(key="k", value=1),))
+    spawn = TriggerSpec(
+        id="ambush",
+        when=AreaEnteredPattern(dungeon_id="d", level_number=1, area_id="2"),
+        consequences=(SpawnMonsters(template_id="orc", count_fixed=2, distance_feet=30),),
+    )
+    fixture = authored(
+        DungeonSpec(
+            id="d",
+            levels=(
+                level(
+                    areas=overlapping,
+                    edges={"1,0:west": OPEN, "1,1:north": OPEN, "1,1:west": gated_door},
+                ),
+            ),
+        ),
+        triggers=(loop, spawn),
+    )
+    assert codes(lint_adventure(fixture)) == [
+        "area_overlap",
+        "flag_read_no_writer",
+        "trigger_cycle",
+        "trigger_spawn_collision",
+    ]
 
 
 def test_the_full_pass_stays_trivially_fast() -> None:

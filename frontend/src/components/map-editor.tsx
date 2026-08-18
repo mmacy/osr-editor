@@ -16,6 +16,7 @@ import {
   PaintbrushIcon,
   RouteIcon,
   SquareIcon,
+  ZapIcon,
   ZoomInIcon,
   ZoomOutIcon,
 } from 'lucide-react'
@@ -63,6 +64,14 @@ import {
   paneWidth,
 } from '@/lib/pane-widths'
 import { areaReportFor } from '@/lib/review'
+import {
+  TRIGGER_BLOCKED_MESSAGE,
+  addTriggerOps,
+  areaTriggersFor,
+  levelTriggersFor,
+  seedAreaTrigger,
+  triggerAreaIds,
+} from '@/lib/trigger-builders'
 import { cn } from '@/lib/utils'
 import { parseEdgeKey } from '@/map/edge-key'
 import {
@@ -650,6 +659,37 @@ export function MapEditor({
   const applyMenuEntry = (areaId: string, entry: StockingMenuEntry) => {
     setSelection({ kind: 'area', areaId })
     const target = { dungeonId, levelNumber, areaId }
+    if (entry.card === 'trigger') {
+      // One gesture on the map, deep editing in the panel: add mints a
+      // next-free-id area trigger and lands in the Quests section; edit
+      // navigates to the existing trigger. In forge mode the add routes to
+      // the blocked-op dialog client-side — the server's 422 stays the
+      // authority for any batch that arrives.
+      if (entry.action === 'edit') {
+        onNavigate({ kind: 'quests', triggerId: entry.triggerId })
+        return
+      }
+      if (forgeProject) {
+        projectStore.getState().setBlockedOp({
+          op: 'add_trigger',
+          address: 'triggers',
+          message: TRIGGER_BLOCKED_MESSAGE,
+        })
+        return
+      }
+      let mintedId = ''
+      void projectStore
+        .getState()
+        .commit((current) => {
+          const trigger = seedAreaTrigger(current, dungeonId, levelNumber, areaId)
+          mintedId = trigger.id
+          return addTriggerOps(trigger)
+        })
+        .then((committed) => {
+          if (committed && mintedId) onNavigate({ kind: 'quests', triggerId: mintedId })
+        })
+      return
+    }
     if (entry.action === 'remove') {
       if (entry.card === 'encounter')
         void projectStore.getState().commit(encounterOps(target, null))
@@ -816,6 +856,12 @@ export function MapEditor({
             onClick={() => onNavigate({ kind: 'level', dungeonId, levelNumber: candidate.number })}
           >
             Level {candidate.number}
+            {levelTriggersFor(document, dungeonId, candidate.number).length > 0 && (
+              <ZapIcon
+                aria-label={`Level ${candidate.number} has triggers`}
+                className="ml-1 inline size-3"
+              />
+            )}
           </button>
         ))}
         <Button variant="ghost" size="sm" onClick={() => setDialog('add-level')}>
@@ -1055,6 +1101,7 @@ export function MapEditor({
                     if (area) library.placeArmed(area.id)
                   }}
                   placementAreaId={dropAreaId ?? (library.armed ? (hoverArea?.id ?? null) : null)}
+                  triggerAreaIds={triggerAreaIds(document, dungeonId, levelNumber)}
                 />
                 {/* Hover-only and pointer-transparent: the card never takes a
                   click, and it duplicates what the inspector already offers
@@ -1082,7 +1129,12 @@ export function MapEditor({
             </ContextMenuTrigger>
             <ContextMenuContent aria-label={menuArea ? `Stock area ${menuArea.id}` : undefined}>
               {menuArea &&
-                stockingMenuEntries(menuArea).map((entry) => (
+                stockingMenuEntries(
+                  menuArea,
+                  areaTriggersFor(document, dungeonId, levelNumber, menuArea.id).map(
+                    (trigger) => trigger.id,
+                  ),
+                ).map((entry) => (
                   <ContextMenuItem
                     key={entry.id}
                     variant={entry.action === 'remove' ? 'destructive' : 'default'}
@@ -1207,6 +1259,8 @@ export function MapEditor({
         levelNumber={levelNumber}
         onOpenResize={() => setDialog('resize')}
         onOpenRenumber={() => setDialog('renumber')}
+        forge={forgeProject !== null}
+        onNavigate={onNavigate}
       />
       <ClearLevelContentDialog
         open={dialog === 'clear-content'}

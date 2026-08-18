@@ -1,4 +1,4 @@
-"""The tier-3 structural lint: forge's five graph checks mirrored exactly, plus `area_overlap`.
+"""The tier-3 structural lint: forge's five graph checks mirrored exactly, plus the editor extensions.
 
 The five shared checks mirror `osrforge.check`'s static tier — semantics,
 messages verbatim, severities from forge's producer-pinned table — which is
@@ -32,9 +32,11 @@ Ordering is deterministic and mirrors forge's exactly: findings are grouped by
 check id in the vocabulary's order (`check.py:189`), each check doing its own
 full dungeon/level sweep in document order — `edge_invalid`,
 `area_unreachable`, `orphan_cell` (bounding-box scan, y outer),
-`secret_only_access`, `transition_unpaired` — with `area_overlap`, the editor
-extension, as a sixth group after them. Stable output keeps tests exact and
-the panel steady.
+`secret_only_access`, `transition_unpaired` — with the editor extensions as
+further groups after them: `area_overlap`, then phase 16's advisory class —
+`flag_read_no_writer`, `trigger_cycle`, and `trigger_spawn_collision`, warning
+severity by construction, never escalating, never gating. Stable output keeps
+tests exact and the panel steady.
 """
 
 import re
@@ -43,9 +45,13 @@ from collections.abc import Mapping
 from typing import Literal
 
 from osrlib.crawl.adventure import Adventure
+from osrlib.crawl.commands import ConsequenceCommand, SetFlag, SpawnMonsters, SpawnNpcParty
 from osrlib.crawl.dungeon import Direction, Edge, EdgeKind, LevelSpec, Position, edge_key, step
+from osrlib.crawl.gates import ConditionSpec, FlagEqualsCondition, flag_values_equal
+from osrlib.crawl.quests import TriggerClause
+from osrlib.crawl.triggers import AreaEnteredPattern, FlagSetPattern, TriggerPattern
 
-from osreditor.addresses import area_address, cell_address, level_address
+from osreditor.addresses import area_address, cell_address, edge_address, level_address, trigger_address
 from osreditor.ops import Finding
 
 __all__ = ["SEVERITY", "lint_adventure"]
@@ -57,8 +63,15 @@ SEVERITY: Mapping[str, Literal["error", "warning"]] = {
     "secret_only_access": "warning",
     "transition_unpaired": "warning",
     "area_overlap": "warning",
+    "flag_read_no_writer": "warning",
+    "trigger_cycle": "warning",
+    "trigger_spawn_collision": "warning",
 }
-"""Each check's severity — forge's producer-pinned table (`check.py:62-70`), plus the editor extension."""
+"""Each check's severity — forge's producer-pinned table (`check.py:62-70`), plus the editor extensions.
+
+The last three are phase 16's advisory class: warning severity by
+construction, so they can never escalate and never gate publish.
+"""
 
 _EDGE_KEY_SHAPE = re.compile(r"^(-?[0-9]+),(-?[0-9]+):(north|south|east|west)$")
 """Forge's edge-key shape regex (`check.py:85`): any compass side, signed integers."""
@@ -262,7 +275,215 @@ def lint_adventure(adventure: Adventure) -> tuple[Finding, ...]:
                     )
 
     findings.extend(_area_overlap_findings(adventure))
+    findings.extend(_flag_read_no_writer_findings(adventure))
+    findings.extend(_trigger_cycle_findings(adventure))
+    findings.extend(_trigger_spawn_collision_findings(adventure))
     return tuple(findings)
+
+
+def _flag_writers(adventure: Adventure) -> set[str]:
+    """Every flag key some `SetFlag` writes — trigger consequences *and* quest rewards.
+
+    The writer set includes quests even before their authoring surface exists:
+    a foreign document whose quest reward writes the key a gate reads must not
+    lint falsely.
+    """
+    keys: set[str] = set()
+    for trigger in adventure.triggers:
+        for consequence in trigger.consequences:
+            if isinstance(consequence, SetFlag):
+                keys.add(consequence.key)
+    for quest in adventure.quests:
+        for reward in quest.rewards:
+            if isinstance(reward, SetFlag):
+                keys.add(reward.key)
+    return keys
+
+
+def _read_flag_key(condition: ConditionSpec) -> str | None:
+    return condition.key if isinstance(condition, FlagEqualsCondition) else None
+
+
+def _pattern_flag_key(pattern: TriggerPattern) -> str | None:
+    return pattern.key if isinstance(pattern, FlagSetPattern) else None
+
+
+def _flag_read_no_writer_findings(adventure: Adventure) -> list[Finding]:
+    """Phase 16's first advisory check: a flag read over a key no `SetFlag` writes.
+
+    The match is key-level and value-blind by decision: the spec names the
+    check over keys, a value mismatch is a different and rarer mistake, and
+    strict-typed value matching across an open domain invites false positives.
+    One finding per reading site, addressed to it — the door's edge, the
+    transition's cell, the trigger — except quest-owned readers, which carry
+    `address=None` until phase 17 grows their grammar: visible and honest,
+    never a navigable lie.
+    """
+    writers = _flag_writers(adventure)
+    sites: list[tuple[str, str | None]] = []
+    for dungeon in adventure.dungeons:
+        for level in dungeon.levels:
+            for key, edge in level.edges.items():
+                if edge.door is not None and edge.door.requires is not None:
+                    flag = _read_flag_key(edge.door.requires.condition)
+                    if flag is not None:
+                        sites.append((flag, edge_address(dungeon.id, level.number, key)))
+            for transition in level.transitions:
+                if transition.requires is not None:
+                    flag = _read_flag_key(transition.requires.condition)
+                    if flag is not None:
+                        sites.append((flag, cell_address(dungeon.id, level.number, transition.position)))
+    for trigger in adventure.triggers:
+        flag = _pattern_flag_key(trigger.when)
+        if flag is not None:
+            sites.append((flag, trigger_address(trigger.id)))
+        for condition in trigger.conditions:
+            flag = _read_flag_key(condition)
+            if flag is not None:
+                sites.append((flag, trigger_address(trigger.id)))
+    for quest in adventure.quests:
+        clauses: list[TriggerClause] = []
+        if quest.activation is not None:
+            clauses.append(quest.activation)
+        for objective in quest.objectives:
+            clauses.append(objective.when)
+            if objective.reveal_when is not None:
+                clauses.append(objective.reveal_when)
+        for clause in clauses:
+            flag = _pattern_flag_key(clause.pattern)
+            if flag is not None:
+                sites.append((flag, None))
+            for condition in clause.conditions:
+                flag = _read_flag_key(condition)
+                if flag is not None:
+                    sites.append((flag, None))
+    return [
+        Finding(
+            source="lint",
+            code="flag_read_no_writer",
+            severity=SEVERITY["flag_read_no_writer"],
+            message=f"flag {key!r} is read but never written — no trigger consequence or quest reward sets it",
+            address=address,
+        )
+        for key, address in sites
+        if key not in writers
+    ]
+
+
+def _trigger_cycle_findings(adventure: Adventure) -> list[Finding]:
+    """Phase 16's second advisory check: `SetFlag` feeding `flag_set` back into a loop.
+
+    The graph is triggers alone — quests are not nodes by construction, not
+    merely by scope: quest lifecycle beats fire once, so a path through a
+    quest cannot loop. An edge runs from A to B where A carries a
+    `SetFlag(key, value)` and B's `when` is a `FlagSetPattern` over the same
+    key with a value of `None` (any write) or one that satisfies
+    `flag_values_equal`. Every strongly connected component with a cycle (two
+    or more members, or a self-loop) yields one finding naming its members in
+    document order, addressed to the first member — deduped by member set, so
+    a three-trigger loop is one row, not three. A cycle of once-only triggers
+    self-limits in play and is flagged anyway: circular flag wiring is almost
+    always a mistake, and the check is advisory by construction.
+    """
+    triggers = adventure.triggers
+    edges: dict[int, set[int]] = {}
+    for index, trigger in enumerate(triggers):
+        writes = [consequence for consequence in trigger.consequences if isinstance(consequence, SetFlag)]
+        if not writes:
+            continue
+        targets = {
+            listener_index
+            for listener_index, listener in enumerate(triggers)
+            if isinstance(listener.when, FlagSetPattern)
+            and any(
+                write.key == listener.when.key
+                and (listener.when.value is None or flag_values_equal(write.value, listener.when.value))
+                for write in writes
+            )
+        }
+        if targets:
+            edges[index] = targets
+
+    def reach(start: int) -> set[int]:
+        """Nodes reachable from `start` through at least one edge (so `start` is in it only on a cycle)."""
+        visited: set[int] = set()
+        queue = deque(edges.get(start, ()))
+        while queue:
+            node = queue.popleft()
+            if node in visited:
+                continue
+            visited.add(node)
+            queue.extend(edges.get(node, ()))
+        return visited
+
+    reachable = {index: reach(index) for index in range(len(triggers))}
+    seen: set[frozenset[int]] = set()
+    findings: list[Finding] = []
+    for index in range(len(triggers)):
+        if index not in reachable[index]:
+            continue
+        members = sorted({other for other in reachable[index] if index in reachable[other]} | {index})
+        component = frozenset(members)
+        if component in seen:
+            continue
+        seen.add(component)
+        names = ", ".join(repr(triggers[member].id) for member in members)
+        findings.append(
+            Finding(
+                source="lint",
+                code="trigger_cycle",
+                severity=SEVERITY["trigger_cycle"],
+                message=(
+                    f"flag wiring loops through {names} — the engine truncates the cascade at its "
+                    "depth bound and drops deeper firings as notes"
+                ),
+                address=trigger_address(triggers[members[0]].id),
+            )
+        )
+    return findings
+
+
+def _spawns(consequences: tuple[ConsequenceCommand, ...]) -> bool:
+    return any(isinstance(consequence, SpawnMonsters | SpawnNpcParty) for consequence in consequences)
+
+
+def _trigger_spawn_collision_findings(adventure: Adventure) -> list[Finding]:
+    """Phase 16's third advisory check: a spawn aimed where a keyed encounter already stands open.
+
+    An `area_entered` trigger spawning into an area that carries a keyed
+    encounter loses the race by the engine's own sequence: entering the area
+    opens the keyed encounter, the spawn drops with `encounter_in_progress`,
+    and a once-only trigger's fired-mark still burns — the mark is issued
+    before the consequences run. Only an addressed area that exists and
+    carries an encounter fires the check; a dangling area is validation's
+    territory.
+    """
+    levels = {(dungeon.id, level.number): level for dungeon in adventure.dungeons for level in dungeon.levels}
+    findings: list[Finding] = []
+    for trigger in adventure.triggers:
+        pattern = trigger.when
+        if not isinstance(pattern, AreaEnteredPattern) or not _spawns(trigger.consequences):
+            continue
+        level = levels.get((pattern.dungeon_id, pattern.level_number))
+        if level is None:
+            continue
+        area = next((area for area in level.areas if area.id == pattern.area_id), None)
+        if area is None or area.encounter is None:
+            continue
+        findings.append(
+            Finding(
+                source="lint",
+                code="trigger_spawn_collision",
+                severity=SEVERITY["trigger_spawn_collision"],
+                message=(
+                    f"spawns into area {area.id!r} on {pattern.dungeon_id!r} level {pattern.level_number}, "
+                    "whose keyed encounter opens first — the spawn drops with encounter_in_progress "
+                    "while the fired-mark still burns"
+                ),
+                address=trigger_address(trigger.id),
+            )
+        )
+    return findings
 
 
 def _area_overlap_findings(adventure: Adventure) -> list[Finding]:

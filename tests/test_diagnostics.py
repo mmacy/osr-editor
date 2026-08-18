@@ -11,8 +11,10 @@ from urllib.parse import quote
 
 import pytest
 from osrlib.core.alignment import Alignment
+from osrlib.core.items import Coins
 from osrlib.core.tables import EncounterTable, EncounterTableRow, MonsterEncounterEntry
 from osrlib.crawl.adventure import Adventure, TownSpec, validate_adventure
+from osrlib.crawl.commands import GrantCoins, GrantItem, PlaceParty, SetDoorState, SpawnMonsters
 from osrlib.crawl.dungeon import (
     AreaSpec,
     Direction,
@@ -24,11 +26,21 @@ from osrlib.crawl.dungeon import (
     KeyedEncounter,
     KeyedMonster,
     LevelSpec,
+    PartyLocation,
     TransitionSpec,
     WanderingSpec,
 )
 from osrlib.crawl.gates import GateSpec, HasItemCondition
-from osrlib.crawl.triggers import ItemAcquiredPattern, TriggerSpec
+from osrlib.crawl.quests import ObjectiveSpec, QuestSpec, TriggerClause
+from osrlib.crawl.triggers import (
+    AreaEnteredPattern,
+    DungeonEnteredPattern,
+    ItemAcquiredPattern,
+    LevelEnteredPattern,
+    MonsterDefeatedPattern,
+    TownEnteredPattern,
+    TriggerSpec,
+)
 from osrlib.data import load_equipment, load_monsters
 from osrlib.errors import ContentValidationError
 
@@ -169,13 +181,178 @@ def test_transition_gate_unknown_item_addresses_the_cell() -> None:
     assert finding.address == "dungeon:d/level:1/cell:1,1"
 
 
-def test_trigger_error_strings_land_unclassified_verbatim() -> None:
-    # Trigger- and quest-error strings degrade to validation_unclassified
-    # verbatim rows until phases 16-17 grow their addresses.
-    fixture = adventure(triggers=(TriggerSpec(id="t", when=ItemAcquiredPattern(item_id="ghost")),))
+# --- the thirteen trigger-owned shapes, enumeration-confirmed --------------------
+
+
+def trigger(trigger_id: str = "t", **overrides: object) -> TriggerSpec:
+    values: dict[str, object] = {"id": trigger_id, "when": TownEnteredPattern()}
+    values.update(overrides)
+    return TriggerSpec.model_validate(values)
+
+
+def test_trigger_id_not_unique_addresses_the_trigger() -> None:
+    finding = sole_finding(adventure(triggers=(trigger(), trigger())))
+    assert finding.code == "trigger_id_not_unique"
+    assert finding.message == "trigger 't': id is not unique"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_pattern_unknown_level() -> None:
+    fixture = adventure(triggers=(trigger(when=LevelEnteredPattern(dungeon_id="nowhere", level_number=9)),))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_pattern_unknown_level"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_pattern_unknown_area() -> None:
+    fixture = adventure(triggers=(trigger(when=AreaEnteredPattern(dungeon_id="d", level_number=1, area_id="ghost")),))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_pattern_unknown_area"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_pattern_unknown_dungeon() -> None:
+    fixture = adventure(triggers=(trigger(when=DungeonEnteredPattern(dungeon_id="nowhere")),))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_pattern_unknown_dungeon"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_pattern_unknown_item() -> None:
+    fixture = adventure(triggers=(trigger(when=ItemAcquiredPattern(item_id="ghost")),))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_pattern_unknown_item"
+    assert finding.message == "trigger 't': pattern references unknown item 'ghost'"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_pattern_unknown_monster() -> None:
+    fixture = adventure(triggers=(trigger(when=MonsterDefeatedPattern(template_id="ghost")),))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_pattern_unknown_monster"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_condition_unknown_item() -> None:
+    fixture = adventure(triggers=(trigger(conditions=(HasItemCondition(item_id="ghost"),)),))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_condition_unknown_item"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_selector_violation() -> None:
+    fixture = adventure(triggers=(trigger(consequences=(GrantCoins(character_id="c-1", coins=Coins(gp=1)),)),))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_selector_violation"
+    assert finding.message == (
+        "trigger 't': consequence 0 names character 'c-1'; an authored consequence addresses '@party' or '@first'"
+    )
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_consequence_unknown_item() -> None:
+    fixture = adventure(triggers=(trigger(consequences=(GrantItem(character_id="@party", item_id="ghost"),)),))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_consequence_unknown_item"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_consequence_unknown_monster() -> None:
+    fixture = adventure(
+        triggers=(trigger(consequences=(SpawnMonsters(template_id="ghost", count_fixed=1, distance_feet=30),)),)
+    )
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_consequence_unknown_monster"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_consequence_unknown_level() -> None:
+    fixture = adventure(
+        triggers=(
+            trigger(
+                consequences=(
+                    SetDoorState(dungeon_id="nowhere", level_number=9, x=0, y=0, direction=Direction.NORTH, open=True),
+                )
+            ),
+        )
+    )
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_consequence_unknown_level"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_consequence_no_door() -> None:
+    fixture = adventure(
+        triggers=(
+            trigger(
+                consequences=(
+                    SetDoorState(dungeon_id="d", level_number=1, x=1, y=1, direction=Direction.NORTH, open=True),
+                )
+            ),
+        )
+    )
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_consequence_no_door"
+    assert finding.message == "trigger 't': consequence 0 names no door at (1, 1) north"
+    assert finding.address == "trigger:t"
+
+
+def test_trigger_consequence_out_of_bounds() -> None:
+    placement = PlaceParty(
+        location=PartyLocation(kind="dungeon", dungeon_id="d", level_number=1, position=(9, 9), facing=Direction.NORTH)
+    )
+    fixture = adventure(triggers=(trigger(consequences=(placement,)),))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_consequence_out_of_bounds"
+    assert finding.address == "trigger:t"
+
+
+def test_a_confirmed_shape_with_an_unconfirmed_id_degrades_to_the_triggers_scope() -> None:
+    # The line is parsed against a document without the trigger: the shape
+    # still matches whole-line, the owner confirms against nothing, and the
+    # address degrades to the bare `triggers` scope — always true, never a lie.
+    fixture = adventure(triggers=(trigger(when=ItemAcquiredPattern(item_id="ghost")),))
+    with pytest.raises(ContentValidationError) as excinfo:
+        validate_adventure(fixture, load_monsters(), load_equipment())
+    findings = parse_validation_error(str(excinfo.value), adventure())
+    assert [finding.code for finding in findings] == ["trigger_pattern_unknown_item"]
+    assert findings[0].address == "triggers"
+
+
+def test_a_hostile_trigger_id_still_classifies_by_enumeration() -> None:
+    # An id embedding another shape's rendered text cannot defeat the
+    # resolver: the true id renders its own prefix exactly, and the
+    # uniqueness tail matches the true remainder.
+    hostile = "x': pattern references unknown item 'g"
+    fixture = adventure(triggers=(trigger(hostile), trigger(hostile)))
+    finding = sole_finding(fixture)
+    assert finding.code == "trigger_id_not_unique"
+    assert finding.address == f"trigger:{quote(hostile, safe='')}"
+
+
+def test_a_dungeon_id_opening_with_trigger_text_keeps_its_true_shape() -> None:
+    # A dungeon id opening with "trigger '…'" renders owner-scoped lines that
+    # look trigger-owned; the owner-confirmed classifiers run first and claim
+    # the line by enumeration.
+    hostile = "trigger 'ghost'"
+    finding = sole_finding(adventure(DungeonSpec(id=hostile, levels=(level(entrance=(9, 9)),))))
+    assert finding.code == "entrance_out_of_bounds"
+    assert finding.address == f"dungeon:{quote(hostile, safe='')}/level:1"
+
+
+def test_quest_error_strings_still_land_unclassified_verbatim() -> None:
+    # Quest-owned lines have their own grammar (`quest {id!r}`), which no
+    # start-anchored trigger classifier matches — they stay verbatim rows
+    # until phase 17 grows their grammar.
+    quest = QuestSpec(
+        id="q",
+        name="The quest",
+        objectives=(ObjectiveSpec(id="find", when=TriggerClause(pattern=ItemAcquiredPattern(item_id="ghost"))),),
+    )
+    fixture = adventure(quests=(quest,))
     finding = sole_finding(fixture)
     assert finding.code == "validation_unclassified"
-    assert finding.message == "trigger 't': pattern references unknown item 'ghost'"
+    assert finding.message == "quest 'q' objective 'find': pattern references unknown item 'ghost'"
     assert finding.address is None
 
 

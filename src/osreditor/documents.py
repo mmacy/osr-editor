@@ -78,6 +78,7 @@ from osreditor.addresses import (
     item_address,
     level_address,
     monster_address,
+    trigger_address,
 )
 from osreditor.aids import (
     AidsStockRequest,
@@ -109,10 +110,12 @@ from osreditor.ops import (
     AddLevel,
     AddMonsterTemplate,
     AddTransition,
+    AddTrigger,
     AnyEditOp,
     CreateArea,
     Diagnostics,
     ForgeState,
+    MoveTrigger,
     OpBatch,
     OpBatchResult,
     RemoveArea,
@@ -122,6 +125,7 @@ from osreditor.ops import (
     RemoveLevel,
     RemoveMonsterTemplate,
     RemoveTransition,
+    RemoveTrigger,
     RenameDungeon,
     RenumberLevel,
     ResizeLevel,
@@ -139,6 +143,7 @@ from osreditor.ops import (
     SetTownField,
     SetTrap,
     SetTreasure,
+    SetTrigger,
     SetWandering,
     SubtreeChange,
 )
@@ -1105,7 +1110,7 @@ def _snapshot_pair(entry: HistoryEntry) -> tuple[bytes, tuple[str, ...]]:
 def _remap_rules(op: AnyEditOp) -> list[tuple[str, str]]:
     """The address-prefix remaps a re-keying op implies for the sidecar's addressed maps.
 
-    The five re-keying ops are all native-mode ops (forge blocks every one),
+    The six re-keying ops are all native-mode ops (forge blocks every one),
     so the cascade never coincides with a forge commit.
     """
     if isinstance(op, RenameDungeon):
@@ -1114,6 +1119,8 @@ def _remap_rules(op: AnyEditOp) -> list[tuple[str, str]]:
         return [(monster_address(op.template_id), monster_address(op.template.id))]
     if isinstance(op, SetItemTemplate) and op.template.id != op.item_id:
         return [(item_address(op.item_id), item_address(op.template.id))]
+    if isinstance(op, SetTrigger) and op.trigger.id != op.trigger_id:
+        return [(trigger_address(op.trigger_id), trigger_address(op.trigger.id))]
     if isinstance(op, RenumberLevel):
         return [
             (level_address(op.dungeon_id, op.old_number), level_address(op.dungeon_id, op.new_number)),
@@ -1162,6 +1169,14 @@ def _apply_op(adventure: Adventure, op: AnyEditOp, forge_mode: bool = False) -> 
         return _apply_set_item_template(adventure, op)
     if isinstance(op, RemoveItemTemplate):
         return _apply_remove_item_template(adventure, op)
+    if isinstance(op, AddTrigger):
+        return _apply_add_trigger(adventure, op)
+    if isinstance(op, SetTrigger):
+        return _apply_set_trigger(adventure, op)
+    if isinstance(op, MoveTrigger):
+        return _apply_move_trigger(adventure, op)
+    if isinstance(op, RemoveTrigger):
+        return _apply_remove_trigger(adventure, op)
     if isinstance(op, SetLevelField):
         return _apply_level_field(adventure, op, op.field, op.value)
     if isinstance(op, SetWandering):
@@ -1346,6 +1361,65 @@ def _apply_remove_item_template(adventure: Adventure, op: RemoveItemTemplate) ->
     index = _resolve_item_template(adventure, op.item_id)
     items = (*adventure.items[:index], *adventure.items[index + 1 :])
     return adventure.model_copy(update={"items": items}), "/items"
+
+
+def _resolve_trigger(adventure: Adventure, trigger_id: str) -> int:
+    """Return the index of the first trigger with `trigger_id` (authored order)."""
+    for index, trigger in enumerate(adventure.triggers):
+        if trigger.id == trigger_id:
+            return index
+    raise OpTargetNotFoundError(f"the document has no trigger {trigger_id!r}")
+
+
+def _require_trigger_id_free(adventure: Adventure, trigger_id: str) -> None:
+    """Reject a trigger id already in `Adventure.triggers` — the `AddTrigger` id rule.
+
+    Strictly smaller than its monster and item siblings: no shipped catalog
+    exists to collide with, and quest ids are a separate namespace that
+    imposes nothing. The invariant is "no op ever *introduces* a collision",
+    so callers run it on new or changed ids only — a foreign document's
+    duplicate ids carry through and stay navigable diagnostics. An empty id
+    needs no check here: `TriggerSpec.id` carries `min_length=1`, so it
+    rejects at request parse.
+    """
+    if any(trigger.id == trigger_id for trigger in adventure.triggers):
+        raise OpInvariantError(f"the document already has a trigger {trigger_id!r}")
+
+
+def _apply_add_trigger(adventure: Adventure, op: AddTrigger) -> tuple[Adventure, str]:
+    _require_trigger_id_free(adventure, op.trigger.id)
+    return adventure.model_copy(update={"triggers": (*adventure.triggers, op.trigger)}), "/triggers"
+
+
+def _apply_set_trigger(adventure: Adventure, op: SetTrigger) -> tuple[Adventure, str]:
+    index = _resolve_trigger(adventure, op.trigger_id)
+    if op.trigger.id != op.trigger_id:
+        # A rename, under AddTrigger's id rule; an unchanged id — duplicated
+        # or not — carries through, so a foreign document's duplicate trigger
+        # stays editable and its finding stays navigable. No document site
+        # references a trigger id, so the rename cascades only into the
+        # sidecar (_remap_rules) and the pointer stays /triggers.
+        _require_trigger_id_free(adventure, op.trigger.id)
+    triggers = (*adventure.triggers[:index], op.trigger, *adventure.triggers[index + 1 :])
+    return adventure.model_copy(update={"triggers": triggers}), "/triggers"
+
+
+def _apply_move_trigger(adventure: Adventure, op: MoveTrigger) -> tuple[Adventure, str]:
+    index = _resolve_trigger(adventure, op.trigger_id)
+    last = len(adventure.triggers) - 1
+    if op.index > last:
+        raise OpInvariantError(
+            f"index {op.index} is out of range — the document's triggers occupy positions 0 through {last}"
+        )
+    rest = [*adventure.triggers[:index], *adventure.triggers[index + 1 :]]
+    rest.insert(op.index, adventure.triggers[index])
+    return adventure.model_copy(update={"triggers": tuple(rest)}), "/triggers"
+
+
+def _apply_remove_trigger(adventure: Adventure, op: RemoveTrigger) -> tuple[Adventure, str]:
+    index = _resolve_trigger(adventure, op.trigger_id)
+    triggers = (*adventure.triggers[:index], *adventure.triggers[index + 1 :])
+    return adventure.model_copy(update={"triggers": triggers}), "/triggers"
 
 
 def _retarget_gate(gate: GateSpec | None, old_id: str, new_id: str) -> GateSpec | None:

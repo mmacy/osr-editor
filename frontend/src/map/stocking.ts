@@ -71,7 +71,9 @@ export function walkAreas(
 
 // One stocking-menu entry: a stable id for tests, the user-facing label, and
 // the card intent the panel consumes. A discriminated union so the roll entry's
-// `stock` card pairs only with `roll`, and every card entry with edit/add/remove.
+// `stock` card pairs only with `roll`, every card entry with edit/add/remove,
+// and the trigger entries with the panel navigation they perform (a trigger's
+// full builder is panel-weight, so no map dialog is invented for it).
 export type StockingMenuEntry =
   | { id: string; label: string; card: 'stock'; action: 'roll' }
   | {
@@ -80,13 +82,22 @@ export type StockingMenuEntry =
       card: 'description' | 'encounter' | 'treasure' | 'trap' | 'features'
       action: 'edit' | 'add' | 'remove'
     }
+  | { id: string; label: string; card: 'trigger'; action: 'add' }
+  | { id: string; label: string; card: 'trigger'; action: 'edit'; triggerId: string }
 
 // The stocking context menu's entries: exactly what the area can hold,
 // reflecting current state — description; encounter, treasure, and trap each
-// as add or edit-plus-remove; add feature. A blank room also offers "Roll SRD
-// stocking" (offered exactly when the area is unstocked, one predicate
-// everywhere), absent rather than disabled on a stocked room (the phase 1 rule).
-export function stockingMenuEntries(area: AreaSpec): StockingMenuEntry[] {
+// as add or edit-plus-remove; add feature; then the trigger entries — "Add
+// trigger" always (one gesture on the map, deep editing in the panel), and
+// one edit row per area_entered trigger already targeting the area, in
+// document order (`areaTriggerIds`).
+// A blank room also offers "Roll SRD stocking" (offered exactly when the
+// area is unstocked, one predicate everywhere), absent rather than disabled
+// on a stocked room (the phase 1 rule).
+export function stockingMenuEntries(
+  area: AreaSpec,
+  areaTriggerIds: readonly string[] = [],
+): StockingMenuEntry[] {
   const entries: StockingMenuEntry[] = [
     { id: 'description', label: 'Edit description', card: 'description', action: 'edit' },
   ]
@@ -122,6 +133,16 @@ export function stockingMenuEntries(area: AreaSpec): StockingMenuEntry[] {
     }
   }
   entries.push({ id: 'add-feature', label: 'Add feature', card: 'features', action: 'add' })
+  entries.push({ id: 'add-trigger', label: 'Add trigger', card: 'trigger', action: 'add' })
+  for (const triggerId of areaTriggerIds) {
+    entries.push({
+      id: `edit-trigger-${triggerId}`,
+      label: `Edit trigger '${triggerId}'`,
+      card: 'trigger',
+      action: 'edit',
+      triggerId,
+    })
+  }
   return entries
 }
 

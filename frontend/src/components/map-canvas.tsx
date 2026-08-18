@@ -43,6 +43,9 @@ export interface MapCanvasProps {
   // The area under an armed hover or an entry drag, highlighted like a drop
   // target (the editor resolves it; the canvas only draws it).
   placementAreaId?: string | null
+  // The area ids any area_entered trigger targets — the trigger glyph's
+  // input (the editor derives it; the canvas only draws it).
+  triggerAreaIds?: ReadonlySet<string>
 }
 
 // The cell tools always want the cell, however close to a border the pointer
@@ -120,6 +123,7 @@ export function MapCanvas(props: MapCanvasProps) {
       gesture: props.gesture,
       dimStocked: props.dimStocked,
       placementAreaId: props.placementAreaId,
+      triggerAreaIds: props.triggerAreaIds,
     })
   })
 
