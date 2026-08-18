@@ -50,6 +50,37 @@
                 "kind": "open",
                 "door": null
               },
+              "2,1:north": {
+                "kind": "open",
+                "door": null
+              },
+              "2,2:north": {
+                "kind": "door",
+                "door": {
+                  "kind": "normal",
+                  "stuck": false,
+                  "locked": false,
+                  "starts_open": false,
+                  "requires": {
+                    "condition": {
+                      "condition_type": "flag_equals",
+                      "key": "mill-caves.wheel-lever",
+                      "value": "pulled"
+                    },
+                    "narrative": {
+                      "refusal": "The portcullis holds fast — somewhere above, machinery waits to be convinced.",
+                      "success": "Chains rattle overhead and the portcullis stands raised; the tail race lies open.",
+                      "fired": "",
+                      "offer": "",
+                      "progress": "",
+                      "completion": "",
+                      "journal": "",
+                      "guidance": "",
+                      "speaker": ""
+                    }
+                  }
+                }
+              },
               "3,0:west": {
                 "kind": "door",
                 "door": {
@@ -286,6 +317,39 @@
                     "C"
                   ],
                   "unguarded": false
+                }
+              },
+              {
+                "id": "6",
+                "name": "The wheel room",
+                "description": "The mill's great wheel lies on its side, half-sunk in silt. A counterweighted lever juts from the hub, worn smooth by hands that were not always hands.",
+                "cells": [
+                  [
+                    2,
+                    1
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": null
+              },
+              {
+                "id": "7",
+                "name": "The tail race",
+                "description": "A brick-lined channel where the spent water once ran, dry now but for a black trickle. Silt banks glitter with what the current dropped.",
+                "cells": [
+                  [
+                    2,
+                    2
+                  ]
+                ],
+                "encounter": null,
+                "features": [],
+                "trap": null,
+                "treasure": {
+                  "letters": [],
+                  "unguarded": true
                 }
               }
             ],
@@ -857,7 +921,38 @@
         "overrides_applied": []
       }
     ],
-    "triggers": [],
+    "triggers": [
+      {
+        "id": "wheel-lever",
+        "when": {
+          "pattern_type": "area_entered",
+          "dungeon_id": "mill-caves",
+          "level_number": 1,
+          "area_id": "6"
+        },
+        "conditions": [],
+        "repeatable": false,
+        "consequences": [
+          {
+            "command_type": "set_flag",
+            "source": null,
+            "key": "mill-caves.wheel-lever",
+            "value": "pulled"
+          }
+        ],
+        "narrative": {
+          "refusal": "",
+          "success": "",
+          "fired": "The lever gives; the counterweight drops and the tail-race portcullis ratchets up.",
+          "offer": "",
+          "progress": "",
+          "completion": "",
+          "journal": "In the wheel room a worn lever moved under our hands, and somewhere east iron rose grinding from its groove.",
+          "guidance": "",
+          "speaker": "The drowned miller"
+        }
+      }
+    ],
     "quests": []
   }
 }

@@ -66,6 +66,8 @@ def test_projection_sections_and_entries_carry_address_ids_in_order() -> None:
         f"{LEVEL_1}/area:1",
         f"{LEVEL_1}/area:2",
         f"{LEVEL_1}/area:3",
+        f"{LEVEL_1}/area:6",
+        f"{LEVEL_1}/area:7",
     ]
     assert [entry.id for entry in pack.sections[1].entries] == [f"{LEVEL_2}/area:4", f"{LEVEL_2}/area:5"]
 

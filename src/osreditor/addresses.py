@@ -12,7 +12,9 @@ addressing) even though no phase 2 finding emits it — `edge_invalid`
 deliberately addresses the level. Phase 4 adds the top-level `monster:<id>`
 segment for bundled monster templates, finer than the bare `monsters` scope
 phase 1 pinned; phase 15 adds `item:<id>` for bundled item templates beside
-it, with the bare `items` scope as its coarse degrade target.
+it, with the bare `items` scope as its coarse degrade target; phase 16 adds
+`trigger:<id>` for authored triggers, with the bare `triggers` scope as its
+degrade target.
 
 Three producers build addresses — the validation parser, the structural lint,
 and the `ResizeLevel` offender list — so the builders live here, in one place.
@@ -31,6 +33,7 @@ __all__ = [
     "item_address",
     "level_address",
     "monster_address",
+    "trigger_address",
 ]
 
 
@@ -68,6 +71,18 @@ def item_address(item_id: str) -> str:
         `item:<id>`.
     """
     return f"item:{encode_value(item_id)}"
+
+
+def trigger_address(trigger_id: str) -> str:
+    """Build an authored-trigger address — a top-level segment kind, phase 16's.
+
+    Args:
+        trigger_id: The trigger id.
+
+    Returns:
+        `trigger:<id>`.
+    """
+    return f"trigger:{encode_value(trigger_id)}"
 
 
 def dungeon_address(dungeon_id: str) -> str:

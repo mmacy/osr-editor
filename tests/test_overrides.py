@@ -17,6 +17,8 @@ DUNGEON = "millstone-warrens"
 
 BESPOKE_ITEM = {"item_type": "gear", "id": "brass-key", "name": "Brass key", "cost_gp": 0}
 
+BESPOKE_TRIGGER = {"id": "t-1", "when": {"pattern_type": "town_entered"}}
+
 BESPOKE_TEMPLATE = {
     "id": "bespoke-1",
     "name": "Bespoke horror",
@@ -533,6 +535,10 @@ BLOCKED_OPS = [
     {"op": "add_item_template", "template": BESPOKE_ITEM},
     {"op": "set_item_template", "item_id": "brass-key", "template": BESPOKE_ITEM},
     {"op": "remove_item_template", "item_id": "brass-key"},
+    {"op": "add_trigger", "trigger": BESPOKE_TRIGGER},
+    {"op": "set_trigger", "trigger_id": "t-1", "trigger": BESPOKE_TRIGGER},
+    {"op": "move_trigger", "trigger_id": "t-1", "index": 0},
+    {"op": "remove_trigger", "trigger_id": "t-1"},
     {"op": "set_level_field", "dungeon_id": DUNGEON, "level_number": 1, "field": "guidance", "value": "…"},
 ]
 
@@ -587,6 +593,21 @@ def test_blocked_item_template_ops_answer_the_item_address(forge_workdir: Path) 
         with pytest.raises(OpUnsupportedForgeError) as excinfo:
             service.apply_batch(project, batch(project, op_data))
         assert excinfo.value.address == "item:brass-key"
+        assert "no authored-layer surface" in str(excinfo.value)
+
+
+def test_blocked_trigger_ops_answer_the_trigger_address(forge_workdir: Path) -> None:
+    service, project = open_forge(forge_workdir)
+    for op_data in (
+        {"op": "add_trigger", "trigger": BESPOKE_TRIGGER},
+        {"op": "set_trigger", "trigger_id": "t-1", "trigger": BESPOKE_TRIGGER},
+        {"op": "move_trigger", "trigger_id": "t-1", "index": 0},
+        {"op": "remove_trigger", "trigger_id": "t-1"},
+    ):
+        with pytest.raises(OpUnsupportedForgeError) as excinfo:
+            service.apply_batch(project, batch(project, op_data))
+        assert excinfo.value.address == "trigger:t-1"
+        assert "triggers have no override kind" in str(excinfo.value)
         assert "no authored-layer surface" in str(excinfo.value)
 
 

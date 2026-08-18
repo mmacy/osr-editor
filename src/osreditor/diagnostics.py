@@ -28,12 +28,15 @@ segments, values percent-encoded (RFC 3986) so arbitrary osrlib ids can never
 make the grammar ambiguous — the builders live in
 [`osreditor.addresses`][osreditor.addresses]. Segments: `town`, `monsters`,
 `monster:<id>` (phase 4's finer bundled-template scope), `items` and
-`item:<id>` (phase 15's bundled-item scopes), `dungeon:<id>`,
+`item:<id>` (phase 15's bundled-item scopes), `triggers` and `trigger:<id>`
+(phase 16's authored-trigger scopes), `dungeon:<id>`,
 `dungeon:<id>/level:<n>`, `dungeon:<id>/level:<n>/area:<id>`, plus the `cell:`
-and `edge:` geometry segments phase 2 added. Trigger- and quest-error strings
-from foreign documents degrade to `validation_unclassified` verbatim rows
-until phases 16-17 grow their addresses — visible, honest, never navigable
-lies.
+and `edge:` geometry segments phase 2 added. Trigger-owned lines classify
+under the enumeration discipline (every one opens `trigger {id!r}: `, and the
+owner id confirms by rendering each of the document's trigger ids exactly as
+osrlib reprs it); quest-error strings degrade to `validation_unclassified`
+verbatim rows until phase 17 grows their grammar — visible, honest, never
+navigable lies.
 
 Every validation finding carries `severity="error"` — `validate_adventure`
 output gates publish, which is what error means here.
@@ -55,6 +58,7 @@ from osreditor.addresses import (
     item_address,
     level_address,
     monster_address,
+    trigger_address,
 )
 from osreditor.lint import lint_adventure
 from osreditor.ops import Diagnostics, Finding
@@ -243,6 +247,78 @@ def _classify_gate_dangling(line: str, adventure: Adventure) -> Finding | None:
     return None
 
 
+# Trigger-owned shapes: the tail each check appends after osrlib's
+# `trigger {id!r}: ` owner prefix (`_validate_trigger` builds the owner, and
+# consequence sites extend it with `consequence {n} `). Ordered most-specific
+# first — the bare `unknown … level \d+` tails are the catchalls for
+# `references unknown {dungeon!r} level {n}` and must come after the shapes
+# whose tails they would also match. Full-matched against the line's
+# remainder; the dangling ids inside the tails are unconfirmable by
+# definition and stay message text — only the owner confirms.
+_TRIGGER_SHAPES: tuple[tuple[str, str], ...] = (
+    ("trigger_id_not_unique", r"id is not unique"),
+    ("trigger_pattern_unknown_area", r"pattern references unknown area .+ on .+ level \d+"),
+    ("trigger_pattern_unknown_dungeon", r"pattern references unknown dungeon .+"),
+    ("trigger_pattern_unknown_item", r"pattern references unknown item .+"),
+    ("trigger_pattern_unknown_monster", r"pattern references unknown monster .+"),
+    ("trigger_pattern_unknown_level", r"pattern references unknown .+ level \d+"),
+    ("trigger_condition_unknown_item", r"condition references unknown item .+"),
+    (
+        "trigger_selector_violation",
+        r"consequence \d+ names character .+; an authored consequence addresses '@party' or '@first'",
+    ),
+    ("trigger_consequence_unknown_item", r"consequence \d+ references unknown item .+"),
+    ("trigger_consequence_unknown_monster", r"consequence \d+ references unknown monster .+"),
+    ("trigger_consequence_unknown_level", r"consequence \d+ references unknown .+ level \d+"),
+    ("trigger_consequence_no_door", rf"consequence \d+ names no door at {_POSITION} (north|east|south|west)"),
+    ("trigger_consequence_out_of_bounds", rf"consequence \d+ places the party out of bounds at {_POSITION}"),
+)
+
+_TRIGGER_TAILS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (code, re.compile(tail)) for code, tail in _TRIGGER_SHAPES
+)
+
+_TRIGGER_GENERIC: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (code, re.compile(rf"trigger .+: {tail}")) for code, tail in _TRIGGER_SHAPES
+)
+
+
+def _classify_trigger_scoped(line: str, adventure: Adventure) -> Finding | None:
+    """Classify a trigger-owned line under the enumeration-confirmation discipline.
+
+    Each of the document's trigger ids is rendered exactly as osrlib reprs it
+    (`trigger {id!r}: `) and the line's remainder full-matched against the
+    thirteen tail shapes. Exactly one confirmed distinct id addresses
+    `trigger:<id>` (duplicate ids render identical prefixes and dedupe — the
+    uniqueness line's own case); a line no id confirms but a whole-line shape
+    still matches degrades to the bare `triggers` scope — always true, never a
+    lie; anything else answers `None` and falls through. Quest-owned lines
+    never arrive here: their owner prefix opens `quest {id!r}`, which a
+    start-anchored `trigger ` render cannot produce.
+    """
+    hits: dict[str, str] = {}
+    for trigger in adventure.triggers:
+        if trigger.id in hits:
+            continue
+        prefix = f"trigger {trigger.id!r}: "
+        if not line.startswith(prefix):
+            continue
+        rest = line[len(prefix) :]
+        for code, tail in _TRIGGER_TAILS:
+            if tail.fullmatch(rest):
+                hits[trigger.id] = code
+                break
+    if len(hits) == 1:
+        trigger_id, code = next(iter(hits.items()))
+        return Finding(
+            source="validation", code=code, severity="error", message=line, address=trigger_address(trigger_id)
+        )
+    for code, shape in _TRIGGER_GENERIC:
+        if shape.fullmatch(line):
+            return Finding(source="validation", code=code, severity="error", message=line, address="triggers")
+    return None
+
+
 def _classify_bundled_item_collision(line: str, adventure: Adventure) -> Finding:
     """Address an item-collision line to `item:<id>` — enumeration-confirmed, degrading to the coarse scope.
 
@@ -271,6 +347,9 @@ def _classify(line: str, adventure: Adventure) -> Finding:
     if finding is not None:
         return finding
     finding = _classify_dungeon_scoped(line, adventure)
+    if finding is not None:
+        return finding
+    finding = _classify_trigger_scoped(line, adventure)
     if finding is not None:
         return finding
     if _BUNDLED_RE.match(line):

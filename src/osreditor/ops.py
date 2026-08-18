@@ -12,9 +12,9 @@ The envelope grows additively. The phase 1 ops and the `AnyEditOp` union landed
 here with the document service, built exactly as osrlib builds `AnyCommand`;
 phase 2 added the geometry and dungeon/level-management vocabulary; phase 3 added
 the content vocabulary — encounters, traps, treasure, and features; phase 4 added
-the bundled monster-template vocabulary; phase 15 adds the bundled item-template
-trio and `SetLevelField`. The `forge` diagnostics tier arrived with forge-backed
-projects in phase 5.
+the bundled monster-template vocabulary; phase 15 added the bundled item-template
+trio and `SetLevelField`; phase 16 adds the trigger quartet. The `forge`
+diagnostics tier arrived with forge-backed projects in phase 5.
 
 The op-level philosophy, continuing phase 1's `travel_turns >= 0` guard:
 **reject what is never intentional and is not a transient editing state**
@@ -44,6 +44,7 @@ from osrlib.crawl.dungeon import (
     TrapSpec,
     WanderingSpec,
 )
+from osrlib.crawl.triggers import TriggerSpec
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from osreditor.sidecar import EditorSidecar
@@ -55,6 +56,7 @@ __all__ = [
     "AddLevel",
     "AddMonsterTemplate",
     "AddTransition",
+    "AddTrigger",
     "AnyEditOp",
     "AreaOp",
     "CreateArea",
@@ -64,6 +66,7 @@ __all__ = [
     "Finding",
     "ForgeState",
     "LevelOp",
+    "MoveTrigger",
     "OpBatch",
     "OpBatchResult",
     "RemoveArea",
@@ -73,6 +76,7 @@ __all__ = [
     "RemoveLevel",
     "RemoveMonsterTemplate",
     "RemoveTransition",
+    "RemoveTrigger",
     "RenameDungeon",
     "RenumberLevel",
     "ResizeLevel",
@@ -90,6 +94,7 @@ __all__ = [
     "SetTownField",
     "SetTrap",
     "SetTreasure",
+    "SetTrigger",
     "SetWandering",
     "SubtreeChange",
 ]
@@ -271,6 +276,79 @@ class RemoveItemTemplate(EditOp):
 
     op: Literal["remove_item_template"] = "remove_item_template"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
     item_id: str
+
+
+class AddTrigger(EditOp):
+    """Add an authored trigger, appended to `Adventure.triggers`.
+
+    Adventure-scoped, the item trio's shape over the whole
+    [`TriggerSpec`][osrlib.crawl.triggers.TriggerSpec]. Appending is the only
+    insertion: authored order is firing order (the interpreter walks the tuple
+    in document order), and a misplaced trigger moves after the fact with
+    [`MoveTrigger`][osreditor.ops.MoveTrigger]. The spec's internal validity —
+    the never-consuming conditions, the no-authored-source rule, the closed
+    nine-command consequence union, each command's own validators — is the
+    model's own, enforced at request parse. Invariant at apply: the id free
+    among the rest of `Adventure.triggers`. No shipped catalog exists to
+    collide with, and quest ids are a separate namespace that imposes nothing;
+    an empty id rejects at parse (`TriggerSpec.id` carries `min_length=1`).
+    """
+
+    op: Literal["add_trigger"] = "add_trigger"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    trigger: TriggerSpec
+
+
+class SetTrigger(EditOp):
+    """Replace one trigger whole; a differing `trigger.id` is a rename.
+
+    Whole-value replacement at the detail editor's commit grain — the
+    [`SetMonsterTemplate`][osreditor.ops.SetMonsterTemplate] reasoning, and the
+    grain that carries consequence order without a reorder op of its own. A
+    rename falls under [`AddTrigger`][osreditor.ops.AddTrigger]'s id rule but
+    cascades nowhere in the document: no document field references a trigger
+    id (fired-marks live in saves, `source` stamps are runtime), so only the
+    sidecar's `trigger:<id>` note key moves and the delta pointer stays
+    `/triggers` even on rename. The uniqueness invariant guards **new or
+    changed ids only**: a foreign document's duplicate ids open, edit, and
+    navigate, resolved first-match in authored order, flagged by the
+    `trigger_id_not_unique` diagnostic, never locked.
+    """
+
+    op: Literal["set_trigger"] = "set_trigger"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    trigger_id: str
+    trigger: TriggerSpec
+
+
+class MoveTrigger(EditOp):
+    """Move one trigger to a new position in `Adventure.triggers`.
+
+    Order is semantics twice over — the interpreter fires matching triggers in
+    document order, each firing's changes visible to later conditions — so
+    reorder is a first-class edit, not a display concern. `index` is the
+    trigger's 0-based position in the reordered list: splice out, insert at
+    `index`. An out-of-range index is rejected as `op_invariant` naming the
+    valid range — the reject-don't-clamp posture `ResizeLevel` set. A
+    same-position move applies as a harmless no-change batch; the UI never
+    posts one (the arrows disable at the ends). First-match among foreign
+    duplicate ids.
+    """
+
+    op: Literal["move_trigger"] = "move_trigger"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    trigger_id: str
+    index: int = Field(ge=0)
+
+
+class RemoveTrigger(EditOp):
+    """Remove one trigger; first-match among foreign duplicate ids.
+
+    Nothing in the document references a trigger id, so removal dangles
+    nothing; the one external consequence — an existing save's fired-mark for
+    the id orphans — is osrlib's own posture (`MarkTriggerFired.trigger_id` is
+    an open domain). The UI's two-step row confirm is the only guard.
+    """
+
+    op: Literal["remove_trigger"] = "remove_trigger"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    trigger_id: str
 
 
 class LevelOp(EditOp):
@@ -679,6 +757,10 @@ AnyEditOp = Annotated[
     | AddItemTemplate
     | SetItemTemplate
     | RemoveItemTemplate
+    | AddTrigger
+    | SetTrigger
+    | MoveTrigger
+    | RemoveTrigger
     | SetLevelField
     | SetWandering
     | SetEdges

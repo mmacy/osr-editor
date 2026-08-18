@@ -26,13 +26,16 @@ from osreditor.ops import (
     AddItemTemplate,
     AddMonsterTemplate,
     AddTransition,
+    AddTrigger,
     Diagnostics,
     Finding,
+    MoveTrigger,
     OpBatch,
     OpBatchResult,
     RemoveFeature,
     RemoveItemTemplate,
     RemoveMonsterTemplate,
+    RemoveTrigger,
     SetAdventureField,
     SetEdges,
     SetEncounter,
@@ -43,6 +46,7 @@ from osreditor.ops import (
     SetTownField,
     SetTrap,
     SetTreasure,
+    SetTrigger,
     SetWandering,
     SubtreeChange,
 )
@@ -68,6 +72,8 @@ TEMPLATE = MonsterTemplate.model_validate(
 )
 
 ITEM_TEMPLATE = GearTemplate(id="brass-key", name="Brass key", cost_gp=0)
+
+TRIGGER_SPEC = {"id": "t-1", "when": {"pattern_type": "town_entered"}}
 
 GATED_DOOR = Edge(
     kind=EdgeKind.DOOR,
@@ -211,6 +217,10 @@ def test_op_batch_discriminates_on_op() -> None:
                     "template": ITEM_TEMPLATE.model_dump(mode="json"),
                 },
                 {"op": "remove_item_template", "item_id": "brass-key"},
+                {"op": "add_trigger", "trigger": TRIGGER_SPEC},
+                {"op": "set_trigger", "trigger_id": "t-1", "trigger": TRIGGER_SPEC},
+                {"op": "move_trigger", "trigger_id": "t-1", "index": 0},
+                {"op": "remove_trigger", "trigger_id": "t-1"},
                 {"op": "set_level_field", "dungeon_id": "d", "level_number": 1, "field": "guidance", "value": "…"},
             ],
         }
@@ -231,6 +241,10 @@ def test_op_batch_discriminates_on_op() -> None:
         AddItemTemplate,
         SetItemTemplate,
         RemoveItemTemplate,
+        AddTrigger,
+        SetTrigger,
+        MoveTrigger,
+        RemoveTrigger,
         SetLevelField,
     ]
 
@@ -375,6 +389,10 @@ def test_finding_rejects_unknown_severity() -> None:
         AddItemTemplate(template=ITEM_TEMPLATE),
         SetItemTemplate(item_id="brass-key", template=ITEM_TEMPLATE),
         RemoveItemTemplate(item_id="brass-key"),
+        AddTrigger.model_validate({"op": "add_trigger", "trigger": TRIGGER_SPEC}),
+        SetTrigger.model_validate({"op": "set_trigger", "trigger_id": "t-1", "trigger": TRIGGER_SPEC}),
+        MoveTrigger(trigger_id="t-1", index=0),
+        RemoveTrigger(trigger_id="t-1"),
         SetLevelField(dungeon_id="d", level_number=1, field="guidance", value="X"),
         OpBatch(revision="rev-1", ops=(SetAdventureField(field="name", value="X"),)),
         FINDING,

@@ -5,7 +5,9 @@ around the stamped document, run forge's own `check()`, and assert the five
 shared static checks agree with `lint_adventure` — ids, severities, messages,
 and locations under the address mapping. The citations phase 2 pinned stop
 being the contract; this running comparison becomes it. Delve findings are
-excluded (no editor counterpart), as is `area_overlap` (the editor extension).
+excluded (no editor counterpart), as are the editor extensions: `area_overlap`
+and phase 16's advisory group — `flag_read_no_writer`, `trigger_cycle`, and
+`trigger_spawn_collision`.
 """
 
 from pathlib import Path
