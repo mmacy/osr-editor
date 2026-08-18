@@ -11,7 +11,7 @@ Right-click an area cell for the stocking menu: description, encounter, treasure
 
 ## Reading the map
 
-Key numbers render hollow until an area is stocked (a description or any content) and carry glyphs for encounters, traps, and treasure. Hovering shows the area's one-line contents in module notation. `F` dims stocked areas so the blanks stand out, and `[` / `]` walk areas in key order — with the filter on, the walk visits unstocked areas only.
+Key numbers render hollow until an area is stocked (a description or any content), and the editor marks encounters, traps, and treasure with glyphs beside the number. Hovering shows the area's one-line contents in module notation. `F` dims stocked areas so the blanks stand out, and `[` / `]` walk areas in key order — with the filter on, the walk visits unstocked areas only.
 
 ![Key numbers on the map, hollow where an area is unstocked and glyphed where it holds content](../assets/screenshots/map-key-glyphs-light.png#only-light)
 ![Key numbers on the map, hollow where an area is unstocked and glyphed where it holds content](../assets/screenshots/map-key-glyphs-dark.png#only-dark)
