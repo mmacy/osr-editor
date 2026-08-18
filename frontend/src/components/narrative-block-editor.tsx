@@ -73,8 +73,8 @@ export function NarrativeBlockEditor({
       {unreadBeats.map((beat) => (
         <div key={beat} className="flex flex-col items-start gap-1.5" aria-label="Unread beat">
           <p className="text-xs text-amber-700 dark:text-amber-400">
-            This block carries <span className="font-mono">{beat}</span> text, which this carrier
-            never reads: <span className="font-serif">“{current[beat]}”</span>
+            This block holds <span className="font-mono">{beat}</span> text, which the engine never
+            reads for this carrier: <span className="font-serif">“{current[beat]}”</span>
           </p>
           <Button variant="outline" size="sm" onClick={() => commitField(beat, '')}>
             Clear the {BEAT_LABELS[beat].toLowerCase()} text

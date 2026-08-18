@@ -301,7 +301,7 @@ test('the quest list renders document order — numbered, never sorted, with the
   expect(rows[1]).toHaveTextContent('standing charge')
   expect(rows[1]).toHaveTextContent('1 objective · 1 reward')
   expect(
-    screen.getByText('Quests seed and advance in this order', { exact: false }),
+    screen.getByText('The interpreter seeds and walks quests in this order', { exact: false }),
   ).toBeInTheDocument()
 })
 
@@ -372,7 +372,7 @@ test('quest remove is a two-step confirm posting remove_quest', async () => {
   const row = screen.getByTestId('quest-row-qa')
   fireEvent.click(within(row).getByRole('button', { name: 'Remove' }))
   expect(row).toHaveTextContent('removal dangles nothing')
-  expect(row).toHaveTextContent('orphaned lifecycle state')
+  expect(row).toHaveTextContent('holds its lifecycle state keeps it, orphaned')
   fireEvent.click(within(row).getByRole('button', { name: 'Confirm remove' }))
   await waitFor(() => expect(postOps).toHaveBeenCalledTimes(1))
   const [, , ops] = postOps.mock.calls[0]
@@ -392,7 +392,7 @@ test('the standing charge states itself and Add activation opens a clause builde
   renderSection(projectWithQuests([quest('qa')]))
   const activation = screen.getByLabelText('Activation')
   expect(activation).toHaveTextContent('Standing charge')
-  expect(activation).toHaveTextContent('the offer beat never journals')
+  expect(activation).toHaveTextContent('the engine never journals the offer text')
   fireEvent.click(within(activation).getByRole('button', { name: 'Add activation' }))
   fireEvent.change(within(activation).getByLabelText('Fires'), {
     target: { value: 'town_entered' },
@@ -463,7 +463,7 @@ test('a hidden objective without a reveal clause names the surfaces-by-completin
   expect(within(reveal).getByRole('button', { name: 'Add reveal clause' })).toBeInTheDocument()
 })
 
-test('the last objective never removes, with the reason named', () => {
+test('the editor never removes the last objective, with the reason named', () => {
   renderSection(projectWithQuests([quest('qa')]))
   expect(screen.getByRole('button', { name: 'Remove objective o-1' })).toBeDisabled()
   expect(screen.getByText(/objective-less quest would be born complete/)).toBeInTheDocument()

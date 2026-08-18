@@ -1,6 +1,6 @@
 # Triggers
 
-The **Quests** section, beside Items in the section list, is where your module's wiring lives: the lever that raises a portcullis, the boss whose defeat unlocks the shrine, the homecoming beat that fires when the party walks back into town. The section carries two lists — the triggers this page covers, and the [quests](quests.md) built from the same clause vocabulary.
+The **Quests** section, beside Items in the section list, is where your module's wiring lives: the lever that raises a portcullis, the boss whose defeat unlocks the shrine, the homecoming beat that fires when the party walks back into town. The section holds two lists — the triggers this page covers, and the [quests](quests.md) built from the same clause vocabulary.
 
 A trigger is an authored binding with three parts: a **pattern** naming the moment it fires on, optional **conditions** that must all hold at that moment, and **consequences** — the referee commands the engine issues when it fires. A trigger with no consequences is a perfectly normal shape: its whole job can be its journal line.
 
@@ -51,10 +51,10 @@ The three commands that give something to a character — grant an item, grant c
 
 A trigger's narrative block holds two beats, for two audiences:
 
-- **Fired** is the referee's line about the wiring — the engine carries it at referee visibility, table talk about what the machinery did. Players don't see it.
+- **Fired** is the referee's line about the wiring — the engine holds it at referee visibility, table talk about what the machinery did. Players don't see it.
 - **Journal** is the players' line about the same moment, written into the party's journal in order of discovery.
 
-Speaker and guidance ride along as on every narrative block: an attribution a renderer may credit the line to, and steering for a narrating front end that is never shown to players verbatim.
+Speaker and guidance are on every narrative block, as always: an attribution a renderer may credit the line to, and steering for a narrating front end that is never shown to players verbatim.
 
 ## Once-only, and what lives in saves
 
@@ -63,7 +63,7 @@ A trigger is **once-only by default**: it fires the first time its pattern match
 Two save-side notes worth knowing:
 
 - The fired mark is written *before* the consequences run. If a consequence is dropped in play — a spawn refused because an encounter is already open — a once-only trigger's one firing is still spent.
-- Renaming a trigger orphans any fired mark an existing save recorded under the old id: the renamed trigger will fire again for that save. Fresh sessions are unaffected.
+- Renaming a trigger orphans any fired mark recorded in an existing save under the old id: the renamed trigger will fire again for that save. Fresh sessions are unaffected.
 
 ## Placing triggers from the map
 

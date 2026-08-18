@@ -196,8 +196,8 @@ export function QuestsSection({
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
-            Quests seed and advance in this order — the interpreter walks them after the triggers,
-            and the player's quest log lists them as authored.
+            The interpreter seeds and walks quests in this order, after the triggers, and the
+            player's quest log lists them as authored.
           </p>
         </div>
         {quests.length === 0 ? (
@@ -293,7 +293,7 @@ function ForgeQuestsBody() {
     <section aria-label="Quests" className="flex max-w-xl flex-col gap-3">
       <h2 className="font-serif text-xl font-semibold">Quests</h2>
       <p className="text-sm">
-        A forge-assembled adventure carries no triggers or quests: the overrides vocabulary has no
+        A forge-assembled adventure holds no triggers or quests: the overrides vocabulary has no
         authored-layer surface, so there is nothing here to review and nothing the editor could
         write back to <span className="font-mono">overrides.yaml</span>. The gap is osr-forge's
         recorded decision (
@@ -411,7 +411,7 @@ function TriggerRow({
       {confirming && (
         <p className="text-muted-foreground px-2 pb-2 text-xs">
           Nothing in the document references a trigger, so removal dangles nothing. A save that
-          already marked it fired keeps the orphaned mark.
+          already holds its fired mark keeps it, orphaned.
         </p>
       )}
     </li>
@@ -508,7 +508,7 @@ function QuestRow({
       {confirming && (
         <p className="text-muted-foreground px-2 pb-2 text-xs">
           Nothing in the document references a quest, so removal dangles nothing. A save that
-          already tracks it keeps the orphaned lifecycle state.
+          already holds its lifecycle state keeps it, orphaned.
         </p>
       )}
     </li>
@@ -680,9 +680,9 @@ function CreateQuestBody({
       <DialogHeader>
         <DialogTitle>New quest</DialogTitle>
         <DialogDescription>
-          A quest needs a name and one objective to exist; the objective completes on the pattern
-          you pick here. Everything else — activation, more objectives, rewards — is detail-editor
-          work.
+          A quest must have a name and one objective to exist; the objective completes on the
+          pattern you pick here. Everything else — activation, more objectives, rewards — is
+          detail-editor work.
         </DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-3">
@@ -828,7 +828,7 @@ function TriggerDetail({
         idPrefix="trigger-consequence"
         noun="consequence"
         title="Consequences"
-        help="Consequences execute in this order when the trigger fires. Empty is a normal shape — a trigger whose whole job is its journal beat."
+        help="The engine executes consequences in this order when the trigger fires. Empty is a normal shape — a trigger whose whole job is its journal beat."
         onUpdate={(build) =>
           update((committed) => {
             const consequences = build(committed.consequences)
@@ -937,7 +937,7 @@ function QuestDetail({
         idPrefix="quest-reward"
         noun="reward"
         title="Rewards"
-        help="Rewards issue in this order when the quest completes. On a concluding quest the session is already victorious when they run: spawns and placements drop, while grants, awards, and flags land."
+        help="The engine issues rewards in this order when the quest completes. On a concluding quest the session is already victorious by then: spawns and placements drop, while grants, awards, and flags land."
         onUpdate={(build) =>
           update((committed) => {
             const rewards = build(committed.rewards)
@@ -967,8 +967,8 @@ function QuestDetail({
           </select>
         </div>
         <p className="text-muted-foreground text-xs">
-          Under "any", the quest completes on the first authored objective whose clause lands in the
-          walk — authored order decides which.
+          Under "any", the first authored objective whose clause lands in the walk completes the
+          quest.
         </p>
       </div>
 
@@ -987,9 +987,9 @@ function QuestDetail({
         <span>
           Concludes the adventure
           <span className="text-muted-foreground block text-xs">
-            Completing this quest ends the adventure in victory, and the completion beat journals
-            with it. Author one concluding quest — osrlib caps nothing, and a second one completing
-            merely journals.
+            Completing this quest ends the adventure in victory, and the engine journals the
+            completion text with it. Author one concluding quest — osrlib caps nothing, and a second
+            one completing merely adds a journal line.
           </span>
         </span>
       </label>
@@ -997,8 +997,8 @@ function QuestDetail({
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-medium">Narrative</h3>
         <p className="text-muted-foreground text-xs">
-          Offer journals at activation, completion at quest completion — each beat journals as
-          itself, riding its lifecycle event, so no separate journal voice exists.
+          The engine journals the offer at activation and the completion at quest completion — each
+          beat as itself, on its own lifecycle event — so no separate journal voice exists.
         </p>
         <NarrativeBlockEditor
           block={quest.narrative ?? null}
@@ -1042,12 +1042,14 @@ function ActivationCard({
       {activation === null && !drafting ? (
         <p className="text-muted-foreground text-xs">
           Standing charge — the quest is active from the session's first moment. With no activation
-          moment the offer beat never journals, but the quest still shows in the player's quest log.
+          moment the engine never journals the offer text, but the quest still shows in the player's
+          quest log.
         </p>
       ) : (
         <>
           <p className="text-muted-foreground text-xs">
-            The quest activates when this clause matches; the offer beat journals at that moment.
+            The quest activates when this clause matches; the engine journals the offer text at that
+            moment.
           </p>
           <ClauseBuilder
             clause={activation}
@@ -1319,8 +1321,8 @@ function ObjectiveCard({
       </div>
       {count <= 1 && (
         <p className="text-muted-foreground text-xs">
-          The last objective never removes — an objective-less quest would be born complete, and
-          osrlib rejects it.
+          The editor never removes the last objective — an objective-less quest would be born
+          complete, and osrlib rejects it.
         </p>
       )}
       <div className="flex items-end gap-3">
@@ -1335,7 +1337,7 @@ function ObjectiveCard({
       </div>
       {idError && <p className="text-destructive text-xs">{idError}</p>}
       <p className="text-muted-foreground text-xs">
-        The name is the quest log's label; empty falls back to the id everywhere a label shows.
+        The name is the quest log's label; leave it empty and the id shows everywhere a label does.
       </p>
       <div className="flex flex-col gap-2">
         <h4 className="text-sm font-medium">Completes</h4>
@@ -1387,8 +1389,8 @@ function ObjectiveCard({
           </div>
           {objective.reveal_when == null && !revealDrafting ? (
             <p className="text-muted-foreground text-xs">
-              No reveal clause — the normal shape: the objective surfaces by completing. The offer
-              beat is read only at reveal.
+              No reveal clause — the normal shape: the objective surfaces by completing. The engine
+              reads the offer beat only at the reveal.
             </p>
           ) : (
             <>
@@ -1424,8 +1426,8 @@ function ObjectiveCard({
       <div className="flex flex-col gap-2">
         <h4 className="text-sm font-medium">Narrative</h4>
         <p className="text-muted-foreground text-xs">
-          Offer is read when the objective reveals, progress when it completes — each journals as
-          itself. A born-visible objective's offer is read at no moment.
+          The engine reads the offer at the reveal and the progress at completion, and journals each
+          as itself. A born-visible objective's offer is read at no moment.
         </p>
         <NarrativeBlockEditor
           block={objective.narrative ?? null}
