@@ -26,7 +26,7 @@ Both tools produce keyed areas. The difference is what else they do.
 
 Because **Area** never opens edges, painting cells into a room does not make them reachable — the wall between the chamber and its new alcove stays a wall until you open it with **Wall/door** or run a **Corridor** through. And because **Area** unions into the *selected* area, select the room first: paint with nothing selected and you get a second key instead.
 
-Neither tool takes cells away from another area, so painting over a neighbour's floor leaves both areas claiming it. That is legal while editing, and the lint flags it as `area_overlap`.
+Neither tool takes cells away from another area, so painting over a neighbour's floor leaves both the neighbour and the area you painted into claiming it. That is legal while editing, and the lint flags it as `area_overlap`.
 
 ## Moving around the map
 
@@ -36,7 +36,7 @@ Two view controls sit beside the zoom buttons and do different things. **Reset z
 
 Zoom is proportional to the gesture and **accelerates as you push it**: the first moments of a pinch or a wheel spin stay fine-grained for framing a room, and holding the gesture on ramps the rate up to cross scales quickly. Pause and it returns to fine-grained, so precision is always a fraction of a second away. Nothing coasts after you stop.
 
-A mouse wheel and a trackpad two-finger drag reach the browser as the same event, so the editor tells them apart by the shape of the scroll. If yours is ever read wrong, **ctrl-scroll** (or **cmd-scroll**) always zooms.
+A mouse wheel and a trackpad two-finger drag reach the browser as the same event, so the editor tells them apart by the shape of the scroll. If your gesture is ever read wrong, **ctrl-scroll** (or **cmd-scroll**) always zooms.
 
 ## Sizing the panels
 
@@ -81,7 +81,7 @@ On the map, the editor marks a gated door with a small solid diamond beside the 
 ![A gated door on the map: the solid gate diamond beside the door leaf](../assets/screenshots/gate-badges-light.png#only-light)
 ![A gated door on the map: the solid gate diamond beside the door leaf](../assets/screenshots/gate-badges-dark.png#only-dark)
 
-Reachability lint stays gate-blind by decision: a room behind a gated door is reachable — the gate is satisfiable in play, like a stuck or locked door — so it is never flagged `area_unreachable`.
+Reachability lint stays gate-blind by decision: a room behind a gated door is reachable — the gate is satisfiable in play, like a stuck or locked door — so the room is never flagged `area_unreachable`.
 
 ## The live lint
 

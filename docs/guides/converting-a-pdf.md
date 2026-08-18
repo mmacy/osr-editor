@@ -1,6 +1,6 @@
 # Converting a PDF
 
-**Convert a PDF** on the home screen is the front door to [osr-forge](https://mmacy.github.io/osr-forge/)'s pipeline: point the editor at a module PDF and it prices the run, converts it with live progress, and lands in the review queue — no CLI required.
+**Convert a PDF** on the home screen is the front door to [osr-forge](https://mmacy.github.io/osr-forge/)'s pipeline: point the editor at a module PDF and it prices the run, converts the module with live progress, and lands the result in the review queue — no CLI required.
 
 ## The cost gate
 

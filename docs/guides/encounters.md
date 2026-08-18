@@ -4,7 +4,7 @@ An area's encounter is the monsters keyed to it — what the party meets when th
 
 ## The encounter card
 
-Each line names a monster and a count. Pick monsters through the type-ahead picker, which ranks the adventure's own bundled templates first, then this session's recent picks, then the shipped catalog in its own order — so a bespoke monster is always a keystroke away and a dangling id is never authored. **Create monster…** leaves the card for [the monster editor](monster-editor.md) with the create flow already open; the new template then ranks first in every picker. In a forge-backed project it opens the blocked-op dialog instead, which names detach as what unlocks it.
+Each line names a monster and a count. Pick monsters through the type-ahead picker, which ranks the adventure's own bundled templates first, then this session's recent picks, then the shipped catalog in its own order — so a bespoke monster is always a keystroke away and a dangling id is never authored. **Create monster…** leaves the card for [the monster editor](monster-editor.md) with the create flow already open; the new template then ranks first in every picker. In a forge-backed project **Create monster…** opens the blocked-op dialog instead, which names detach as what unlocks the create flow.
 
 A count is a fixed number or a dice expression: `4` for four orcs, `2d4` when you want the roll to happen at play time. Lines remove individually, and the last line can't go — an encounter with no monsters isn't a thing the model allows, so remove the encounter itself instead.
 

@@ -16,7 +16,7 @@ The monster picker on an encounter card offers a **Create monster…** shortcut 
 
 ## The detail editor
 
-The detail editor covers the whole stat block, and — like the rest of the editor — saves each field as you commit it; there is no save button. Everything the game reads is here: armour class (both conventions, gated by the attack-roll toggle), hit dice, attack routines in order, movement modes, saving throws, morale, alignment, XP, number appearing, the treasure reference, special abilities with their named values, defenses, and categories.
+The detail editor covers the whole stat block, and — like the rest of the editor — saves each field as you commit it; there is no save button. Everything the game reads is here: armour class (descending and ascending, gated by the attack-roll toggle), hit dice, attack routines in order, movement modes, saving throws, morale, alignment, XP, number appearing, the treasure reference, special abilities with their named values, defenses, and categories.
 
 Dice fields check your notation as you type; the server has the final say when the field commits. The **derive from HD** buttons fill XP, the THAC0 and attack-bonus pair, and the saving-throw band from the hit dice you set, so a reshaped monster's numbers stay consistent with the rules tables — see [authoring aids](authoring-aids.md).
 

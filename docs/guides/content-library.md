@@ -4,7 +4,7 @@ The third stocking mode, beside hand-keying and SRD stocking: stock a map by pla
 
 The **Library** button on the map toolbar opens the panel beside the canvas. Everything it lists is a *content pack*: geometry-free room projections — name, description, encounter, trap, treasure, and features, but never cells, walls, or transitions — plus the bundled monsters those rooms reference and any wandering tables their levels hold. Packs come from three places, and the panel treats them identically:
 
-- **Another project.** Type or browse any project directory — a native project, or a forge workdir, which assembles read-only exactly as review would. Opening a source writes nothing to it and opens no second session; it is a snapshot as of the open, and **Refresh** re-reads it.
+- **Another project.** Type or browse any project directory — a native project, or a forge workdir, which assembles read-only exactly as review would. Opening a source writes nothing to it and opens no second session; the pack you get is a snapshot as of the open, and **Refresh** re-reads the source.
 - **This project.** The one-click shortcut projects your own working document — current to the latest edit — so you can borrow from a dungeon's own earlier levels.
 - **The stash.** Content banked by the two destructive acts below, stored inside this project's own sidecar.
 
@@ -19,7 +19,7 @@ Long section and entry labels truncate to the panel's width rather than pushing 
 
 ## Placing a room
 
-Every entry row is a drag source and a **Place** button. Drag onto an area and release, or arm the entry and click an area — the click path serves keyboards, trackpads, and assistive tech, and either way the area under the pointer highlights before anything commits. While armed, panning still works, a click on corridor or empty paper is a no-op that stays armed, and Escape, a tool, or closing the panel disarms. Drops land on existing areas only: corridors are unkeyed floor, and creating areas stays the area tool's job.
+Every entry row is a drag source and a **Place** button. Drag onto an area and release, or arm the entry and click an area — the click path serves keyboards, trackpads, and assistive tech, and either way the area under the pointer highlights before anything commits. While armed, panning still works, a click on corridor or empty paper is a no-op that leaves the entry armed, and Escape, a tool, or closing the panel disarms. Drops land on existing areas only: corridors are unkeyed floor, and creating areas stays the area tool's job.
 
 A drop writes exactly what the entry holds, as one ordinary op batch — one undo step, immediately linted. Merge is the default posture, not a mode: a trap-only entry dropped on a stocked room touches only the trap slot, and features always append, re-keyed under the level's next-free convention.
 

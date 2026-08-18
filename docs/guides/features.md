@@ -12,7 +12,7 @@ The three kinds say what the feature is for, and the kind is load-bearing rather
 - **Construction trick** — the dungeon doing something: the sliding wall, the rotating room, the sinking floor.
 - **Custom** — everything else worth keying.
 
-Set the kind first, because the contents below belong to the cache and appear on one only. A trick or a custom feature has no way for the party to open it, so items and coins on one would be unreachable at the table; the editor doesn't offer fields that could only disappoint. Changing a cache to another kind takes its contents and its trap with it, in the same undo step — and undo puts them back.
+Set the kind first, because the contents below belong to the cache and appear on that kind alone. A trick or a custom feature has no way for the party to open it, so items and coins on either would be unreachable at the table; the editor doesn't offer fields that could only disappoint. Changing a cache to another kind takes its contents and its trap with it, in the same undo step — and undo puts them back.
 
 When a feature arrives with contents already on a kind that can't hold them — from an earlier version of this editor, which showed the fields on every kind, or from a converted module — the editor says so and names what's there. Hiding the fields would otherwise hide the contents themselves, which stay in the document and still publish. Set the kind back to **Treasure cache** and they're all there to edit or remove; nothing was cleared behind your back.
 
