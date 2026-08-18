@@ -2,7 +2,7 @@
 
 The **Items** section, beside Monsters in the section list, is where you create items of your own: a brass key for a door in your module, a blade with a history, a lamp no equipment list includes. Items you create here travel inside the adventure itself — the interface calls them *bundled* — and stand beside the standard catalog, the equipment and magic items every osrlib game ships with.
 
-Once created, an item can go anywhere the editor takes one: into a [treasure cache](features.md)'s item list for the party to find, or onto a [gate](map-editor.md#gates) — a door or stairway the party can pass only while carrying the item. When you publish, your items ride along inside the adventure, and in play the game treats them exactly like catalog items: found, carried, dropped, given, and — if a gate consumes it, spent.
+Once created, an item can go anywhere the editor takes one: into a [treasure cache](features.md)'s item list for the party to find, or onto a [gate](map-editor.md#gates) — a door or stairway the party can pass only while carrying the item. When you publish, your items ride along inside the adventure, and in play the game treats them exactly like catalog items: found, carried, dropped, given, and — if a gate consumes it — spent.
 
 ## Creating an item
 

@@ -76,7 +76,7 @@ The narrative block holds the gate's two read beats — **Refusal** for a refuse
 
 A gate composes with the door's own mechanics rather than replacing them: on a locked and gated door the party must open the lock and satisfy the gate. Auto-reciprocal stairs are created ungated, because a gate applies to one threshold's attempt and a toll on the way down is not authored intent for the way up. A trap's slide has no gate control at all: a forced relocation is not an attempt, and the engine rejects a gated slide outright.
 
-On the map, the editor marks a gated door with a small solid diamond beside the door symbol, and a gated transition with the same diamond beside its glyph. A door that is both gated and secret shows the diamond beside the secret disc.
+On the map, the editor marks a gated door with a small solid diamond beside the door symbol, and a gated transition with the same diamond beside its glyph. On a door that is both gated and secret, the diamond sits beside the secret disc.
 
 ![A gated door on the map: the solid gate diamond beside the door leaf](../assets/screenshots/gate-badges-light.png#only-light)
 ![A gated door on the map: the solid gate diamond beside the door leaf](../assets/screenshots/gate-badges-dark.png#only-dark)
