@@ -1,7 +1,7 @@
 {
   "kind": "adventure",
-  "schema_version": 2,
-  "engine_version": "1.4.0",
+  "schema_version": 3,
+  "engine_version": "1.6.0",
   "payload": {
     "name": "The Mill on the Moor",
     "description": "A ruined mill above a wind-scoured hamlet hides the caves its miller dug, died in, and never left.",
@@ -56,7 +56,8 @@
                   "kind": "normal",
                   "stuck": false,
                   "locked": false,
-                  "starts_open": false
+                  "starts_open": false,
+                  "requires": null
                 }
               },
               "3,1:north": {
@@ -69,7 +70,25 @@
                   "kind": "secret",
                   "stuck": false,
                   "locked": false,
-                  "starts_open": false
+                  "starts_open": false,
+                  "requires": {
+                    "condition": {
+                      "condition_type": "has_item",
+                      "item_id": "millers-key",
+                      "consumes": false
+                    },
+                    "narrative": {
+                      "refusal": "The false wall holds. Behind it, something counts on its fingers and waits.",
+                      "success": "The brass key turns twice, and the counting stops.",
+                      "fired": "",
+                      "offer": "",
+                      "progress": "",
+                      "completion": "",
+                      "journal": "",
+                      "guidance": "",
+                      "speaker": "The drowned miller"
+                    }
+                  }
                 }
               },
               "4,1:north": {
@@ -118,7 +137,27 @@
                   "stance": "hostile",
                   "hoard": true
                 },
-                "features": [],
+                "features": [
+                  {
+                    "id": "feature-4",
+                    "kind": "treasure_cache",
+                    "description": "The orcs' pay strongbox, bolted under the barricade's lip.",
+                    "cell": null,
+                    "item_ids": [
+                      "millers-key"
+                    ],
+                    "magic_item_ids": [],
+                    "coins": {
+                      "pp": 0,
+                      "gp": 0,
+                      "ep": 0,
+                      "sp": 45,
+                      "cp": 0
+                    },
+                    "valuables": [],
+                    "trap": null
+                  }
+                ],
                 "trap": null,
                 "treasure": null
               },
@@ -285,7 +324,25 @@
                   0,
                   0
                 ],
-                "to_facing": "south"
+                "to_facing": "south",
+                "requires": {
+                  "condition": {
+                    "condition_type": "has_item",
+                    "item_id": "torch",
+                    "consumes": true
+                  },
+                  "narrative": {
+                    "refusal": "The dark below drinks unlit steps. It wants fire.",
+                    "success": "You feed a torch to the dark; it gutters somewhere below, and the way is open.",
+                    "fired": "",
+                    "offer": "",
+                    "progress": "",
+                    "completion": "",
+                    "journal": "",
+                    "guidance": "",
+                    "speaker": ""
+                  }
+                }
               }
             ],
             "wandering": {
@@ -296,7 +353,8 @@
             "entrance": [
               0,
               0
-            ]
+            ],
+            "guidance": "Narrate the upper caves as the mill gone feral: flour dust in the torchlight, orc voices ahead, the machinery repurposed for ambush. Keep the miller a rumour up here — he never leaves the water."
           },
           {
             "number": 2,
@@ -392,7 +450,8 @@
                   0,
                   1
                 ],
-                "to_facing": "north"
+                "to_facing": "north",
+                "requires": null
               }
             ],
             "wandering": {
@@ -670,7 +729,8 @@
                 "overrides_applied": []
               }
             },
-            "entrance": null
+            "entrance": null,
+            "guidance": ""
           }
         ]
       }
@@ -783,6 +843,21 @@
         ],
         "overrides_applied": []
       }
-    ]
+    ],
+    "items": [
+      {
+        "item_type": "gear",
+        "id": "millers-key",
+        "name": "The miller's brass key",
+        "cost_gp": 0,
+        "lot_size": 1,
+        "capacity_coins": null,
+        "combat": null,
+        "params": {},
+        "overrides_applied": []
+      }
+    ],
+    "triggers": [],
+    "quests": []
   }
 }

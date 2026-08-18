@@ -9,6 +9,7 @@ import { CorrectionsPanel } from '@/components/corrections-panel'
 import { DiagnosticsPanel } from '@/components/diagnostics-panel'
 import { ExportDialog } from '@/components/export-dialog'
 import { FidelityDialog } from '@/components/fidelity-dialog'
+import { ItemsSection } from '@/components/items-section'
 import { MonsterResolutionPanel } from '@/components/monster-resolution-panel'
 import { MonstersSection } from '@/components/monsters-section'
 import { PipelinePanel } from '@/components/pipeline-panel'
@@ -252,6 +253,11 @@ export function ProjectScreen() {
                 active={section.kind === 'monsters'}
                 onClick={() => setSection({ kind: 'monsters' })}
               />
+              <SectionButton
+                label="Items"
+                active={section.kind === 'items'}
+                onClick={() => setSection({ kind: 'items' })}
+              />
               {project.document.dungeons.map((dungeon) => (
                 <div key={dungeon.id} className="mt-2 flex flex-col gap-0.5">
                   <span className="truncate px-2 text-xs font-medium text-muted-foreground">
@@ -301,6 +307,9 @@ export function ProjectScreen() {
             {section.kind === 'monster-resolution' && <MonsterResolutionPanel project={project} />}
             {section.kind === 'monsters' && (
               <MonstersSection project={project} section={section} focusToken={focusToken} />
+            )}
+            {section.kind === 'items' && (
+              <ItemsSection project={project} section={section} focusToken={focusToken} />
             )}
             {section.kind === 'level' && (
               <MapEditor

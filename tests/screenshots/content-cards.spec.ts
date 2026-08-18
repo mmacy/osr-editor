@@ -210,11 +210,10 @@ test('the four content-kind cards', async ({ page }, testInfo) => {
     )
   await trapCard.getByLabel('Manual effect').blur()
 
-  // The trigger is a read-only readout, and this trap is the healthy case: no
-  // repair offer. Asserted exactly, since a loose match would also find the
-  // Affects select's `triggerer` option.
-  await expect(trapCard.getByText('enter', { exact: true })).toBeVisible()
-  await expect(trapCard.getByRole('button', { name: 'Set the trigger to enter' })).toHaveCount(0)
+  // The trigger is an authorable choice under osrlib 1.6 — both values live —
+  // with the chosen value's springing action named beneath.
+  await expect(trapCard.getByLabel('Trigger')).toHaveValue('enter')
+  await expect(trapCard.getByText('Springs when the party steps onto a cell of the area.')).toBeVisible()
   await expect(trapCard.getByLabel('Volley')).toBeEnabled()
   await expect(trapCard.getByLabel('Volley')).toHaveValue('1d3')
   await expect(trapCard.getByLabel('On save')).toHaveValue('negates')
@@ -268,7 +267,7 @@ test('the four content-kind cards', async ({ page }, testInfo) => {
     ['stakes', /Stakes/],
   ] as const) {
     await feature.getByRole('button', { name: 'Add item' }).click()
-    await page.getByPlaceholder('Search equipment…').fill(query)
+    await page.getByPlaceholder('Search items…').fill(query)
     await page.getByRole('option', { name }).first().click()
   }
   // A named magic item beside the mundane three — the strongbox's sword +1,

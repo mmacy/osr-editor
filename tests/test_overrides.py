@@ -15,6 +15,8 @@ from osreditor.store import LocalProjectStore
 
 DUNGEON = "millstone-warrens"
 
+BESPOKE_ITEM = {"item_type": "gear", "id": "brass-key", "name": "Brass key", "cost_gp": 0}
+
 BESPOKE_TEMPLATE = {
     "id": "bespoke-1",
     "name": "Bespoke horror",
@@ -528,7 +530,29 @@ BLOCKED_OPS = [
     {"op": "add_monster_template", "template": BESPOKE_TEMPLATE},
     {"op": "set_monster_template", "template_id": "bespoke-1", "template": BESPOKE_TEMPLATE},
     {"op": "remove_monster_template", "template_id": "bespoke-1"},
+    {"op": "add_item_template", "template": BESPOKE_ITEM},
+    {"op": "set_item_template", "item_id": "brass-key", "template": BESPOKE_ITEM},
+    {"op": "remove_item_template", "item_id": "brass-key"},
+    {"op": "set_level_field", "dungeon_id": DUNGEON, "level_number": 1, "field": "guidance", "value": "…"},
 ]
+
+GATED_DOOR_VALUE = {
+    "kind": "door",
+    "door": {
+        "kind": "normal",
+        "requires": {"condition": {"condition_type": "has_item", "item_id": "brass-key"}},
+    },
+}
+
+GATED_TRANSITION_VALUE = {
+    "kind": "stairs_down",
+    "position": [1, 1],
+    "to_dungeon_id": DUNGEON,
+    "to_level_number": 2,
+    "to_position": [0, 0],
+    "to_facing": "south",
+    "requires": {"condition": {"condition_type": "has_item", "item_id": "toll-coin", "consumes": True}},
+}
 
 
 @pytest.mark.parametrize("blocked", BLOCKED_OPS, ids=lambda op: str(op["op"]))
@@ -551,6 +575,59 @@ def test_blocked_monster_template_ops_answer_the_monster_address(forge_workdir: 
             service.apply_batch(project, batch(project, op_data))
         assert excinfo.value.address == "monster:bespoke-1"
         assert "assembly derives them from the monsters stage" in str(excinfo.value)
+
+
+def test_blocked_item_template_ops_answer_the_item_address(forge_workdir: Path) -> None:
+    service, project = open_forge(forge_workdir)
+    for op_data in (
+        {"op": "add_item_template", "template": BESPOKE_ITEM},
+        {"op": "set_item_template", "item_id": "brass-key", "template": BESPOKE_ITEM},
+        {"op": "remove_item_template", "item_id": "brass-key"},
+    ):
+        with pytest.raises(OpUnsupportedForgeError) as excinfo:
+            service.apply_batch(project, batch(project, op_data))
+        assert excinfo.value.address == "item:brass-key"
+        assert "no authored-layer surface" in str(excinfo.value)
+
+
+def test_a_gated_door_value_blocks_at_the_edge_address(forge_workdir: Path) -> None:
+    # The value-dependent branch: SetEdges itself translates, but an edge
+    # value carrying door.requires has no override kind and blocks whole.
+    service, project = open_forge(forge_workdir)
+    with pytest.raises(OpUnsupportedForgeError) as excinfo:
+        service.apply_batch(
+            project,
+            batch(
+                project,
+                {"op": "set_edges", "dungeon_id": DUNGEON, "level_number": 1, "edges": {"1,1:north": GATED_DOOR_VALUE}},
+            ),
+        )
+    assert excinfo.value.op == "set_edges"
+    assert excinfo.value.address == f"dungeon:{DUNGEON}/level:1/edge:1,1:north"
+    assert "gates have no override kind" in str(excinfo.value)
+    assert not (forge_workdir / "overrides.yaml").exists()
+    assert project.revision == "r1"
+
+
+def test_a_gated_transition_value_blocks_at_the_cell_address(forge_workdir: Path) -> None:
+    service, project = open_forge(forge_workdir)
+    with pytest.raises(OpUnsupportedForgeError) as excinfo:
+        service.apply_batch(
+            project,
+            batch(
+                project,
+                {
+                    "op": "add_transition",
+                    "dungeon_id": DUNGEON,
+                    "level_number": 1,
+                    "transition": GATED_TRANSITION_VALUE,
+                },
+            ),
+        )
+    assert excinfo.value.op == "add_transition"
+    assert excinfo.value.address == f"dungeon:{DUNGEON}/level:1/cell:1,1"
+    assert "gates have no override kind" in str(excinfo.value)
+    assert not (forge_workdir / "overrides.yaml").exists()
 
 
 def test_a_blocked_op_rejects_the_whole_batch_before_any_side_effect(forge_workdir: Path) -> None:

@@ -22,6 +22,10 @@ export type NavTarget =
   // scope's landing, a `monster:<id>` finding's landing with that template
   // selected, and the picker's create shortcut with the create dialog open.
   | { kind: 'monsters'; templateId?: string; create?: boolean }
+  // The always-present Items section, the Monsters mirror: the `items`
+  // scope's landing and an `item:<id>` finding's landing with that template
+  // selected.
+  | { kind: 'items'; itemId?: string; create?: boolean }
   // The forge review surfaces — nav sections, never address-mapped (the
   // grammar's producers stay validation, lint, and the forge tier).
   | { kind: 'review' }
@@ -81,8 +85,22 @@ export function areaAddress(dungeonId: string, levelNumber: number, areaId: stri
   return `${levelAddress(dungeonId, levelNumber)}/area:${encodeURIComponent(areaId)}`
 }
 
+// The geometry segments are numeric grammar — unencoded, mirroring the
+// backend's builders.
+export function cellAddress(dungeonId: string, levelNumber: number, cell: Position): string {
+  return `${levelAddress(dungeonId, levelNumber)}/cell:${cell[0]},${cell[1]}`
+}
+
+export function edgeAddress(dungeonId: string, levelNumber: number, edgeKey: string): string {
+  return `${levelAddress(dungeonId, levelNumber)}/edge:${edgeKey}`
+}
+
 export function monsterAddress(templateId: string): string {
   return `monster:${encodeURIComponent(templateId)}`
+}
+
+export function itemAddress(itemId: string): string {
+  return `item:${encodeURIComponent(itemId)}`
 }
 
 export function navTargetFor(
@@ -92,6 +110,7 @@ export function navTargetFor(
   if (!address) return null
   if (address === 'town') return { kind: 'town' }
   if (address === 'monsters') return { kind: 'monsters' }
+  if (address === 'items') return { kind: 'items' }
 
   const segments = address.split('/')
   const templateId = segmentValue(segments[0], 'monster')
@@ -102,6 +121,14 @@ export function navTargetFor(
     if (segments.length !== 1) return null
     return document.monsters.some((template) => template.id === templateId)
       ? { kind: 'monsters', templateId }
+      : null
+  }
+  const itemId = segmentValue(segments[0], 'item')
+  if (itemId !== null) {
+    // The `item:<id>` mirror, with the same not-bundled refusal.
+    if (segments.length !== 1) return null
+    return document.items.some((template) => template.id === itemId)
+      ? { kind: 'items', itemId }
       : null
   }
   const dungeonId = segmentValue(segments[0], 'dungeon')

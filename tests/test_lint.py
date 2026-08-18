@@ -239,6 +239,20 @@ def test_doors_in_any_state_are_passable_inclusively() -> None:
     assert lint_adventure(fixture) == ()
 
 
+def test_reachability_is_gate_blind_by_the_specs_decision() -> None:
+    # _passable reads edge kinds, never `requires`: a room behind a gated door
+    # is reachable — the gate is play-time state, not geometry — so it is not
+    # area_unreachable.
+    gated = door(
+        kind="normal",
+        requires={"condition": {"condition_type": "has_item", "item_id": "brass-key"}},
+    )
+    fixture = adventure(
+        DungeonSpec(id="d", levels=(level(edges={"1,0:west": gated}, areas=(AreaSpec(id="1", cells=((1, 0),)),)),))
+    )
+    assert lint_adventure(fixture) == ()
+
+
 def test_directed_transitions_extend_reachability() -> None:
     levels = (
         level(1, transitions=(transition(),)),

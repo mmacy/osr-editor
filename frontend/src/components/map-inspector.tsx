@@ -7,13 +7,14 @@ import { useEffect, useRef } from 'react'
 
 import { AreaContentCards, type CardIntent } from '@/components/area-content-cards'
 import { AuthorNotesCard } from '@/components/author-notes-card'
+import { GateCard } from '@/components/gate-card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCommittedField } from '@/hooks/use-committed-field'
 import { ProseAssistant } from '@/components/prose-assistant'
-import { areaAddress } from '@/lib/address'
+import { areaAddress, edgeAddress } from '@/lib/address'
 import { FACING_LABELS, KIND_LABELS } from '@/lib/transitions'
 import type { MapSelection } from '@/map/render'
 import { isAreaStocked } from '@/map/stocking'
@@ -85,6 +86,7 @@ export function MapInspector({
     return (
       <EdgeInspector
         key={`${dungeonId}/${levelNumber}/${selection.key}`}
+        document={document}
         edgeKey={selection.key}
         edge={edge}
         dungeonId={dungeonId}
@@ -226,16 +228,19 @@ function AreaInspector({
 const DEFAULT_DOOR: DoorSpec = { kind: 'normal', stuck: false, locked: false, starts_open: false }
 
 function EdgeInspector({
+  document,
   edgeKey,
   edge,
   dungeonId,
   levelNumber,
 }: {
+  document: Adventure
   edgeKey: string
   edge: Edge | undefined
   dungeonId: string
   levelNumber: number
 }) {
+  const forge = useProjectStore((state) => state.project?.forge != null)
   // Builders read the committed entry so a queued change patches what is
   // actually there; deletes are emitted only for keys that exist.
   const commitEdge = (value: Edge | null) => {
@@ -322,6 +327,43 @@ function EdgeInspector({
             checked={edge.door.starts_open}
             onChange={(starts_open) => patchDoor({ starts_open })}
           />
+          {/* The gate composes with locked/stuck rather than replacing them:
+              the whole DoorSpec rides every set_edges value, so flag commits
+              preserve the gate and gate commits preserve the flags. The gate
+              update applies against the committed door inside the queue —
+              never the render-time prop. */}
+          <GateCard
+            gate={edge.door.requires ?? null}
+            document={document}
+            idPrefix="door-gate"
+            forge={forge}
+            blockedAddress={edgeAddress(dungeonId, levelNumber, edgeKey)}
+            blockedOpCode="set_edges"
+            onCommit={(update) => {
+              void projectStore.getState().commit((current) => {
+                const level = findLevel(current, dungeonId, levelNumber)
+                const committed = level?.edges[edgeKey]
+                if (!level || committed?.kind !== 'door') return []
+                const door = committed.door ?? DEFAULT_DOOR
+                return [
+                  {
+                    op: 'set_edges',
+                    dungeon_id: dungeonId,
+                    level_number: levelNumber,
+                    edges: {
+                      [edgeKey]: {
+                        kind: 'door',
+                        door: { ...door, requires: update(door.requires ?? null) },
+                      },
+                    },
+                  },
+                ]
+              })
+            }}
+          />
+          <p className="text-muted-foreground text-xs">
+            A gate composes with locked and stuck — a locked and gated door requires both.
+          </p>
         </div>
       )}
     </section>

@@ -8,10 +8,10 @@ Every level renders as graph paper, and the tool set works directly on it.
 - **Pan** (`H`) binds panning to a plain left-drag, for when holding a chord is the wrong hand.
 - **Room** (`R`) drags a rectangle into a keyed area with its interior edges opened.
 - **Corridor** (`C`) opens passages along a dragged path.
-- **Wall/door** (`W`) click-cycles an edge wall → open → door, and drags to paint. The door inspector sets normal or secret, stuck, locked, and starts-open.
+- **Wall/door** (`W`) click-cycles an edge wall → open → door, and drags to paint. The door inspector sets normal or secret, stuck, locked, and starts-open — and hangs a [gate](#gates) on the door.
 - **Area** (`A`) paints cells into the selected area or a new one.
 - **Entrance** (`E`) places the level entrance.
-- **Transition** (`T`) places stairs, trapdoors, and chutes with a target-level picker — stairs offer reciprocal creation in the same undo step.
+- **Transition** (`T`) places stairs, trapdoors, and chutes with a target-level picker — stairs offer reciprocal creation in the same undo step, and the dialog carries a [gate](#gates) card for tolling the threshold.
 
 ![The map editor toolbar: the select, pan, room, corridor, wall and door, area, entrance, and transition tools, then the zoom in, zoom out, reset zoom, and fit level view controls](../assets/screenshots/map-toolbar-light.png#only-light)
 ![The map editor toolbar: the select, pan, room, corridor, wall and door, area, entrance, and transition tools, then the zoom in, zoom out, reset zoom, and fit level view controls](../assets/screenshots/map-toolbar-dark.png#only-dark)
@@ -50,7 +50,7 @@ Widths belong to the project, kept in its editor sidecar beside the per-level ca
 
 An adventure holds any number of dungeons, each with any number of levels. The map chrome manages both: create, rename, and renumber (renames cascade through every reference in one undo step), and resize a level — with the offenders listed first when a shrink would strand geometry. **Remove level** discards the level from the row itself; a dungeon's last level can't go, and hovering the dimmed control says why.
 
-Level properties also holds two authoring surfaces the map itself doesn't show: the level's [wandering monster table](encounters.md#wandering-monsters), and its [level-scope features](features.md#level-features) for the tricks and caches that belong to a corridor rather than to any keyed room.
+Level properties also holds three authoring surfaces the map itself doesn't show: the level's [wandering monster table](encounters.md#wandering-monsters), its [level-scope features](features.md#level-features) for the tricks and caches that belong to a corridor rather than to any keyed room, and its **guidance** — ambient steering for a narrating front end, per-level narrator direction that the engine never acts on and players never see verbatim.
 
 **Clear content** strips a level back to its geometry in one undo step, which is what you want after importing a map whose rooms arrive already described. The grid, the walls and doors, the cells they enclose, the entrance, the transitions, and the wandering monsters all stay; area names and descriptions, encounters, traps, treasure, and features go. The dialog counts exactly what it will remove before you commit.
 
@@ -60,6 +60,28 @@ In a forge-backed project this is an ordinary correction, not a special case: ea
 
 ![The level row: the level picker, add level, remove level, clear content, and level properties](../assets/screenshots/level-chrome-light.png#only-light)
 ![The level row: the level picker, add level, remove level, clear content, and level properties](../assets/screenshots/level-chrome-dark.png#only-dark)
+
+## Gates
+
+A gate is an authored predicate the engine checks when the party *attempts* something — opening a door, taking a stair. It hangs on exactly two carriers: a door and a level-placed transition. The gate card sits in the door inspector's door branch and in the transition dialog, and holds one condition plus the narrative for both outcomes:
+
+- **Carries an item** — some party member's carried inventory holds the item, picked from the bundled items, shipped equipment, and magic items — exactly the domain the engine resolves against. **Consumes the item** makes it a toll: one instance leaves the first carrier in marching order per success, so a door that swings shut wants another key. The toll is a gate-only power — a trigger or quest clause that consumes is rejected by the engine, so those builders never offer it.
+- **A flag equals** — a session flag holds a value, compared strictly: the value control is typed (text, number, or boolean), because a stored `true` never satisfies an authored `1`.
+- **An effect is active** — an effect of that kind is attached to a party member. Effect kinds are an open vocabulary, so the field is a free string.
+
+The narrative block carries the gate's two read beats — **Refusal** is what a refused attempt says, **Success** rides the successful one — plus speaker attribution and narrator guidance. Text a gate never reads (a foreign block carrying a trigger's `fired` beat, say) is warned about by name with a one-click clear, never silently rewritten or hidden.
+
+![The door inspector with an open gate card: the has-item condition naming the brass key, the consumes toggle, and the authored refusal and success beats](../assets/screenshots/door-gate-card-light.png#only-light)
+![The door inspector with an open gate card: the has-item condition naming the brass key, the consumes toggle, and the authored refusal and success beats](../assets/screenshots/door-gate-card-dark.png#only-dark)
+
+A gate composes with the door's own mechanics rather than replacing them — a locked and gated door requires both — and auto-reciprocal stairs are created ungated, because a gate guards one threshold's attempt and a toll on the way down is not authored intent for the way up. A trap's slide has no gate control at all: a forced relocation is not an attempt, and the engine rejects a gated slide outright.
+
+On the map, a gated door draws a small solid diamond beside its leaf — beside the secret disc when both apply — and a gated transition draws the same diamond beside its glyph: one mark, both carriers.
+
+![A gated door on the map: the solid gate diamond beside the door leaf](../assets/screenshots/gate-badges-light.png#only-light)
+![A gated door on the map: the solid gate diamond beside the door leaf](../assets/screenshots/gate-badges-dark.png#only-dark)
+
+Reachability lint stays gate-blind by decision: a room behind a gated door is reachable — the gate is satisfiable in play, like a stuck or locked door — so it is never flagged `area_unreachable`.
 
 ## The live lint
 

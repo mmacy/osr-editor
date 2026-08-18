@@ -189,6 +189,28 @@ export type StashRequest = components['schemas']['StashRequest']
 export type StashedPack = components['schemas']['StashedPack']
 export type CopyRecord = components['schemas']['CopyRecord']
 
+// Phase 15: the authored layer — the four item-template kinds, gates and
+// their condition union, and narrative blocks, riding the generated types.
+export type WeaponTemplate = components['schemas']['WeaponTemplate']
+export type ArmourTemplate = components['schemas']['ArmourTemplate']
+export type GearTemplate = components['schemas']['GearTemplate']
+export type AmmunitionTemplate = components['schemas']['AmmunitionTemplate']
+export type WeaponQuality = components['schemas']['WeaponQuality']
+export type Material = components['schemas']['Material']
+export type ArmourCategory = components['schemas']['ArmourCategory']
+export type MissileRanges = components['schemas']['MissileRanges']
+export type RangeBand = components['schemas']['RangeBand']
+export type CombatFacet = components['schemas']['CombatFacet']
+export type GateSpec = components['schemas']['GateSpec']
+export type HasItemCondition = components['schemas']['HasItemCondition']
+export type FlagEqualsCondition = components['schemas']['FlagEqualsCondition']
+export type EffectActiveCondition = components['schemas']['EffectActiveCondition']
+export type NarrativeBlock = components['schemas']['NarrativeBlock']
+export type AddItemTemplate = components['schemas']['AddItemTemplate']
+export type SetItemTemplate = components['schemas']['SetItemTemplate']
+export type RemoveItemTemplate = components['schemas']['RemoveItemTemplate']
+export type SetLevelField = components['schemas']['SetLevelField']
+
 // The discriminated aid unions, composed from their members (the route bodies
 // and responses carry the union, not a named schema — the AnyEditOp pattern).
 export type AidsPreviewRequest =
@@ -214,6 +236,14 @@ export type AnySidecarPatch = SidecarPatchRequest['patches'][number]
 
 // The encounter-table entry union, as a row actually carries it.
 export type EncounterEntry = EncounterTableRow['entry']
+
+// The item-template union, as Adventure.items actually carries it — the
+// AnyEditOp pattern; discriminates on item_type.
+export type ItemTemplate = Adventure['items'][number]
+
+// The gate condition union, as a gate actually carries it — discriminates on
+// condition_type.
+export type ConditionSpec = GateSpec['condition']
 
 // The cell address shared by every geometry surface: a two-tuple, as osrlib
 // serializes Position.

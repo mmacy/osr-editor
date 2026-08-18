@@ -9,7 +9,12 @@ unguarded; a pit trap; a trapped treasure cache; a construction trick and a
 level-scope custom feature; a secret door on the only route to the treasure
 room; an inline wandering table on level 2; a bundled bespoke monster template
 keyed in a level 2 encounter (phase 4's growth, so the round-trip, golden, and
-publish suites cover `Adventure.monsters` permanently); town, hooks, and
+publish suites cover `Adventure.monsters` permanently); and the authored layer
+(phase 15's growth, covered by the same suites permanently): a bundled gear
+item — the miller's key — cached in room 1's strongbox, the treasure-room
+secret door gated on carrying it with authored refusal, success, and speaker,
+the stairs down gated on a toll that consumes a torch, and level 1 guidance
+prose. Town, hooks, and
 services filled. Validation-clean, and lint-clean except the one finding it is
 built to carry: the secret-only treasure room *is* the `secret_only_access`
 trigger — the spec's own publish rule ("secret-only access is sometimes the
@@ -26,7 +31,7 @@ from fastapi.testclient import TestClient
 from osrlib.core.alignment import Alignment
 from osrlib.core.classes import SavingThrows
 from osrlib.core.combat import SaveCategory
-from osrlib.core.items import Coins
+from osrlib.core.items import Coins, GearTemplate
 from osrlib.core.monsters import (
     AlignmentSpec,
     AttackRoutine,
@@ -60,6 +65,8 @@ from osrlib.crawl.dungeon import (
     ValuableSpec,
     WanderingSpec,
 )
+from osrlib.crawl.gates import GateSpec, HasItemCondition
+from osrlib.crawl.narrative import NarrativeBlock
 from osrlib.data import load_encounter_tables, load_equipment, load_monsters
 from osrlib.errors import ContentValidationError
 
@@ -75,7 +82,35 @@ SMALL_MODULE_PATH = Path(__file__).parent / "fixtures" / "small_module.json"
 
 OPEN = Edge(kind=EdgeKind.OPEN)
 DOOR = Edge(kind=EdgeKind.DOOR, door=DoorSpec())
-SECRET_DOOR = Edge(kind=EdgeKind.DOOR, door=DoorSpec(kind="secret"))
+
+# The gated secret door: the milestone's composition — a gate composes with
+# the door's kind and flags rather than replacing them, and the map draws the
+# gate diamond beside the secret disc when both apply.
+GATED_SECRET_DOOR = Edge(
+    kind=EdgeKind.DOOR,
+    door=DoorSpec(
+        kind="secret",
+        requires=GateSpec(
+            condition=HasItemCondition(item_id="millers-key"),
+            narrative=NarrativeBlock(
+                refusal="The false wall holds. Behind it, something counts on its fingers and waits.",
+                success="The brass key turns twice, and the counting stops.",
+                speaker="The drowned miller",
+            ),
+        ),
+    ),
+)
+
+# The toll gate: consuming, so the descent costs a torch per crossing — and
+# deliberately hung on a *shipped* item id, so the fixture exercises both
+# halves of the gate picker's domain (the door's gate names the bundled key).
+TOLL_GATE = GateSpec(
+    condition=HasItemCondition(item_id="torch", consumes=True),
+    narrative=NarrativeBlock(
+        refusal="The dark below drinks unlit steps. It wants fire.",
+        success="You feed a torch to the dark; it gutters somewhere below, and the way is open.",
+    ),
+)
 
 
 def _level_one() -> LevelSpec:
@@ -96,7 +131,16 @@ def _level_one() -> LevelSpec:
             aware=True,
             stance=ReactionResult.HOSTILE,
         ),
-        features=(),
+        features=(
+            FeatureSpec(
+                id="feature-4",
+                kind="treasure_cache",
+                description="The orcs' pay strongbox, bolted under the barricade's lip.",
+                cell=None,
+                item_ids=("millers-key",),
+                coins=Coins(sp=45),
+            ),
+        ),
     )
     pit_room = AreaSpec(
         id="2",
@@ -163,7 +207,7 @@ def _level_one() -> LevelSpec:
             "2,0:west": OPEN,
             "3,0:west": DOOR,
             "3,1:north": OPEN,
-            "4,0:west": SECRET_DOOR,
+            "4,0:west": GATED_SECRET_DOOR,
             "4,1:north": OPEN,
         },
         areas=(guard_room, pit_room, treasure_room),
@@ -183,9 +227,15 @@ def _level_one() -> LevelSpec:
                 to_level_number=2,
                 to_position=(0, 0),
                 to_facing=Direction.SOUTH,
+                requires=TOLL_GATE,
             ),
         ),
         entrance=(0, 0),
+        guidance=(
+            "Narrate the upper caves as the mill gone feral: flour dust in the torchlight, "
+            "orc voices ahead, the machinery repurposed for ambush. Keep the miller a rumour "
+            "up here — he never leaves the water."
+        ),
     )
 
 
@@ -327,6 +377,15 @@ def build_small_module() -> Adventure:
         ),
         dungeons=(DungeonSpec(id="mill-caves", name="The mill caves", levels=(_level_one(), _level_two())),),
         monsters=(_drowned_miller(),),
+        items=(
+            # The bundled key: editor-authored conventions apply —
+            # overrides_applied=() (SRD-compiler provenance, meaningless here).
+            GearTemplate(
+                id="millers-key",
+                name="The miller's brass key",
+                cost_gp=0,
+            ),
+        ),
     )
 
 

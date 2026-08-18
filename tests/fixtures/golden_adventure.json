@@ -1,7 +1,7 @@
 {
   "kind": "adventure",
-  "schema_version": 2,
-  "engine_version": "1.4.0",
+  "schema_version": 3,
+  "engine_version": "1.6.0",
   "payload": {
     "name": "The mill on the moor",
     "description": "A ruined mill hides the entrance to the caves its miller dug too deep.",
@@ -40,7 +40,8 @@
                   "kind": "normal",
                   "stuck": false,
                   "locked": true,
-                  "starts_open": false
+                  "starts_open": false,
+                  "requires": null
                 }
               },
               "2,1:west": {
@@ -113,11 +114,15 @@
             "entrance": [
               0,
               0
-            ]
+            ],
+            "guidance": ""
           }
         ]
       }
     ],
-    "monsters": []
+    "monsters": [],
+    "items": [],
+    "triggers": [],
+    "quests": []
   }
 }

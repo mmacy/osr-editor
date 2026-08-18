@@ -16,7 +16,10 @@ from osrlib.crawl.adventure import Adventure, TownSpec, validate_adventure
 from osrlib.crawl.dungeon import (
     AreaSpec,
     Direction,
+    DoorSpec,
     DungeonSpec,
+    Edge,
+    EdgeKind,
     FeatureSpec,
     KeyedEncounter,
     KeyedMonster,
@@ -24,6 +27,8 @@ from osrlib.crawl.dungeon import (
     TransitionSpec,
     WanderingSpec,
 )
+from osrlib.crawl.gates import GateSpec, HasItemCondition
+from osrlib.crawl.triggers import ItemAcquiredPattern, TriggerSpec
 from osrlib.data import load_equipment, load_monsters
 from osrlib.errors import ContentValidationError
 
@@ -101,6 +106,77 @@ def test_bundled_monster_collision_degrades_when_the_id_does_not_resolve() -> No
     findings = parse_validation_error(str(excinfo.value), adventure())
     assert [finding.code for finding in findings] == ["bundled_monster_collision"]
     assert findings[0].address == "monsters"
+
+
+def test_bundled_item_collision_addresses_the_template() -> None:
+    shipped = load_equipment().gear[0]
+    finding = sole_finding(adventure(items=(shipped,)))
+    assert finding.code == "bundled_item_collision"
+    assert finding.address == f"item:{quote(shipped.id, safe='')}"
+
+
+def test_bundled_item_collision_degrades_when_the_id_does_not_resolve() -> None:
+    # A collision line the document's own bundled ids cannot confirm degrades
+    # to the coarse `items` scope — always true, never a lie.
+    shipped = load_equipment().gear[0]
+    fixture = adventure(items=(shipped,))
+    with pytest.raises(ContentValidationError) as excinfo:
+        validate_adventure(fixture, load_monsters(), load_equipment())
+    findings = parse_validation_error(str(excinfo.value), adventure())
+    assert [finding.code for finding in findings] == ["bundled_item_collision"]
+    assert findings[0].address == "items"
+
+
+def gated_edge(item_id: str) -> Edge:
+    return Edge(
+        kind=EdgeKind.DOOR,
+        door=DoorSpec(kind="normal", requires=GateSpec(condition=HasItemCondition(item_id=item_id))),
+    )
+
+
+def test_door_gate_unknown_item_addresses_the_edge() -> None:
+    fixture = adventure(DungeonSpec(id="d", levels=(level(edges={"1,1:north": gated_edge("ghost-key")}),)))
+    finding = sole_finding(fixture)
+    assert finding.code == "door_gate_unknown_item"
+    assert finding.address == "dungeon:d/level:1/edge:1,1:north"
+
+
+def test_a_door_gate_line_with_no_confirmable_edge_degrades_to_unclassified() -> None:
+    # The owner confirms but no edge key renders the line: the classification
+    # is refused rather than guessed coarser — the dangling item id is
+    # unconfirmable by definition and never becomes an address.
+    fixture = adventure(DungeonSpec(id="d", levels=(level(edges={"1,1:north": gated_edge("ghost-key")}),)))
+    with pytest.raises(ContentValidationError) as excinfo:
+        validate_adventure(fixture, load_monsters(), load_equipment())
+    findings = parse_validation_error(str(excinfo.value), adventure())
+    assert [finding.code for finding in findings] == ["validation_unclassified"]
+    assert findings[0].address is None
+
+
+def test_transition_gate_unknown_item_addresses_the_cell() -> None:
+    toll = TransitionSpec(
+        kind="stairs_down",
+        position=(1, 1),
+        to_dungeon_id="d",
+        to_level_number=1,
+        to_position=(0, 0),
+        to_facing=Direction.SOUTH,
+        requires=GateSpec(condition=HasItemCondition(item_id="ghost-coin")),
+    )
+    fixture = adventure(DungeonSpec(id="d", levels=(level(transitions=(toll,)),)))
+    finding = sole_finding(fixture)
+    assert finding.code == "transition_gate_unknown_item"
+    assert finding.address == "dungeon:d/level:1/cell:1,1"
+
+
+def test_trigger_error_strings_land_unclassified_verbatim() -> None:
+    # Trigger- and quest-error strings degrade to validation_unclassified
+    # verbatim rows until phases 16-17 grow their addresses.
+    fixture = adventure(triggers=(TriggerSpec(id="t", when=ItemAcquiredPattern(item_id="ghost")),))
+    finding = sole_finding(fixture)
+    assert finding.code == "validation_unclassified"
+    assert finding.message == "trigger 't': pattern references unknown item 'ghost'"
+    assert finding.address is None
 
 
 def test_travel_unknown_dungeon() -> None:

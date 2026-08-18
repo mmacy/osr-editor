@@ -38,11 +38,20 @@ from osrlib.crawl.dungeon import Edge, EdgeKind, LevelSpec, Position
 from pydantic import BaseModel, ConfigDict, StringConstraints
 from pydantic import Field as PydanticField
 
-from osreditor.addresses import area_address, dungeon_address, level_address, monster_address
+from osreditor.addresses import (
+    area_address,
+    cell_address,
+    dungeon_address,
+    edge_address,
+    item_address,
+    level_address,
+    monster_address,
+)
 from osreditor.errors import OpTargetNotFoundError, OpUnsupportedForgeError
 from osreditor.ops import (
     AddDungeon,
     AddFeature,
+    AddItemTemplate,
     AddLevel,
     AddMonsterTemplate,
     AddTransition,
@@ -51,6 +60,7 @@ from osreditor.ops import (
     RemoveArea,
     RemoveDungeon,
     RemoveFeature,
+    RemoveItemTemplate,
     RemoveLevel,
     RemoveMonsterTemplate,
     RemoveTransition,
@@ -65,6 +75,8 @@ from osreditor.ops import (
     SetEncounter,
     SetEntrance,
     SetFeature,
+    SetItemTemplate,
+    SetLevelField,
     SetMonsterTemplate,
     SetTownField,
     SetTrap,
@@ -124,13 +136,23 @@ class TranslationResult:
     serialized: bytes
 
 
-# The frontend mirrors two of these strings verbatim for client-side
+# The frontend mirrors three of these strings verbatim for client-side
 # flow-entry routing (monster-builders.ts BUNDLED_TEMPLATE_BLOCKED_MESSAGE;
-# import-dialog.tsx's new-level radio) — a rewording here should carry over so
-# the dialog copy matches what a posted batch would answer.
+# item-builders.ts BUNDLED_ITEM_BLOCKED_MESSAGE; import-dialog.tsx's new-level
+# radio) — a rewording here should carry over so the dialog copy matches what
+# a posted batch would answer.
 _BUNDLED_TEMPLATE_BLOCKED = (
     "bundled monster templates have no override kind — assembly derives them from the monsters stage"
 )
+
+# The authored-layer gap is forge's recorded decision (osr-forge#39): the
+# overrides vocabulary has no authored-layer surface, so the item ops and the
+# gate-carrying values below block rather than being shimmed around.
+_BUNDLED_ITEM_BLOCKED = (
+    "bundled item templates have no override kind — the overrides vocabulary has no authored-layer surface"
+)
+
+_GATE_BLOCKED = "gates have no override kind — the overrides vocabulary has no authored-layer surface"
 
 _BLOCKED_MESSAGES: dict[type, str] = {
     SetWandering: "wandering-monster parameters have no override kind",
@@ -145,6 +167,10 @@ _BLOCKED_MESSAGES: dict[type, str] = {
     AddMonsterTemplate: _BUNDLED_TEMPLATE_BLOCKED,
     SetMonsterTemplate: _BUNDLED_TEMPLATE_BLOCKED,
     RemoveMonsterTemplate: _BUNDLED_TEMPLATE_BLOCKED,
+    AddItemTemplate: _BUNDLED_ITEM_BLOCKED,
+    SetItemTemplate: _BUNDLED_ITEM_BLOCKED,
+    RemoveItemTemplate: _BUNDLED_ITEM_BLOCKED,
+    SetLevelField: "level guidance has no override kind",
 }
 
 
@@ -154,6 +180,10 @@ def _blocked_address(op: AnyEditOp) -> str:
         return monster_address(op.template.id)
     if isinstance(op, SetMonsterTemplate | RemoveMonsterTemplate):
         return monster_address(op.template_id)
+    if isinstance(op, AddItemTemplate):
+        return item_address(op.template.id)
+    if isinstance(op, SetItemTemplate | RemoveItemTemplate):
+        return item_address(op.item_id)
     if isinstance(op, SetDungeonField | RemoveDungeon):
         return dungeon_address(op.dungeon_id)
     if isinstance(op, AddDungeon):
@@ -166,7 +196,9 @@ def _blocked_address(op: AnyEditOp) -> str:
         return level_address(op.dungeon_id, op.old_number)
     if isinstance(op, SetAreaField):
         return area_address(op.dungeon_id, op.level_number, op.area_id)
-    if isinstance(op, SetWandering | ResizeLevel | RemoveLevel | AddFeature | SetFeature | RemoveFeature):
+    if isinstance(
+        op, SetWandering | SetLevelField | ResizeLevel | RemoveLevel | AddFeature | SetFeature | RemoveFeature
+    ):
         return level_address(op.dungeon_id, op.level_number)
     raise AssertionError(f"no blocked address rule for {type(op).__name__}")  # pragma: no cover
 
@@ -200,6 +232,27 @@ def ensure_forge_supported(ops: Sequence[AnyEditOp]) -> None:
                 "level-scope features have no override kind",
                 op=op.op,
                 address=_blocked_address(op),
+            )
+        if isinstance(op, SetEdges):
+            for key, edge in op.edges.items():
+                if edge is not None and edge.door is not None and edge.door.requires is not None:
+                    # This guard runs before apply-time key validation, so a
+                    # malformed key must not crash the address build — the raw
+                    # key is the honest fallback.
+                    try:
+                        canonical = canonicalize_edge_key(key)
+                    except ValueError:
+                        canonical = key
+                    raise OpUnsupportedForgeError(
+                        _GATE_BLOCKED,
+                        op=op.op,
+                        address=edge_address(op.dungeon_id, op.level_number, canonical),
+                    )
+        if isinstance(op, AddTransition) and op.transition.requires is not None:
+            raise OpUnsupportedForgeError(
+                _GATE_BLOCKED,
+                op=op.op,
+                address=cell_address(op.dungeon_id, op.level_number, op.transition.position),
             )
 
 

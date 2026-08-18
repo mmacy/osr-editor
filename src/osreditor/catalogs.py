@@ -23,14 +23,14 @@ server-side, no consumer.
 from functools import cache
 
 from osrlib.core.alignment import Alignment
-from osrlib.core.items import MagicItemCategory
+from osrlib.core.items import ItemTemplate, MagicItemCategory
 from osrlib.core.monsters import MonsterHitDice, MonsterTemplate
 from osrlib.core.tables import EncounterTable
 from osrlib.core.treasure import TreasureSection
 from osrlib.data import load_encounter_tables, load_equipment, load_magic_items, load_monsters, load_treasure_tables
 from pydantic import BaseModel, ConfigDict
 
-from osreditor.errors import CatalogMonsterNotFoundError
+from osreditor.errors import CatalogItemNotFoundError, CatalogMonsterNotFoundError
 
 __all__ = [
     "CatalogItem",
@@ -42,6 +42,7 @@ __all__ = [
     "MagicItemCatalogResponse",
     "MonsterCatalogResponse",
     "TreasureTypeCatalogResponse",
+    "catalog_item",
     "catalog_monster",
     "encounter_table_catalog",
     "equipment_catalog",
@@ -195,6 +196,30 @@ def catalog_monster(monster_id: str) -> MonsterTemplate:
         return load_monsters().get(monster_id)
     except ValueError as error:
         raise CatalogMonsterNotFoundError(f"the shipped catalog has no monster {monster_id!r}") from error
+
+
+def catalog_item(item_id: str) -> ItemTemplate:
+    """Answer one shipped equipment item's full template — the item clone source.
+
+    Serves from `load_equipment()` itself (osrlib's cached loader); the list
+    route's summaries stay picker-thin by this module's charter. Bundled
+    templates need no route — the document is in hand client-side — and magic
+    items are not clone sources (a bundle is never magic), so they get no
+    detail route either.
+
+    Args:
+        item_id: A shipped equipment id, from any of the four lists.
+
+    Returns:
+        The full template, verbatim.
+
+    Raises:
+        CatalogItemNotFoundError: If no shipped equipment item has that id.
+    """
+    try:
+        return load_equipment().get(item_id)
+    except ValueError as error:
+        raise CatalogItemNotFoundError(f"the shipped catalog has no equipment item {item_id!r}") from error
 
 
 @cache

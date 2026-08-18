@@ -9,6 +9,7 @@ their members under [`OsrEditorError`][osreditor.errors.OsrEditorError].
 __all__ = [
     "AidTargetStockedError",
     "ArtifactNotFoundError",
+    "CatalogItemNotFoundError",
     "CatalogMonsterNotFoundError",
     "ConversionCancelledError",
     "ConversionDestinationExistsError",
@@ -74,6 +75,10 @@ class ProviderRequestFailedError(OsrEditorError):
 
 class ArtifactNotFoundError(OsrEditorError):
     """A project artifact requested from a store does not exist."""
+
+
+class CatalogItemNotFoundError(OsrEditorError):
+    """No shipped equipment item has the requested id — the item detail route's miss."""
 
 
 class CatalogMonsterNotFoundError(OsrEditorError):

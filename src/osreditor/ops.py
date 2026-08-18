@@ -11,9 +11,10 @@ never a silent overwrite.
 The envelope grows additively. The phase 1 ops and the `AnyEditOp` union landed
 here with the document service, built exactly as osrlib builds `AnyCommand`;
 phase 2 added the geometry and dungeon/level-management vocabulary; phase 3 added
-the content vocabulary — encounters, traps, treasure, and features; phase 4 adds
-the bundled monster-template vocabulary. The `forge` diagnostics tier arrived
-with forge-backed projects in phase 5.
+the content vocabulary — encounters, traps, treasure, and features; phase 4 added
+the bundled monster-template vocabulary; phase 15 adds the bundled item-template
+trio and `SetLevelField`. The `forge` diagnostics tier arrived with forge-backed
+projects in phase 5.
 
 The op-level philosophy, continuing phase 1's `travel_turns >= 0` guard:
 **reject what is never intentional and is not a transient editing state**
@@ -31,6 +32,7 @@ from typing import Annotated, Literal
 from osrforge.contracts.overrides import Overrides
 from osrforge.contracts.report import ExtractionReport
 from osrforge.contracts.run import RunMeta
+from osrlib.core.items import ItemTemplate
 from osrlib.core.monsters import MonsterTemplate
 from osrlib.crawl.dungeon import (
     AreaTreasureSpec,
@@ -49,6 +51,7 @@ from osreditor.sidecar import EditorSidecar
 __all__ = [
     "AddDungeon",
     "AddFeature",
+    "AddItemTemplate",
     "AddLevel",
     "AddMonsterTemplate",
     "AddTransition",
@@ -66,6 +69,7 @@ __all__ = [
     "RemoveArea",
     "RemoveDungeon",
     "RemoveFeature",
+    "RemoveItemTemplate",
     "RemoveLevel",
     "RemoveMonsterTemplate",
     "RemoveTransition",
@@ -80,6 +84,8 @@ __all__ = [
     "SetEncounter",
     "SetEntrance",
     "SetFeature",
+    "SetItemTemplate",
+    "SetLevelField",
     "SetMonsterTemplate",
     "SetTownField",
     "SetTrap",
@@ -182,10 +188,11 @@ class SetMonsterTemplate(EditOp):
     field-grained op over `MonsterTemplate`'s 25 fields would need a value union
     undiscriminable on the wire. A rename falls under
     [`AddMonsterTemplate`][osreditor.ops.AddMonsterTemplate]'s id rejections and
-    cascades: every `KeyedMonster.template_id` and wandering-row monster id
-    naming the old id is rewritten in the same commit (the `RenameDungeon`
-    precedent — template ids are referenced in-document), with the honest
-    whole-document delta. The collision invariant guards **new or changed ids
+    cascades: every `KeyedMonster.template_id`, wandering-row monster id,
+    `monster_defeated` pattern, and `SpawnMonsters` consequence naming the old
+    id is rewritten in the same commit (the `RenameDungeon` precedent —
+    template ids are referenced in-document), with the honest whole-document
+    delta. The collision invariant guards **new or changed ids
     only**: a foreign template's unchanged colliding id passes through
     untouched, so its other fields stay editable and the finding stays a
     navigable diagnostic. Among foreign duplicate bundled ids, the first match
@@ -210,6 +217,62 @@ class RemoveMonsterTemplate(EditOp):
     template_id: str
 
 
+class AddItemTemplate(EditOp):
+    """Add a bundled item template, appended to `Adventure.items` in authored order.
+
+    Adventure-scoped, the monster trio's shape over the four-kind
+    [`ItemTemplate`][osrlib.core.items.ItemTemplate] union — the kinds ride the
+    wire on `item_type`, and each kind's internal validity (the missile
+    quality ↔ ranges coupling, the body-armour XOR shield rule, dice grammars)
+    is the model's own, enforced at request parse. Invariants at apply: the id
+    non-empty and free across the full collision domain — shipped equipment
+    (all four lists), shipped magic items, and the rest of the bundle — the
+    exact seen-set osrlib's `_effective_equipment` seeds, so the editor
+    refuses at commit precisely what `validate_adventure` would flag. The op
+    never *introduces* a collision; a foreign document already carrying one
+    stays editable (see [`SetItemTemplate`][osreditor.ops.SetItemTemplate]'s
+    carry-through).
+    """
+
+    op: Literal["add_item_template"] = "add_item_template"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    template: ItemTemplate
+
+
+class SetItemTemplate(EditOp):
+    """Replace one bundled item template whole; a differing `template.id` is a rename.
+
+    Whole-value replacement at the item form's commit grain — the
+    [`SetMonsterTemplate`][osreditor.ops.SetMonsterTemplate] reasoning. A
+    rename falls under [`AddItemTemplate`][osreditor.ops.AddItemTemplate]'s id
+    rejections and cascades in the same commit over every in-document
+    reference: cache `item_ids` on area and level features, `has_item`
+    conditions inside door and transition gates, and the authored-layer sites
+    (`item_acquired` patterns, clause conditions, `GrantItem` consequences) —
+    with the honest whole-document delta. The collision invariant guards
+    **new or changed ids only**: a foreign template's unchanged colliding id
+    passes through untouched, so its other fields stay editable and the
+    finding stays a navigable diagnostic. Among foreign duplicate bundled ids,
+    the first match in authored order is the target.
+    """
+
+    op: Literal["set_item_template"] = "set_item_template"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    item_id: str
+    template: ItemTemplate
+
+
+class RemoveItemTemplate(EditOp):
+    """Remove one bundled item template; first-match among foreign duplicate ids.
+
+    Removal admits dangling references: cache `item_ids` naming the removed id
+    become `feature_unknown_item` diagnostics and gate conditions the gate
+    findings — legal while editing, gated at publish. The UI confirms first
+    when references exist, naming the count.
+    """
+
+    op: Literal["remove_item_template"] = "remove_item_template"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    item_id: str
+
+
 class LevelOp(EditOp):
     """Shared targeting for ops scoped to one level: `dungeon_id` + `level_number`.
 
@@ -219,6 +282,20 @@ class LevelOp(EditOp):
 
     dungeon_id: str
     level_number: int = Field(ge=1)
+
+
+class SetLevelField(LevelOp):
+    """Set one plain level field — `guidance`, the one such field today.
+
+    The `SetAdventureField` shape at level scope; the `Literal` grows if a
+    later osrlib adds level fields. Guidance is ambient steering for a
+    narrating front end — per-level narrator direction, inert to the engine,
+    never shown to players verbatim.
+    """
+
+    op: Literal["set_level_field"] = "set_level_field"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    field: Literal["guidance"]
+    value: str
 
 
 class SetWandering(LevelOp):
@@ -298,8 +375,10 @@ class SetAreaField(LevelOp):
 
     `id` is the re-key affordance (key numbers render on the map, so re-keying
     is a map concern): apply rejects empty and duplicate ids like
-    [`CreateArea`][osreditor.ops.CreateArea]. Nothing references area ids in
-    the document, so re-keying cascades nowhere. Phase 3 does not grow this
+    [`CreateArea`][osreditor.ops.CreateArea]. A re-key cascades over the one
+    reference kind that names area ids — authored-trigger and quest
+    `AreaEnteredPattern`s naming this area's whole triple — with the honest
+    whole-document delta when any rewrite lands. Phase 3 does not grow this
     literal — encounter, trap, and treasure have their own ops per the spec's
     vocabulary.
     """
@@ -495,10 +574,13 @@ class RenameDungeon(EditOp):
 
     A rename means "same thing, new name", so references follow, atomically, in
     one undo step: the dungeon's `id`, the town's `travel_turns` key (order
-    preserved), and every `TransitionSpec.to_dungeon_id` naming it, across all
-    dungeons. Invariants at apply: `new_id` non-empty and not already taken.
-    Contrast [`RemoveDungeon`][osreditor.ops.RemoveDungeon], which deliberately
-    does not cascade.
+    preserved), every `TransitionSpec.to_dungeon_id` naming it across all
+    dungeons, and the authored-layer sites — location patterns
+    (`area_entered`, `level_entered`, `dungeon_entered`), `SetDoorState`
+    consequences, and `PlaceParty` locations. Invariants at apply: `new_id`
+    non-empty and not already taken. Contrast
+    [`RemoveDungeon`][osreditor.ops.RemoveDungeon], which deliberately does not
+    cascade.
     """
 
     op: Literal["rename_dungeon"] = "rename_dungeon"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
@@ -540,8 +622,12 @@ class AddLevel(EditOp):
 
 
 class RenumberLevel(EditOp):
-    """Renumber a level, cascading every transition in the document targeting it.
+    """Renumber a level, cascading every reference in the document targeting it.
 
+    The cascade covers every transition targeting the level and the
+    authored-layer sites naming its dungeon and old number — `area_entered`
+    and `level_entered` patterns, `SetDoorState` consequences, and
+    `PlaceParty` locations.
     Same rename-vs-remove logic as dungeons; per the no-reorder rule the level
     stays where it sits in the tuple (display order is sorted anyway, and
     moving it could change the stored-order entrance semantics). Invariant at
@@ -590,6 +676,10 @@ AnyEditOp = Annotated[
     | AddMonsterTemplate
     | SetMonsterTemplate
     | RemoveMonsterTemplate
+    | AddItemTemplate
+    | SetItemTemplate
+    | RemoveItemTemplate
+    | SetLevelField
     | SetWandering
     | SetEdges
     | SetEntrance

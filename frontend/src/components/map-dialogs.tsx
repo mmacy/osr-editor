@@ -6,10 +6,12 @@
 import { useState } from 'react'
 
 import { AuthorNotesCard } from '@/components/author-notes-card'
+import { GateCard } from '@/components/gate-card'
 import { LevelFeaturesSection } from '@/components/level-features'
 import { MiniLevelPicker } from '@/components/mini-level-picker'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import { WanderingTableEditor } from '@/components/wandering-table-editor'
 import {
   Dialog,
@@ -22,7 +24,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
-import { levelAddress, navTargetFor, type NavTarget } from '@/lib/address'
+import { cellAddress, levelAddress, navTargetFor, type NavTarget } from '@/lib/address'
 import {
   clearLevelContentOps,
   contentTally,
@@ -36,6 +38,7 @@ import { projectStore, useProjectStore } from '@/store/project-store'
 import type {
   Adventure,
   DungeonSpec,
+  GateSpec,
   LevelSpec,
   Position,
   TransitionSpec,
@@ -580,6 +583,7 @@ export function LevelPropertiesDialog({
             levelNumber={levelNumber}
             wandering={level.wandering}
           />
+          <GuidanceForm dungeonId={dungeonId} levelNumber={levelNumber} guidance={level.guidance} />
           <LevelFeaturesSection
             document={document}
             dungeonId={dungeonId}
@@ -721,6 +725,58 @@ function ClearLevelContentBody({
   )
 }
 
+// The level's ambient guidance: steering for a narrating front end, never
+// shown to players verbatim — the UI voice, not the serif. In forge mode the
+// field routes to the blocked-op dialog on entry (level guidance has no
+// override kind), the server's 422 behind it.
+function GuidanceForm({
+  dungeonId,
+  levelNumber,
+  guidance,
+}: {
+  dungeonId: string
+  levelNumber: number
+  guidance: string
+}) {
+  const forge = useProjectStore((state) => state.project?.forge != null)
+  const field = useCommittedField(guidance, (value) => {
+    void projectStore.getState().commit([
+      {
+        op: 'set_level_field',
+        dungeon_id: dungeonId,
+        level_number: levelNumber,
+        field: 'guidance',
+        value,
+      },
+    ])
+  })
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor="level-guidance">Guidance</Label>
+      <Textarea
+        id="level-guidance"
+        className="min-h-16"
+        value={field.value}
+        onChange={field.onChange}
+        onBlur={field.onBlur}
+        onFocus={(event) => {
+          if (!forge) return
+          event.currentTarget.blur()
+          projectStore.getState().setBlockedOp({
+            op: 'set_level_field',
+            address: levelAddress(dungeonId, levelNumber),
+            message: 'level guidance has no override kind',
+          })
+        }}
+      />
+      <p className="text-muted-foreground text-xs">
+        Ambient steering for a narrating front end — per-level narrator direction, inert to the
+        engine and never shown to players verbatim.
+      </p>
+    </div>
+  )
+}
+
 // The wandering form: the scalar parameters plus the inline d20 table editor.
 function WanderingForm({
   document,
@@ -851,6 +907,11 @@ function TransitionBody({
   const [hoverCell, setHoverCell] = useState<Position | null>(null)
   const [facing, setFacing] = useState<TransitionSpec['to_facing']>(existing?.to_facing ?? 'north')
   const [reciprocal, setReciprocal] = useState(true)
+  // The edit path seeds the gate from the committed transition — without
+  // which an unrelated edit to a foreign gated transition would silently
+  // strip its gate.
+  const [gate, setGate] = useState<GateSpec | null>(existing?.requires ?? null)
+  const forge = useProjectStore((state) => state.project?.forge != null)
   const dungeon = document.dungeons.find((candidate) => candidate.id === targetDungeon)
   const level = dungeon?.levels.find((candidate) => candidate.number === targetLevel)
   const stairs = kind === 'stairs_up' || kind === 'stairs_down'
@@ -916,6 +977,7 @@ function TransitionBody({
       to_level_number: targetLevel,
       to_position: targetCell,
       to_facing: facing,
+      requires: gate,
     }
     void projectStore
       .getState()
@@ -1082,6 +1144,15 @@ function TransitionBody({
             )}
           </div>
         )}
+        <GateCard
+          gate={gate}
+          document={document}
+          idPrefix="transition-gate"
+          forge={forge}
+          blockedAddress={cellAddress(dungeonId, levelNumber, sourceCell)}
+          blockedOpCode="add_transition"
+          onCommit={(update) => setGate((current) => update(current))}
+        />
         {stairs && !editing && (
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
@@ -1089,6 +1160,11 @@ function TransitionBody({
               onCheckedChange={(next) => setReciprocal(next === true)}
             />
             Create the reciprocal stairs on the target level
+            {gate !== null && (
+              <span className="text-muted-foreground text-xs">
+                — created ungated: a gate guards one threshold's attempt
+              </span>
+            )}
           </label>
         )}
         {!stairs && (

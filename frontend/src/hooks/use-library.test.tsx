@@ -88,6 +88,7 @@ const LEVEL: LevelSpec = {
   transitions: [],
   wandering: { chance_in_six: 1, interval_turns: 2, table: null },
   entrance: null,
+  guidance: '',
 }
 
 let commit: ReturnType<typeof vi.fn<CommitAction>>
