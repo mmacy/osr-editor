@@ -607,15 +607,23 @@ def _key_not_placed_findings(adventure: Adventure) -> list[Finding]:
 
 
 def _cached_item_ids(adventure: Adventure) -> set[str]:
-    """Every item id some area- or level-feature cache holds."""
+    """Every item id some area- or level-feature *cache* holds.
+
+    The kind filter is load-bearing: osrlib's take and inspect handlers
+    reject any feature whose kind is not a treasure cache, so contents a
+    foreign document parks on another kind are unreachable in play and must
+    not satisfy the gate — the exact shape this check exists to catch.
+    """
     ids: set[str] = set()
     for dungeon in adventure.dungeons:
         for level in dungeon.levels:
             for area in level.areas:
                 for feature in area.features:
-                    ids.update(feature.item_ids)
+                    if feature.kind == "treasure_cache":
+                        ids.update(feature.item_ids)
             for feature in level.features:
-                ids.update(feature.item_ids)
+                if feature.kind == "treasure_cache":
+                    ids.update(feature.item_ids)
     return ids
 
 

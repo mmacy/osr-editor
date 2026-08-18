@@ -63,7 +63,7 @@ Two advisory checks watch the quest layer, joining the [three on the trigger lay
 
 ## What lives in saves
 
-A quest's lifecycle state — activated, revealed, completed — lives in the play session's save, keyed by quest and objective ids, not in your document. Renaming a quest orphans an existing save's state for it: the engine skips the unknown entry silently and the renamed quest starts over for that save. Renaming an objective does the same one level down — under the *all* rule, a quest with a renamed objective can never complete from an old save. Fresh sessions are unaffected. This is the game engine's own posture, and the editor does not attempt to repair old saves.
+A quest's lifecycle state — activated, revealed, completed — lives in the play session's save, keyed by quest and objective ids, not in your document. Renaming a quest orphans it in existing saves: loading a save replaces the session's quest state wholesale, so the renamed quest has no entry at all — the engine skips it silently, and it never activates, never appears in the quest log, and never advances in that save. Renaming an objective orphans one level down — under the *all* rule, a quest with a renamed objective can never complete from an old save. Fresh sessions are unaffected. This is the game engine's own posture, and the editor does not attempt to repair old saves.
 
 ## In converted projects
 

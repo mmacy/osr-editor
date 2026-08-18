@@ -783,6 +783,17 @@ def test_a_level_cache_satisfies_the_gate() -> None:
     assert key_not_placed(fixture) == []
 
 
+def test_a_non_cache_features_contents_do_not_satisfy() -> None:
+    # osrlib's take and inspect handlers reject any feature whose kind is not
+    # a treasure cache, so contents a foreign document parks on another kind
+    # are unreachable in play — exactly the shape this check exists to catch.
+    trick = FeatureSpec(id="trick", kind="construction_trick", cell=(0, 0), item_ids=("jade-idol",))
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door()}, features=(trick,)),)), items=(IDOL,)
+    )
+    assert len(key_not_placed(fixture)) == 1
+
+
 def test_a_trigger_grant_satisfies_the_gate() -> None:
     granting = TriggerSpec(
         id="lever",
