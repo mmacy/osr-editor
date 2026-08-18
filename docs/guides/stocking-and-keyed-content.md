@@ -33,6 +33,6 @@ The cards commit through type-ahead pickers over osrlib's shipped catalogs — m
 One page per kind:
 
 - [Encounters](encounters.md) — monster lines and counts, the reaction and awareness pins, the lair hoard, and the level's wandering table.
-- [Treasure](treasure.md) — treasure type letters or the unguarded band roll, and which one a room wants.
+- [Treasure](treasure.md) — treasure type letters or the unguarded band roll, and when to use each.
 - [Traps](traps.md) — the composable trap builder, for room traps and for trapped caches.
 - [Features](features.md) — keyed details, caches, and tricks, at area scope or level scope.

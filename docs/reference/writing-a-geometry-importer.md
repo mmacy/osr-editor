@@ -49,7 +49,7 @@ The sniff is two cheap gates: the extension, then one bounded read checked for p
 --8<-- "tests/example_importer.py:load"
 ```
 
-Everything unreadable becomes `ImportSourceInvalidError` with a message a person can act on. Note what does *not* happen: no partial payload, no silent empty level — the source either converts or refuses honestly.
+Everything unreadable becomes `ImportSourceInvalidError` with a message a person can act on. Note what does *not* happen: no partial payload, no silent empty level — the importer either converts the source or refuses honestly.
 
 ### The conversion
 
@@ -79,7 +79,7 @@ requires = ["uv_build>=0.8.22,<0.9.0"]
 build-backend = "uv_build"
 ```
 
-Install the package into the editor's environment and the importer appears in the import dialog — no editor configuration, no registration call. Discovery is defensive on the editor's side: a broken entry point logs a warning and is skipped (a third-party package must never break boot), and a duplicate `format_id` keeps the first registration, so no package can shadow another's format.
+Install the package into the editor's environment and the importer appears in the import dialog — no editor configuration, no registration call. Discovery is defensive on the editor's side: the editor logs a warning and skips a broken entry point (a third-party package must never break boot), and a duplicate `format_id` keeps the first registration, so no package can shadow another's format.
 
 ## API reference
 

@@ -5,10 +5,10 @@ The third stocking mode, beside hand-keying and SRD stocking: stock a map by pla
 The **Library** button on the map toolbar opens the panel beside the canvas. Everything it lists is a *content pack*: geometry-free room projections — name, description, encounter, trap, treasure, and features, but never cells, walls, or transitions — plus the bundled monsters those rooms reference and any wandering tables their levels hold. Packs come from three places, and the panel treats them identically:
 
 - **Another project.** Type or browse any project directory — a native project, or a forge workdir, which assembles read-only exactly as review would. Opening a source writes nothing to it and opens no second session; it is a snapshot as of the open, and **Refresh** re-reads it.
-- **This project.** The one-click shortcut projects your own working document — current to the latest edit — so a dungeon can borrow from its own earlier levels.
+- **This project.** The one-click shortcut projects your own working document — current to the latest edit — so you can borrow from a dungeon's own earlier levels.
 - **The stash.** Content banked by the two destructive acts below, stored inside this project's own sidecar.
 
-Loaded libraries are remembered per project: leave for the home screen or another adventure and come back, and the panel restores every pack you had open — each a fresh read of its source, so a source edited in the meantime comes back current. A source that no longer opens says so once and drops off the list.
+Loaded libraries are remembered per project: leave for the home screen or another adventure and come back, and the panel restores every pack you had open — each a fresh read of its source, so a source edited in the meantime comes back current. When a source no longer opens, the panel says so once and drops it from the list.
 
 Every entry row previews in place: the chevron discloses the entry's description and one module-notation line per kind the entry holds — the encounter with its monster names resolved, the trap, the treasure, each feature — so you can read a room before placing it rather than dropping it to find out. The toggle in the panel header expands or collapses every row in every open pack at once, for scanning a whole palette. Previews are read-only, like everything else in the panel; placing is still the only write.
 

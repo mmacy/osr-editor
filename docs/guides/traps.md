@@ -13,7 +13,7 @@ The kind follows from where you added it, and the models enforce the split, so a
 
 ## The trap's shape
 
-**Trigger** names the springing action, and a room trap offers the choice: `enter` springs when the party steps onto a cell of the area — the pit-in-the-floor construction — and `open` springs when a door of the area is opened, from either side, the blade that drops when the door swings. The help under the field states the chosen value's springing action. A cache's trap springs when the cache is opened and the engine reads no trigger at all, so a treasure trap shows no trigger field.
+**Trigger** names the springing action, and a room trap offers the choice: `enter` springs when the party steps onto a cell of the area — the pit-in-the-floor construction — and `open` springs when a door of the area is opened, from either side, the blade that drops when the door swings. The help under the field states the chosen value's springing action. A cache's trap springs when the cache is opened and the engine reads no trigger at all, so the builder shows no trigger field for a treasure trap.
 
 A room trap also isn't certain to go off. Entering the cell springs it 2-in-6, the way B/X handles a party walking over a pit, and a trap the party has already found, removed, or sprung never fires again.
 

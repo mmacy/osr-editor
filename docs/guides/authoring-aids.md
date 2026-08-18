@@ -27,7 +27,7 @@ Previews show what a declaration will produce without committing anything — pu
 
 Each line reads `coins · valuables · magic · total`, and the trailing figure is the **whole hoard's value in gold**, not a gold-coin count. A line reading `200 sp · 0 valuable(s) · 0 magic · 20 gp` is 200 silver and nothing else — worth 20 gp at ten silver to the gold. The total counts coins and valuables; magic items have no gp value in it.
 
-The magic the roll produced is named beneath its line, one item per row: the item's catalog name, a leading count only when the roll produced more than one of it (`3 × Potion of Healing`), and the charges in parentheses only for an item that has a charge count (`Wand of Fire Balls (7 charges)`). A hoard that rolled no magic shows nothing under its line. Gems and jewellery stay a count — the wand is what decides a room, and three gem values rarely do.
+The magic the roll produced is named beneath its line, one item per row: the item's catalog name, a leading count only when the roll produced more than one of it (`3 × Potion of Healing`), and the charges in parentheses only for an item that has a charge count (`Wand of Fire Balls (7 charges)`). A hoard that rolled no magic shows nothing under its line. Gems and jewellery stay a count — you judge a room on the wand, and rarely on three gem values.
 
 **Expert tier** switches which magic-item tables a roll draws from, Basic or Expert. Coins, gems, and jewellery are unaffected, so on a hoard that rolls no magic the toggle changes nothing. It's a control on the preview alone — the card stores letters or the unguarded flag, and the tier the hoard is finally rolled at is the game's.
 

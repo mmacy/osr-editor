@@ -44,7 +44,7 @@ Every panel around the canvas takes the width you drag it to: the section list o
 
 Neither side can be dragged away. Each panel stops at a width that still shows its own controls, and the canvas keeps a floor of its own, so no panel can take the window.
 
-Widths belong to the project, kept in its editor sidecar beside the per-level camera — set a layout and it is still there when you open the project tomorrow. Until you set one, the inspector widens on its own whenever an area is selected, because the content forms need the room; from your first drag onward your width holds whatever is selected.
+Widths belong to the project, kept in its editor sidecar beside the per-level camera — set a layout and it is still there when you open the project tomorrow. Until you set one, the inspector widens on its own whenever an area is selected, so the content forms have room; from your first drag onward your width holds whatever is selected.
 
 ## Levels and dungeons
 

@@ -1,8 +1,8 @@
 # The item editor
 
-The **Items** section, beside Monsters in the section list, is where you create items of your own: the brass key a door in your module wants opened with, a blade with a history, a lamp no equipment list carries. Items you create here travel inside the adventure itself — the interface calls them *bundled* — and stand beside the standard catalog, the equipment and magic items every osrlib game ships with.
+The **Items** section, beside Monsters in the section list, is where you create items of your own: a brass key for a door in your module, a blade with a history, a lamp no equipment list includes. Items you create here travel inside the adventure itself — the interface calls them *bundled* — and stand beside the standard catalog, the equipment and magic items every osrlib game ships with.
 
-Once created, an item can go anywhere the editor takes one: into a [treasure cache](features.md)'s item list for the party to find, or onto a [gate](map-editor.md#gates) — a door or stairway that wants the party carrying it. When you publish, your items ride along inside the adventure, and in play the game treats them exactly like catalog items: found, carried, dropped, given, and — if a gate says so — spent.
+Once created, an item can go anywhere the editor takes one: into a [treasure cache](features.md)'s item list for the party to find, or onto a [gate](map-editor.md#gates) — a door or stairway the party can pass only while carrying the item. When you publish, your items ride along inside the adventure, and in play the game treats them exactly like catalog items: found, carried, dropped, given, and — if a gate consumes it, spent.
 
 ## Creating an item
 
@@ -30,7 +30,7 @@ Each kind gets a form covering everything the game knows about it. Like the rest
 
 ## Renaming and removing
 
-To rename an item, change its id in the detail form. Every mention of it follows in the same step — treasure caches naming it, gates that want it carried — as one undo, and your author note moves with it.
+To rename an item, change its id in the detail form. Every mention of it follows in the same step — treasure caches naming it, gates whose condition names it — as one undo, and your author note moves with it.
 
 Removing an item something still mentions warns you first, with the count. The mentions themselves are never silently deleted: they stay in the document and appear in the diagnostics panel, each one a click away, so you can retarget or remove them on your own terms. Add an item back under the same id and those findings clear.
 
