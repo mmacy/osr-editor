@@ -13,7 +13,7 @@ The kind follows from where you added it, and the models enforce the split, so a
 
 ## The trap's shape
 
-**Trigger** names the springing action, and a room trap offers the choice: `enter` springs when the party steps onto a cell of the area — the pit-in-the-floor construction — and `open` springs when a door of the area is opened, from either side, the blade that drops when the door swings. The help under the field states the chosen value's springing action. A cache's trap springs when the cache is opened and the engine reads no trigger at all, so a treasure trap shows no trigger field.
+**Trigger** names the springing action, and a room trap offers the choice: `enter` springs when the party steps onto a cell of the area — the pit-in-the-floor construction — and `open` springs when a door of the area is opened, from either side, the blade that drops when the door swings. The help under the field states the chosen value's springing action. A cache's trap springs when the cache is opened and the engine reads no trigger at all, so the builder shows no trigger field for a treasure trap.
 
 A room trap also isn't certain to go off. Entering the cell springs it 2-in-6, the way B/X handles a party walking over a pit, and a trap the party has already found, removed, or sprung never fires again.
 
@@ -29,8 +29,8 @@ Every field below is optional, and a trap is the sum of the ones you set. Nothin
 - **Save or die** — the classic lethal trap. It takes precedence over everything else that would happen to the victim: the damage, the fall, and the condition never apply. Pair it with a save set to `negates`. A `half` save does not stop a kill, so **Save or die** with **On save: half** is lethal to everyone the trap catches, saved or not.
 - **Condition** — what the victim is left with: `poisoned`, `paralysed`, `asleep`, `blind`, `petrified`, and the rest of osrlib's condition vocabulary. **Duration** and **Unit** say for how long — a fixed number or a dice expression, in `round`, `turn`, or `day`. Both are available only once a condition is set, and clearing the condition clears them.
 - **Fall (feet)** — the drop, for the pit.
-- **Slide** — where the chute dumps them: pick the destination dungeon, level, cell, and facing, the same target gesture the map's transition tool uses. It relocates the party outright rather than adding a transition to the map, so nothing leads back up. It also applies to the *whole party* whatever the rest of the trap says — the party has one location — so a slide fires on a triggerer-only trap, and fires even when every character saves.
-- **Manual effect** — prose, for what the rules leave to the referee. Everything B/X describes and no field above can express goes here. The engine carries it and never automates it, so it is a note to the human running the game rather than a mechanic.
+- **Slide** — where the chute dumps the party: pick the destination dungeon, level, cell, and facing, the same target gesture the map's transition tool uses. It relocates them outright rather than adding a transition to the map, so nothing leads back up. It also applies to the *whole party* whatever the rest of the trap says — the party has one location — so a slide fires on a triggerer-only trap, and fires even when every character saves.
+- **Manual effect** — prose, for what the rules leave to the referee. Everything B/X describes and no field above can express goes here. The engine holds it and never automates it, so it is a note to the human running the game rather than a mechanic.
 
 The builder holds those dependencies by construction rather than validating after the fact, so the trap you're editing is a legal trap at every keystroke — which is why the dependent fields disable instead of complaining.
 

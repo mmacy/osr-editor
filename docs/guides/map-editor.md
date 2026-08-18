@@ -11,7 +11,7 @@ Every level renders as graph paper, and the tool set works directly on it.
 - **Wall/door** (`W`) click-cycles an edge wall → open → door, and drags to paint. The door inspector sets normal or secret, stuck, locked, and starts-open — and hangs a [gate](#gates) on the door.
 - **Area** (`A`) paints cells into the selected area or a new one.
 - **Entrance** (`E`) places the level entrance.
-- **Transition** (`T`) places stairs, trapdoors, and chutes with a target-level picker — stairs offer reciprocal creation in the same undo step, and the dialog carries a [gate](#gates) card for tolling the threshold.
+- **Transition** (`T`) places stairs, trapdoors, and chutes with a target-level picker — the dialog offers reciprocal creation for stairs in the same undo step, and holds a [gate](#gates) card for tolling the threshold.
 
 ![The map editor toolbar: the select, pan, room, corridor, wall and door, area, entrance, and transition tools, then the zoom in, zoom out, reset zoom, and fit level view controls](../assets/screenshots/map-toolbar-light.png#only-light)
 ![The map editor toolbar: the select, pan, room, corridor, wall and door, area, entrance, and transition tools, then the zoom in, zoom out, reset zoom, and fit level view controls](../assets/screenshots/map-toolbar-dark.png#only-dark)
@@ -26,7 +26,7 @@ Both tools produce keyed areas. The difference is what else they do.
 
 Because **Area** never opens edges, painting cells into a room does not make them reachable — the wall between the chamber and its new alcove stays a wall until you open it with **Wall/door** or run a **Corridor** through. And because **Area** unions into the *selected* area, select the room first: paint with nothing selected and you get a second key instead.
 
-Neither tool takes cells away from another area, so painting over a neighbour's floor leaves both areas claiming it. That is legal while editing, and the lint flags it as `area_overlap`.
+Neither tool takes cells away from another area, so painting over a neighbour's floor leaves both the neighbour and the area you painted into claiming it. That is legal while editing, and the lint flags it as `area_overlap`.
 
 ## Moving around the map
 
@@ -36,7 +36,7 @@ Two view controls sit beside the zoom buttons and do different things. **Reset z
 
 Zoom is proportional to the gesture and **accelerates as you push it**: the first moments of a pinch or a wheel spin stay fine-grained for framing a room, and holding the gesture on ramps the rate up to cross scales quickly. Pause and it returns to fine-grained, so precision is always a fraction of a second away. Nothing coasts after you stop.
 
-A mouse wheel and a trackpad two-finger drag reach the browser as the same event, so the editor tells them apart by the shape of the scroll. If yours is ever read wrong, **ctrl-scroll** (or **cmd-scroll**) always zooms.
+A mouse wheel and a trackpad two-finger drag reach the browser as the same event, so the editor tells them apart by the shape of the scroll. If your gesture is ever read wrong, **ctrl-scroll** (or **cmd-scroll**) always zooms.
 
 ## Sizing the panels
 
@@ -44,7 +44,7 @@ Every panel around the canvas takes the width you drag it to: the section list o
 
 Neither side can be dragged away. Each panel stops at a width that still shows its own controls, and the canvas keeps a floor of its own, so no panel can take the window.
 
-Widths belong to the project, kept in its editor sidecar beside the per-level camera — set a layout and it is still there when you open the project tomorrow. Until you set one, the inspector widens on its own whenever an area is selected, because the content forms need the room; from your first drag onward your width holds whatever is selected.
+Widths belong to the project, kept in its editor sidecar beside the per-level camera — set a layout and it is still there when you open the project tomorrow. Until you set one, the inspector widens on its own whenever an area is selected, so the content forms have room; from your first drag onward your width holds whatever is selected.
 
 ## Levels and dungeons
 
@@ -54,7 +54,7 @@ Level properties also holds three authoring surfaces the map itself doesn't show
 
 **Clear content** strips a level back to its geometry in one undo step, which is what you want after importing a map whose rooms arrive already described. The grid, the walls and doors, the cells they enclose, the entrance, the transitions, and the wandering monsters all stay; area names and descriptions, encounters, traps, treasure, and features go. The dialog counts exactly what it will remove before you commit.
 
-**Also remove the emptied areas** goes one step further: the key numbers go too, and the emptied cells become corridor. The walls and doors that draw the rooms are edges, so the map still reads exactly the same — you get the shape without the keying, ready to re-key as you stock it. The choice sticks for the session, because stripping an imported module is a per-level job.
+**Also remove the emptied areas** goes one step further: the key numbers go too, and the emptied cells become corridor. The walls and doors that enclose the rooms are edges, so the map still reads exactly the same — you get the shape without the keying, ready to re-key as you stock it. The choice sticks for the session, because stripping an imported module is a per-level job.
 
 In a forge-backed project this is an ordinary correction, not a special case: each emptied room becomes one reasoned entry in `overrides.yaml`, so clearing a converted module's prose is a claim you are making about the source — reviewable, and undoable — rather than an edit that escapes the record.
 
@@ -63,25 +63,25 @@ In a forge-backed project this is an ordinary correction, not a special case: ea
 
 ## Gates
 
-A gate is an authored predicate the engine checks when the party *attempts* something — opening a door, taking a stair. It hangs on exactly two carriers: a door and a level-placed transition. The gate card sits in the door inspector's door branch and in the transition dialog, and holds one condition plus the narrative for both outcomes:
+A gate is an authored predicate the engine checks when the party *attempts* something — opening a door, taking a stair. A gate goes on exactly two things: a door and a level-placed transition. The gate card sits in the door inspector's door branch and in the transition dialog, and holds one condition plus the narrative for both outcomes, refusal and success:
 
-- **Carries an item** — some party member's carried inventory holds the item, picked from the bundled items, shipped equipment, and magic items — exactly the domain the engine resolves against. **Consumes the item** makes it a toll: one instance leaves the first carrier in marching order per success, so a door that swings shut wants another key. The toll is a gate-only power — a trigger or quest clause that consumes is rejected by the engine, so those builders never offer it.
+- **Carries an item** — some party member's carried inventory holds the item, picked from the bundled items, shipped equipment, and magic items — exactly the domain the engine resolves against. **Consumes the item** makes it a toll: one instance leaves the first carrier in marching order per success, so passing the same door twice costs two keys. The toll is a gate-only power — a trigger or quest clause that consumes is rejected by the engine, so the trigger and quest builders never offer it.
 - **A flag equals** — a session flag holds a value, compared strictly: the value control is typed (text, number, or boolean), because a stored `true` never satisfies an authored `1`.
 - **An effect is active** — an effect of that kind is attached to a party member. Effect kinds are an open vocabulary, so the field is a free string.
 
-The narrative block carries the gate's two read beats — **Refusal** is what a refused attempt says, **Success** rides the successful one — plus speaker attribution and narrator guidance. Text a gate never reads (a foreign block carrying a trigger's `fired` beat, say) is warned about by name with a one-click clear, never silently rewritten or hidden.
+The narrative block holds the gate's two read beats — **Refusal** for a refused attempt, **Success** for a successful one — plus speaker attribution and narrator guidance. Text the engine never reads for a gate (a foreign block holding a trigger's `fired` beat, say) is warned about by name with a one-click clear, never silently rewritten or hidden.
 
 ![The door inspector with an open gate card: the has-item condition naming the brass key, the consumes toggle, and the authored refusal and success beats](../assets/screenshots/door-gate-card-light.png#only-light)
 ![The door inspector with an open gate card: the has-item condition naming the brass key, the consumes toggle, and the authored refusal and success beats](../assets/screenshots/door-gate-card-dark.png#only-dark)
 
-A gate composes with the door's own mechanics rather than replacing them — a locked and gated door requires both — and auto-reciprocal stairs are created ungated, because a gate guards one threshold's attempt and a toll on the way down is not authored intent for the way up. A trap's slide has no gate control at all: a forced relocation is not an attempt, and the engine rejects a gated slide outright.
+A gate composes with the door's own mechanics rather than replacing them: on a locked and gated door the party must open the lock and satisfy the gate. Auto-reciprocal stairs are created ungated, because a gate applies to one threshold's attempt and a toll on the way down is not authored intent for the way up. A trap's slide has no gate control at all: a forced relocation is not an attempt, and the engine rejects a gated slide outright.
 
-On the map, a gated door draws a small solid diamond beside its leaf — beside the secret disc when both apply — and a gated transition draws the same diamond beside its glyph: one mark, both carriers.
+On the map, the editor marks a gated door with a small solid diamond beside the door symbol, and a gated transition with the same diamond beside its glyph. On a door that is both gated and secret, the diamond sits beside the secret disc.
 
 ![A gated door on the map: the solid gate diamond beside the door leaf](../assets/screenshots/gate-badges-light.png#only-light)
 ![A gated door on the map: the solid gate diamond beside the door leaf](../assets/screenshots/gate-badges-dark.png#only-dark)
 
-Reachability lint stays gate-blind by decision: a room behind a gated door is reachable — the gate is satisfiable in play, like a stuck or locked door — so it is never flagged `area_unreachable`.
+Reachability lint stays gate-blind by decision: a room behind a gated door is reachable — the gate is satisfiable in play, like a stuck or locked door — so the room is never flagged `area_unreachable`.
 
 ## The live lint
 

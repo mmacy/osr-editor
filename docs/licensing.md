@@ -4,7 +4,7 @@ osr-editor's code is MIT licensed.
 
 ## No game content in this package
 
-osr-editor ships no game content. The Old-School Essentials SRD data — monsters, treasure types, the stocking tables — lives in [osrlib](https://mmacy.github.io/osrlib-python/), which carries the Open Game License and its attribution; the editor consumes that catalog through osrlib's own API and bundles none of it. The editor's test fixtures are original, synthetic material.
+osr-editor ships no game content. The Old-School Essentials SRD data — monsters, treasure types, the stocking tables — lives in [osrlib](https://mmacy.github.io/osrlib-python/), which includes the Open Game License and its attribution; the editor consumes that catalog through osrlib's own API and bundles none of it. The editor's test fixtures are original, synthetic material.
 
 ## Your modules stay yours
 

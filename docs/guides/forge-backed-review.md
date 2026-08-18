@@ -10,7 +10,7 @@ Undo and redo work on the same terms: each step is a snapshot pair of the overri
 
 ## Review
 
-**Review** lists `report.json`'s flags as a work list. Selecting a row jumps to the flagged area with its printed pages rendered alongside, and each flag carries its own dismissal mark — reviewed-and-fine is recorded, not remembered.
+**Review** lists `report.json`'s flags as a work list. Selecting a row jumps to the flagged area with its printed pages rendered alongside, and each flag has its own dismissal mark — reviewed-and-fine is recorded, not remembered.
 
 ![The review queue listing twelve flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-light.png#only-light)
 ![The review queue listing twelve flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-dark.png#only-dark)
@@ -44,4 +44,4 @@ Every edit you commit gets an auto-drafted, page-anchored reason: redrawing geom
 
 ## Detach
 
-Some edits have no override vocabulary: new dungeons or levels, wandering tables, resizing. The editor blocks these in place and offers **detach** — the recorded, one-way crossing to a native project, with provenance written down and author notes carried over. After detach the project is yours entirely; the workdir stays behind, unchanged, still reproducible.
+Some edits have no override vocabulary: new dungeons or levels, wandering tables, resizing. The editor blocks these in place and offers **detach** — the recorded, one-way crossing to a native project, with provenance written down and author notes moved across. After detach the project is yours entirely; the workdir stays behind, unchanged, still reproducible.

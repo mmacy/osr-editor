@@ -19,7 +19,7 @@ App config lives at `platformdirs.user_config_path("osr-editor") / "config.json"
 - macOS: `~/Library/Application Support/osr-editor/config.json`
 - Linux: `~/.config/osr-editor/config.json`
 
-It holds the recents list (the ten most recently opened projects), once publish has collected it the osr-web checkout path, and the directory each path field's picker was last used in — which is what makes **Browse** reopen where you left off, per field, across restarts. It is a convenience cache, not user data: deleting it clears the recents, the publish target, and the picker locations and loses nothing else, and a corrupted file logs a warning and resets rather than failing boot.
+It holds the recents list (the ten most recently opened projects), the osr-web checkout path once publish has collected it, and the directory each path field's picker was last used in — which is what makes **Browse** reopen where you left off, per field, across restarts. It is a convenience cache, not user data: deleting it clears the recents, the publish target, and the picker locations, and loses nothing else. A corrupted file never fails boot — the editor logs a warning and resets it.
 
 No credential is ever written to it. Provider configuration comes from the environment — see [converting a PDF](../guides/converting-a-pdf.md).
 

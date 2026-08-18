@@ -4,7 +4,7 @@ An area's encounter is the monsters keyed to it — what the party meets when th
 
 ## The encounter card
 
-Each line names a monster and a count. Pick monsters through the type-ahead picker, which ranks the adventure's own bundled templates first, then this session's recent picks, then the shipped catalog in its own order — so a bespoke monster is always a keystroke away and a dangling id is never authored. **Create monster…** leaves the card for [the monster editor](monster-editor.md) with the create flow already open; the new template then ranks first in every picker. In a forge-backed project it opens the blocked-op dialog instead, which names detach as what unlocks it.
+Each line names a monster and a count. Pick monsters through the type-ahead picker, which ranks the adventure's own bundled templates first, then this session's recent picks, then the shipped catalog in its own order — so a bespoke monster is always a keystroke away and a dangling id is never authored. **Create monster…** leaves the card for [the monster editor](monster-editor.md) with the create flow already open; the new template then ranks first in every picker. In a forge-backed project **Create monster…** opens the blocked-op dialog instead, which names detach as what unlocks the create flow.
 
 A count is a fixed number or a dice expression: `4` for four orcs, `2d4` when you want the roll to happen at play time. Lines remove individually, and the last line can't go — an encounter with no monsters isn't a thing the model allows, so remove the encounter itself instead.
 
@@ -23,14 +23,14 @@ An acolyte takes any alignment and a skeleton only chaotic, so `chaotic` is the 
 
 ## Where a monster's treasure comes from
 
-**Lair hoard** is on by default, and it means the engine generates the keyed monsters' own treasure the first time the encounter spawns. Key four orcs and you have keyed their type D hoard with them — you do not add a treasure card for it.
+**Lair hoard** is on by default, and it means the engine generates the keyed monsters' own treasure when it first spawns them. Key four orcs and you have keyed their type D hoard with them — you do not add a treasure card for it.
 
-- **It rolls per encounter line, not per monster.** One line of four orcs rolls type D once. Two separate orc lines roll it twice.
-- **Nothing lands in your document.** The hoard is generated at play time and dropped on the area's first cell, so `adventure.json` records the encounter and nothing else. The area's [treasure card](treasure.md) generates *separately* on first entry, which is why putting the monsters' own letters there would double the hoard.
-- **Only lair treasure is gated by the checkbox.** Treasure types that monsters carry individually, or that a group carries between them, generate at spawn either way — the toggle governs the lair cache alone.
-- **Some monsters have no lair treasure at all.** Their type yields no hoard letters, so the checkbox has nothing to generate. SRD stocking reports this as a follow-up rather than quietly substituting an unguarded roll.
+- **The engine rolls once per encounter line, not per monster.** It rolls type D once for one line of four orcs, and twice for two separate orc lines.
+- **Nothing lands in your document.** The hoard is generated at play time and dropped on the area's first cell, so `adventure.json` records the encounter and nothing else. The engine rolls the area's [treasure card](treasure.md) *separately* on first entry, which is why putting the monsters' own letters there would double the hoard.
+- **Only lair treasure is gated by the checkbox.** The engine generates what monsters carry individually, and what a group carries between them, at spawn either way — the toggle governs the lair cache alone.
+- **Some monsters have no lair treasure at all.** Their type yields no hoard letters, so the engine has nothing to generate. SRD stocking reports this as a follow-up rather than quietly substituting an unguarded roll.
 
-Untick it for the treasure-absent monster room: the SRD's stocking procedure puts treasure on only some monster rooms, and without the toggle a keyed encounter would always bring its letters along. That's exactly what **Roll SRD stocking** does when a room rolls monsters but the treasure die fails.
+Untick it for the treasure-absent monster room: the SRD's stocking procedure puts treasure on only some monster rooms, and without the toggle a keyed encounter would always bring its letters along. That's exactly what **Roll SRD stocking** does when the dice give a room monsters but the treasure die fails.
 
 Use the treasure card alongside an encounter only when the room holds something *beyond* what the monsters are guarding.
 

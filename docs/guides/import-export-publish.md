@@ -13,8 +13,8 @@ The import dialog renders every converter note before anything commits, and the 
 
 An import that brings prose you didn't want — a One Page Dungeon export describes every keyed room — comes back to blank rooms in one more step: **Clear content** on the level row strips the level to its geometry, keeping the map and discarding the keys' contents. See [the map editor](map-editor.md#levels-and-dungeons).
 
-![The import dialog listing every judgment call the One Page Dungeon converter made — the round room imported as its bounding square, two doors dropped as duplicates, a second boundary door left to place by hand, and the stairs down carrying a fabricated destination to resolve or drop before publishing — above the title and story offered for adoption and the destination controls](../assets/screenshots/import-dialog-light.png#only-light)
-![The import dialog listing every judgment call the One Page Dungeon converter made — the round room imported as its bounding square, two doors dropped as duplicates, a second boundary door left to place by hand, and the stairs down carrying a fabricated destination to resolve or drop before publishing — above the title and story offered for adoption and the destination controls](../assets/screenshots/import-dialog-dark.png#only-dark)
+![The import dialog listing every judgment call the One Page Dungeon converter made — the round room imported as its bounding square, two doors dropped as duplicates, a second boundary door left to place by hand, and the stairs down with a fabricated destination to resolve or drop before publishing — above the title and story offered for adoption and the destination controls](../assets/screenshots/import-dialog-light.png#only-light)
+![The import dialog listing every judgment call the One Page Dungeon converter made — the round room imported as its bounding square, two doors dropped as duplicates, a second boundary door left to place by hand, and the stairs down with a fabricated destination to resolve or drop before publishing — above the title and story offered for adoption and the destination controls](../assets/screenshots/import-dialog-dark.png#only-dark)
 
 ## Export
 

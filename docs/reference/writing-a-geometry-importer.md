@@ -17,9 +17,9 @@ An importer is a small object: a `format_id`, a human `label`, a cheap `sniff`, 
 `load` returns an `ImportedGeometry`: optional adoptable metadata plus one or more `ImportedLevel`s. The semantics that matter:
 
 - **An absent edge is a wall.** Connectivity is the edge set: author one `OPEN` edge per adjacent floor pair (and a `DOOR` edge where a door sits), and author nothing for a cell's rock neighbours. Edge keys are osrlib-canonical — build them with `osrlib.crawl.dungeon.edge_key`, which normalizes direction for you; non-canonical keys are never consulted by the engine, so a hand-rolled key is a silent no-op.
-- **`entrance` is optional.** A source with no way in imports without one — note it, and the author places it by hand. A level with no entrance is a diagnostic, not an invalid document.
+- **`entrance` is optional.** A source with no way in imports without one — note that, and the author places the entrance by hand. A level with no entrance is a diagnostic, not an invalid document.
 - **Dangling transition targets are legal but linted.** A `TransitionSpec` requires a whole destination; if your source doesn't describe one, a fabricated destination that cannot accidentally resolve (the bundled One Page Dungeon reader uses an empty dungeon id) is the honest move — it renders as a validation finding until the author resolves or drops it, so publish will not pass it silently.
-- **Area ids must survive the op vocabulary.** An import lands as one atomic op batch, and the create-area op rejects an empty id, a duplicate id, and (in forge-backed projects) an id carrying a slash — any one of which would fail the entire import. When your format carries source-authored ids, run each through `repair_area_id`, which returns a safe id plus the reason it had to change (a ready-made note). The worked example below sidesteps the problem by construction — its ids come from a one-character alphabet — which is also a legitimate design.
+- **Area ids must survive the op vocabulary.** An import lands as one atomic op batch, and the create-area op rejects an empty id, a duplicate id, and (in forge-backed projects) an id containing a slash — any one of which would fail the entire import. When your format has source-authored ids, run each through `repair_area_id`, which returns a safe id plus the reason it had to change (a ready-made note). The worked example below sidesteps the problem by construction — its ids come from a one-character alphabet — which is also a legitimate design.
 
 ## The notes contract
 
@@ -49,7 +49,7 @@ The sniff is two cheap gates: the extension, then one bounded read checked for p
 --8<-- "tests/example_importer.py:load"
 ```
 
-Everything unreadable becomes `ImportSourceInvalidError` with a message a person can act on. Note what does *not* happen: no partial payload, no silent empty level — the source either converts or refuses honestly.
+Everything unreadable becomes `ImportSourceInvalidError` with a message a person can act on. Note what does *not* happen: no partial payload, no silent empty level — the importer either converts the source or refuses honestly.
 
 ### The conversion
 
@@ -79,7 +79,7 @@ requires = ["uv_build>=0.8.22,<0.9.0"]
 build-backend = "uv_build"
 ```
 
-Install the package into the editor's environment and the importer appears in the import dialog — no editor configuration, no registration call. Discovery is defensive on the editor's side: a broken entry point logs a warning and is skipped (a third-party package must never break boot), and a duplicate `format_id` keeps the first registration, so no package can shadow another's format.
+Install the package into the editor's environment and the importer appears in the import dialog — no editor configuration, no registration call. Discovery is defensive on the editor's side: the editor logs a warning and skips a broken entry point (a third-party package must never break boot), and a duplicate `format_id` keeps the first registration, so no package can shadow another's format.
 
 ## API reference
 
