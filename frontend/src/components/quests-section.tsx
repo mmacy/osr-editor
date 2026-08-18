@@ -87,7 +87,7 @@ export function QuestsSection({
 
   return (
     <section aria-label="Quests" className="flex min-h-0 gap-6">
-      <div className="flex w-96 shrink-0 flex-col gap-3">
+      <div className="flex w-96 shrink-0 flex-col gap-3 self-start" data-testid="trigger-list-pane">
         <h2 className="font-serif text-xl font-semibold">Quests</h2>
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
@@ -97,8 +97,8 @@ export function QuestsSection({
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
-            Triggers fire in this order — a later trigger's conditions see what an earlier firing
-            changed.
+            Triggers fire in this order — a later trigger's conditions are checked against what an
+            earlier firing changed.
           </p>
         </div>
         {triggers.length === 0 ? (

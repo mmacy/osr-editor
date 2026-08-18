@@ -93,6 +93,7 @@ nav:
           - Features: guides/features.md
       - The monster editor: guides/monster-editor.md
       - The item editor: guides/item-editor.md
+      - Triggers: guides/triggers.md
       - Forge-backed review: guides/forge-backed-review.md
       - Converting a PDF: guides/converting-a-pdf.md
       - Authoring aids: guides/authoring-aids.md

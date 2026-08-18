@@ -4,14 +4,14 @@ Stocking is map-first: the map shows you what needs work, and the gestures start
 
 ## The stocking menu
 
-Right-click an area cell for the stocking menu: description, encounter, treasure, trap, and features, each offered as add or edit-plus-remove to match what the area already holds. **Roll SRD stocking** appears on blank rooms — see [authoring aids](authoring-aids.md).
+Right-click an area cell for the stocking menu: description, encounter, treasure, trap, and features, each offered as add or edit-plus-remove to match what the area already holds. **Roll SRD stocking** appears on blank rooms — see [authoring aids](authoring-aids.md). The menu also holds **Add trigger**, which creates a [trigger](triggers.md) bound to entering that area and opens it in the Quests panel, plus an edit entry for each trigger the area already has.
 
 ![The right-click stocking menu offering description, encounter, treasure, trap, and features](../assets/screenshots/stocking-context-menu-light.png#only-light)
 ![The right-click stocking menu offering description, encounter, treasure, trap, and features](../assets/screenshots/stocking-context-menu-dark.png#only-dark)
 
 ## Reading the map
 
-Key numbers render hollow until an area is stocked (a description or any content), and the editor marks encounters, traps, and treasure with glyphs beside the number. Hovering shows the area's one-line contents in module notation. `F` dims stocked areas so the blanks stand out, and `[` / `]` walk areas in key order — with the filter on, the walk visits unstocked areas only.
+Key numbers render hollow until an area is stocked (a description or any content), and the editor marks encounters, traps, and treasure with glyphs beside the number — and an area that has an entering-the-area [trigger](triggers.md) with a small lightning bolt. Hovering shows the area's one-line contents in module notation. `F` dims stocked areas so the blanks stand out, and `[` / `]` walk areas in key order — with the filter on, the walk visits unstocked areas only.
 
 ![Key numbers on the map, hollow where an area is unstocked and glyphed where it holds content](../assets/screenshots/map-key-glyphs-light.png#only-light)
 ![Key numbers on the map, hollow where an area is unstocked and glyphed where it holds content](../assets/screenshots/map-key-glyphs-dark.png#only-dark)
