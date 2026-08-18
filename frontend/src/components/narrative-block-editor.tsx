@@ -1,8 +1,8 @@
 // The shared narrative-block editor: the carrier declares its read beats
-// (a gate's are refusal and success; phase 16's triggers read fired and
-// journal, quests offer and completion), and speaker and guidance render for
-// every carrier — attribution and narrator steering are audience fields, not
-// display beats.
+// (a gate's are refusal and success; a trigger's fired and journal; a
+// quest's offer and completion; an objective's offer and progress), and
+// speaker and guidance render for every carrier — attribution and narrator
+// steering are audience fields, not display beats.
 //
 // Non-empty beats *outside* the carrier's read set — a foreign block carrying
 // `fired` on a gate — warn by name with a one-patch clear as the offered

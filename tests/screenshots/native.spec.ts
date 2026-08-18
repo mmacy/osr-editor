@@ -452,7 +452,7 @@ test('the quests section and the trigger surfaces', async ({ page }, testInfo) =
   await page.getByTestId('trigger-row-trigger-1').getByRole('button').first().click()
   await expect(page.getByTestId('trigger-detail-trigger-1')).toBeVisible()
   await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
-  await shoot(page.getByTestId('trigger-list-pane'), 'quests-triggers', testInfo)
+  await shoot(page.getByTestId('quests-triggers-pane'), 'quests-triggers', testInfo)
 
   // The detail editor alone, tall enough to hold the three builders in frame.
   await page.setViewportSize({ width: 1280, height: 1700 })
