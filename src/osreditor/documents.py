@@ -67,7 +67,7 @@ from osrlib.crawl.triggers import (
     TriggerPattern,
     TriggerSpec,
 )
-from osrlib.data import load_equipment, load_magic_items, load_monsters
+from osrlib.data import load_monsters
 from osrlib.versioning import check_document, stamp_document
 from pydantic import ValidationError
 
@@ -78,6 +78,7 @@ from osreditor.addresses import (
     item_address,
     level_address,
     monster_address,
+    quest_address,
     trigger_address,
 )
 from osreditor.aids import (
@@ -91,6 +92,7 @@ from osreditor.aids import (
     snapshot_stream,
     stock_targets,
 )
+from osreditor.catalogs import shipped_item_ids
 from osreditor.diagnostics import compute_diagnostics, forge_findings
 from osreditor.errors import (
     DocumentPayloadInvalidError,
@@ -109,12 +111,14 @@ from osreditor.ops import (
     AddItemTemplate,
     AddLevel,
     AddMonsterTemplate,
+    AddQuest,
     AddTransition,
     AddTrigger,
     AnyEditOp,
     CreateArea,
     Diagnostics,
     ForgeState,
+    MoveQuest,
     MoveTrigger,
     OpBatch,
     OpBatchResult,
@@ -124,6 +128,7 @@ from osreditor.ops import (
     RemoveItemTemplate,
     RemoveLevel,
     RemoveMonsterTemplate,
+    RemoveQuest,
     RemoveTransition,
     RemoveTrigger,
     RenameDungeon,
@@ -140,6 +145,7 @@ from osreditor.ops import (
     SetItemTemplate,
     SetLevelField,
     SetMonsterTemplate,
+    SetQuest,
     SetTownField,
     SetTrap,
     SetTreasure,
@@ -1110,7 +1116,7 @@ def _snapshot_pair(entry: HistoryEntry) -> tuple[bytes, tuple[str, ...]]:
 def _remap_rules(op: AnyEditOp) -> list[tuple[str, str]]:
     """The address-prefix remaps a re-keying op implies for the sidecar's addressed maps.
 
-    The six re-keying ops are all native-mode ops (forge blocks every one),
+    The seven re-keying ops are all native-mode ops (forge blocks every one),
     so the cascade never coincides with a forge commit.
     """
     if isinstance(op, RenameDungeon):
@@ -1121,6 +1127,8 @@ def _remap_rules(op: AnyEditOp) -> list[tuple[str, str]]:
         return [(item_address(op.item_id), item_address(op.template.id))]
     if isinstance(op, SetTrigger) and op.trigger.id != op.trigger_id:
         return [(trigger_address(op.trigger_id), trigger_address(op.trigger.id))]
+    if isinstance(op, SetQuest) and op.quest.id != op.quest_id:
+        return [(quest_address(op.quest_id), quest_address(op.quest.id))]
     if isinstance(op, RenumberLevel):
         return [
             (level_address(op.dungeon_id, op.old_number), level_address(op.dungeon_id, op.new_number)),
@@ -1177,6 +1185,14 @@ def _apply_op(adventure: Adventure, op: AnyEditOp, forge_mode: bool = False) -> 
         return _apply_move_trigger(adventure, op)
     if isinstance(op, RemoveTrigger):
         return _apply_remove_trigger(adventure, op)
+    if isinstance(op, AddQuest):
+        return _apply_add_quest(adventure, op)
+    if isinstance(op, SetQuest):
+        return _apply_set_quest(adventure, op)
+    if isinstance(op, MoveQuest):
+        return _apply_move_quest(adventure, op)
+    if isinstance(op, RemoveQuest):
+        return _apply_remove_quest(adventure, op)
     if isinstance(op, SetLevelField):
         return _apply_level_field(adventure, op, op.field, op.value)
     if isinstance(op, SetWandering):
@@ -1291,19 +1307,6 @@ def _apply_remove_monster_template(adventure: Adventure, op: RemoveMonsterTempla
     return adventure.model_copy(update={"monsters": monsters}), "/monsters"
 
 
-@cache
-def _shipped_item_ids() -> frozenset[str]:
-    """The item-collision domain's shipped half: the four equipment lists plus the magic-item catalog.
-
-    Exactly the seen-set osrlib's `_effective_equipment` seeds, cached like
-    its loaders.
-    """
-    equipment = load_equipment()
-    ids = {template.id for template in (*equipment.weapons, *equipment.armour, *equipment.gear, *equipment.ammunition)}
-    ids.update(template.id for template in load_magic_items().items)
-    return frozenset(ids)
-
-
 def _resolve_item_template(adventure: Adventure, item_id: str) -> int:
     """Return the index of the first bundled item template with `item_id` (authored order)."""
     for index, template in enumerate(adventure.items):
@@ -1324,7 +1327,7 @@ def _require_item_id_free(adventure: Adventure, item_id: str) -> None:
     """
     if not item_id:
         raise OpInvariantError("item template id must be non-empty")
-    if item_id in _shipped_item_ids():
+    if item_id in shipped_item_ids():
         raise OpInvariantError(
             f"item template id {item_id!r} collides with the shipped catalog — "
             "the shipped entry would shadow the bundled one"
@@ -1420,6 +1423,64 @@ def _apply_remove_trigger(adventure: Adventure, op: RemoveTrigger) -> tuple[Adve
     index = _resolve_trigger(adventure, op.trigger_id)
     triggers = (*adventure.triggers[:index], *adventure.triggers[index + 1 :])
     return adventure.model_copy(update={"triggers": triggers}), "/triggers"
+
+
+def _resolve_quest(adventure: Adventure, quest_id: str) -> int:
+    """Return the index of the first quest with `quest_id` (authored order)."""
+    for index, quest in enumerate(adventure.quests):
+        if quest.id == quest_id:
+            return index
+    raise OpTargetNotFoundError(f"the document has no quest {quest_id!r}")
+
+
+def _require_quest_id_free(adventure: Adventure, quest_id: str) -> None:
+    """Reject a quest id already in `Adventure.quests` — the `AddQuest` id rule.
+
+    The trigger sibling's shape exactly: no shipped catalog exists to collide
+    with, and trigger ids are a separate namespace that imposes nothing. The
+    invariant is "no op ever *introduces* a collision", so callers run it on
+    new or changed ids only — a foreign document's duplicate ids carry through
+    and stay navigable diagnostics. An empty id needs no check here:
+    `QuestSpec.id` carries `min_length=1`, so it rejects at request parse.
+    """
+    if any(quest.id == quest_id for quest in adventure.quests):
+        raise OpInvariantError(f"the document already has a quest {quest_id!r}")
+
+
+def _apply_add_quest(adventure: Adventure, op: AddQuest) -> tuple[Adventure, str]:
+    _require_quest_id_free(adventure, op.quest.id)
+    return adventure.model_copy(update={"quests": (*adventure.quests, op.quest)}), "/quests"
+
+
+def _apply_set_quest(adventure: Adventure, op: SetQuest) -> tuple[Adventure, str]:
+    index = _resolve_quest(adventure, op.quest_id)
+    if op.quest.id != op.quest_id:
+        # A rename, under AddQuest's id rule; an unchanged id — duplicated or
+        # not — carries through, so a foreign document's duplicate quest stays
+        # editable and its finding stays navigable. No document site
+        # references a quest id, so the rename cascades only into the sidecar
+        # (_remap_rules) and the pointer stays /quests.
+        _require_quest_id_free(adventure, op.quest.id)
+    quests = (*adventure.quests[:index], op.quest, *adventure.quests[index + 1 :])
+    return adventure.model_copy(update={"quests": quests}), "/quests"
+
+
+def _apply_move_quest(adventure: Adventure, op: MoveQuest) -> tuple[Adventure, str]:
+    index = _resolve_quest(adventure, op.quest_id)
+    last = len(adventure.quests) - 1
+    if op.index > last:
+        raise OpInvariantError(
+            f"index {op.index} is out of range — the document's quests occupy positions 0 through {last}"
+        )
+    rest = [*adventure.quests[:index], *adventure.quests[index + 1 :]]
+    rest.insert(op.index, adventure.quests[index])
+    return adventure.model_copy(update={"quests": tuple(rest)}), "/quests"
+
+
+def _apply_remove_quest(adventure: Adventure, op: RemoveQuest) -> tuple[Adventure, str]:
+    index = _resolve_quest(adventure, op.quest_id)
+    quests = (*adventure.quests[:index], *adventure.quests[index + 1 :])
+    return adventure.model_copy(update={"quests": quests}), "/quests"
 
 
 def _retarget_gate(gate: GateSpec | None, old_id: str, new_id: str) -> GateSpec | None:

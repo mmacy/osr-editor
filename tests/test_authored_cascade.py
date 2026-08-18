@@ -1,8 +1,10 @@
 """Cascade completion over the authored layer: every re-keying op rewrites trigger and quest reference sites.
 
-The committed fixtures grow trigger and quest content with the phases that can
-author them (16-17); until then these suites build authored-layer adventures
-in-test, exercising every site kind `validate_adventure` walks — a trigger's
+The committed small-module fixture carries trigger and quest content (phases
+16 and 17 grew it), so the round-trip, golden, and publish suites cover the
+authored layer permanently. These suites still build authored-layer adventures
+in-test — they exercise re-key shapes the shipped fixture deliberately does
+not carry, covering every site kind `validate_adventure` walks: a trigger's
 `when`, `conditions`, and `consequences`; a quest's `activation`, each
 objective's `when` and `reveal_when`, and its `rewards`.
 """

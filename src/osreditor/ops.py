@@ -13,8 +13,9 @@ here with the document service, built exactly as osrlib builds `AnyCommand`;
 phase 2 added the geometry and dungeon/level-management vocabulary; phase 3 added
 the content vocabulary — encounters, traps, treasure, and features; phase 4 added
 the bundled monster-template vocabulary; phase 15 added the bundled item-template
-trio and `SetLevelField`; phase 16 adds the trigger quartet. The `forge`
-diagnostics tier arrived with forge-backed projects in phase 5.
+trio and `SetLevelField`; phase 16 added the trigger quartet; phase 17 adds the
+quest quartet beside it. The `forge` diagnostics tier arrived with forge-backed
+projects in phase 5.
 
 The op-level philosophy, continuing phase 1's `travel_turns >= 0` guard:
 **reject what is never intentional and is not a transient editing state**
@@ -44,6 +45,7 @@ from osrlib.crawl.dungeon import (
     TrapSpec,
     WanderingSpec,
 )
+from osrlib.crawl.quests import QuestSpec
 from osrlib.crawl.triggers import TriggerSpec
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -55,6 +57,7 @@ __all__ = [
     "AddItemTemplate",
     "AddLevel",
     "AddMonsterTemplate",
+    "AddQuest",
     "AddTransition",
     "AddTrigger",
     "AnyEditOp",
@@ -66,6 +69,7 @@ __all__ = [
     "Finding",
     "ForgeState",
     "LevelOp",
+    "MoveQuest",
     "MoveTrigger",
     "OpBatch",
     "OpBatchResult",
@@ -75,6 +79,7 @@ __all__ = [
     "RemoveItemTemplate",
     "RemoveLevel",
     "RemoveMonsterTemplate",
+    "RemoveQuest",
     "RemoveTransition",
     "RemoveTrigger",
     "RenameDungeon",
@@ -91,6 +96,7 @@ __all__ = [
     "SetItemTemplate",
     "SetLevelField",
     "SetMonsterTemplate",
+    "SetQuest",
     "SetTownField",
     "SetTrap",
     "SetTreasure",
@@ -349,6 +355,83 @@ class RemoveTrigger(EditOp):
 
     op: Literal["remove_trigger"] = "remove_trigger"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
     trigger_id: str
+
+
+class AddQuest(EditOp):
+    """Add an authored quest, appended to `Adventure.quests`.
+
+    Adventure-scoped, the trigger quartet's shape over the whole
+    [`QuestSpec`][osrlib.crawl.quests.QuestSpec]. Appending is the only
+    insertion: authored order is seeding and walk order (the interpreter walks
+    all triggers first and then all quests, each in document order), and a
+    misplaced quest moves after the fact with
+    [`MoveQuest`][osreditor.ops.MoveQuest]. The spec's internal validity — the
+    required name, at least one objective, quest-scoped objective-id
+    uniqueness, the never-consuming clause conditions, the reveal clause only
+    on a hidden objective, the no-authored-source rule on rewards, the closed
+    nine-command reward union — is the model's own, enforced at request parse.
+    Invariant at apply: the id free among the rest of `Adventure.quests`.
+    Trigger ids are a separate namespace that imposes nothing; an empty id or
+    name rejects at parse (`QuestSpec` carries `min_length=1` on both).
+    """
+
+    op: Literal["add_quest"] = "add_quest"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    quest: QuestSpec
+
+
+class SetQuest(EditOp):
+    """Replace one quest whole; a differing `quest.id` is a rename.
+
+    Whole-value replacement at the detail editor's commit grain — the
+    [`SetTrigger`][osreditor.ops.SetTrigger] reasoning, and the grain that
+    carries objective and reward order without reorder ops of their own:
+    objective-scoped edits — add, remove, rename, reorder, every field — ride
+    this op whole. A rename falls under
+    [`AddQuest`][osreditor.ops.AddQuest]'s id rule but cascades nowhere in the
+    document: no document field references a quest id (lifecycle state lives
+    in saves, `source` stamps are runtime), so only the sidecar's `quest:<id>`
+    note key moves and the delta pointer stays `/quests` even on rename. The
+    uniqueness invariant guards **new or changed ids only**: a foreign
+    document's duplicate ids open, edit, and navigate, resolved first-match in
+    authored order, flagged by the `quest_id_not_unique` diagnostic, never
+    locked.
+    """
+
+    op: Literal["set_quest"] = "set_quest"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    quest_id: str
+    quest: QuestSpec
+
+
+class MoveQuest(EditOp):
+    """Move one quest to a new position in `Adventure.quests`.
+
+    Order is semantics twice over — quests seed in document order and the
+    interpreter walks them in document order after the triggers, and the
+    player view ships authored order — so reorder is a first-class edit, the
+    [`MoveTrigger`][osreditor.ops.MoveTrigger] mirror. `index` is the quest's
+    0-based position in the reordered list: splice out, insert at `index`. An
+    out-of-range index is rejected as `op_invariant` naming the valid range —
+    the reject-don't-clamp posture. A same-position move applies as a harmless
+    no-change batch; the UI never posts one (the arrows disable at the ends).
+    First-match among foreign duplicate ids.
+    """
+
+    op: Literal["move_quest"] = "move_quest"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    quest_id: str
+    index: int = Field(ge=0)
+
+
+class RemoveQuest(EditOp):
+    """Remove one quest; first-match among foreign duplicate ids.
+
+    Nothing in the document references a quest id, so removal dangles nothing;
+    the one external consequence — an existing save's lifecycle state for the
+    id orphans, and the interpreter skips the missing quest silently — is
+    osrlib's own posture. The UI's two-step row confirm is the only guard.
+    """
+
+    op: Literal["remove_quest"] = "remove_quest"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
+    quest_id: str
 
 
 class LevelOp(EditOp):
@@ -761,6 +844,10 @@ AnyEditOp = Annotated[
     | SetTrigger
     | MoveTrigger
     | RemoveTrigger
+    | AddQuest
+    | SetQuest
+    | MoveQuest
+    | RemoveQuest
     | SetLevelField
     | SetWandering
     | SetEdges

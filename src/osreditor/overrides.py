@@ -46,6 +46,7 @@ from osreditor.addresses import (
     item_address,
     level_address,
     monster_address,
+    quest_address,
     trigger_address,
 )
 from osreditor.errors import OpTargetNotFoundError, OpUnsupportedForgeError
@@ -55,10 +56,12 @@ from osreditor.ops import (
     AddItemTemplate,
     AddLevel,
     AddMonsterTemplate,
+    AddQuest,
     AddTransition,
     AddTrigger,
     AnyEditOp,
     CreateArea,
+    MoveQuest,
     MoveTrigger,
     RemoveArea,
     RemoveDungeon,
@@ -66,6 +69,7 @@ from osreditor.ops import (
     RemoveItemTemplate,
     RemoveLevel,
     RemoveMonsterTemplate,
+    RemoveQuest,
     RemoveTransition,
     RemoveTrigger,
     RenameDungeon,
@@ -82,6 +86,7 @@ from osreditor.ops import (
     SetItemTemplate,
     SetLevelField,
     SetMonsterTemplate,
+    SetQuest,
     SetTownField,
     SetTrap,
     SetTreasure,
@@ -163,6 +168,11 @@ _GATE_BLOCKED = "gates have no override kind — the overrides vocabulary has no
 # (lib/trigger-builders.ts) — a rewording here should carry over.
 _TRIGGER_BLOCKED = "triggers have no override kind — the overrides vocabulary has no authored-layer surface"
 
+# Deliberately unmirrored: quests have no flow entry outside the panel, and in
+# forge mode the section renders the explanation body with no quest control —
+# nothing routes client-side, so the server's 422 is the whole story.
+_QUEST_BLOCKED = "quests have no override kind — the overrides vocabulary has no authored-layer surface"
+
 _BLOCKED_MESSAGES: dict[type, str] = {
     SetWandering: "wandering-monster parameters have no override kind",
     SetDungeonField: "dungeon fields have no override kind",
@@ -183,6 +193,10 @@ _BLOCKED_MESSAGES: dict[type, str] = {
     SetTrigger: _TRIGGER_BLOCKED,
     MoveTrigger: _TRIGGER_BLOCKED,
     RemoveTrigger: _TRIGGER_BLOCKED,
+    AddQuest: _QUEST_BLOCKED,
+    SetQuest: _QUEST_BLOCKED,
+    MoveQuest: _QUEST_BLOCKED,
+    RemoveQuest: _QUEST_BLOCKED,
     SetLevelField: "level guidance has no override kind",
 }
 
@@ -201,6 +215,10 @@ def _blocked_address(op: AnyEditOp) -> str:
         return trigger_address(op.trigger.id)
     if isinstance(op, SetTrigger | MoveTrigger | RemoveTrigger):
         return trigger_address(op.trigger_id)
+    if isinstance(op, AddQuest):
+        return quest_address(op.quest.id)
+    if isinstance(op, SetQuest | MoveQuest | RemoveQuest):
+        return quest_address(op.quest_id)
     if isinstance(op, SetDungeonField | RemoveDungeon):
         return dungeon_address(op.dungeon_id)
     if isinstance(op, AddDungeon):

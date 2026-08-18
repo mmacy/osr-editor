@@ -25,16 +25,19 @@ from osreditor.ops import (
     AddFeature,
     AddItemTemplate,
     AddMonsterTemplate,
+    AddQuest,
     AddTransition,
     AddTrigger,
     Diagnostics,
     Finding,
+    MoveQuest,
     MoveTrigger,
     OpBatch,
     OpBatchResult,
     RemoveFeature,
     RemoveItemTemplate,
     RemoveMonsterTemplate,
+    RemoveQuest,
     RemoveTrigger,
     SetAdventureField,
     SetEdges,
@@ -43,6 +46,7 @@ from osreditor.ops import (
     SetItemTemplate,
     SetLevelField,
     SetMonsterTemplate,
+    SetQuest,
     SetTownField,
     SetTrap,
     SetTreasure,
@@ -74,6 +78,12 @@ TEMPLATE = MonsterTemplate.model_validate(
 ITEM_TEMPLATE = GearTemplate(id="brass-key", name="Brass key", cost_gp=0)
 
 TRIGGER_SPEC = {"id": "t-1", "when": {"pattern_type": "town_entered"}}
+
+QUEST_SPEC = {
+    "id": "q-1",
+    "name": "The quest",
+    "objectives": [{"id": "o-1", "when": {"pattern": {"pattern_type": "town_entered"}}}],
+}
 
 GATED_DOOR = Edge(
     kind=EdgeKind.DOOR,
@@ -158,6 +168,10 @@ RESULT = OpBatchResult(
         AddItemTemplate(template=ITEM_TEMPLATE),
         SetItemTemplate(item_id="brass-key", template=ITEM_TEMPLATE),
         RemoveItemTemplate(item_id="brass-key"),
+        AddQuest.model_validate({"op": "add_quest", "quest": QUEST_SPEC}),
+        SetQuest.model_validate({"op": "set_quest", "quest_id": "q-1", "quest": QUEST_SPEC}),
+        MoveQuest(quest_id="q-1", index=0),
+        RemoveQuest(quest_id="q-1"),
         SetLevelField(dungeon_id="mill-caves", level_number=1, field="guidance", value="Slow, dripping dread."),
         # Gates ride the existing geometry ops as values — the regenerated
         # types carry `requires` transitively, and the wire round-trips it.
@@ -221,6 +235,10 @@ def test_op_batch_discriminates_on_op() -> None:
                 {"op": "set_trigger", "trigger_id": "t-1", "trigger": TRIGGER_SPEC},
                 {"op": "move_trigger", "trigger_id": "t-1", "index": 0},
                 {"op": "remove_trigger", "trigger_id": "t-1"},
+                {"op": "add_quest", "quest": QUEST_SPEC},
+                {"op": "set_quest", "quest_id": "q-1", "quest": QUEST_SPEC},
+                {"op": "move_quest", "quest_id": "q-1", "index": 0},
+                {"op": "remove_quest", "quest_id": "q-1"},
                 {"op": "set_level_field", "dungeon_id": "d", "level_number": 1, "field": "guidance", "value": "…"},
             ],
         }
@@ -245,6 +263,10 @@ def test_op_batch_discriminates_on_op() -> None:
         SetTrigger,
         MoveTrigger,
         RemoveTrigger,
+        AddQuest,
+        SetQuest,
+        MoveQuest,
+        RemoveQuest,
         SetLevelField,
     ]
 
@@ -393,6 +415,10 @@ def test_finding_rejects_unknown_severity() -> None:
         SetTrigger.model_validate({"op": "set_trigger", "trigger_id": "t-1", "trigger": TRIGGER_SPEC}),
         MoveTrigger(trigger_id="t-1", index=0),
         RemoveTrigger(trigger_id="t-1"),
+        AddQuest.model_validate({"op": "add_quest", "quest": QUEST_SPEC}),
+        SetQuest.model_validate({"op": "set_quest", "quest_id": "q-1", "quest": QUEST_SPEC}),
+        MoveQuest(quest_id="q-1", index=0),
+        RemoveQuest(quest_id="q-1"),
         SetLevelField(dungeon_id="d", level_number=1, field="guidance", value="X"),
         OpBatch(revision="rev-1", ops=(SetAdventureField(field="name", value="X"),)),
         FINDING,

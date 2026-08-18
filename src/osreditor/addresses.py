@@ -14,7 +14,9 @@ segment for bundled monster templates, finer than the bare `monsters` scope
 phase 1 pinned; phase 15 adds `item:<id>` for bundled item templates beside
 it, with the bare `items` scope as its coarse degrade target; phase 16 adds
 `trigger:<id>` for authored triggers, with the bare `triggers` scope as its
-degrade target.
+degrade target; phase 17 adds `quest:<id>` for authored quests beside it, with
+the bare `quests` scope as its degrade target — the quest detail editor owns
+its objectives, so no finer segment exists.
 
 Three producers build addresses — the validation parser, the structural lint,
 and the `ResizeLevel` offender list — so the builders live here, in one place.
@@ -33,6 +35,7 @@ __all__ = [
     "item_address",
     "level_address",
     "monster_address",
+    "quest_address",
     "trigger_address",
 ]
 
@@ -83,6 +86,18 @@ def trigger_address(trigger_id: str) -> str:
         `trigger:<id>`.
     """
     return f"trigger:{encode_value(trigger_id)}"
+
+
+def quest_address(quest_id: str) -> str:
+    """Build an authored-quest address — a top-level segment kind, phase 17's.
+
+    Args:
+        quest_id: The quest id.
+
+    Returns:
+        `quest:<id>`.
+    """
+    return f"quest:{encode_value(quest_id)}"
 
 
 def dungeon_address(dungeon_id: str) -> str:
