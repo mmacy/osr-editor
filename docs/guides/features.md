@@ -27,7 +27,7 @@ Cell binding is what lets a big room hold several distinct features — the foun
 A cache's contents are authored explicitly rather than rolled:
 
 - **Items** come from osrlib's equipment catalog through the type-ahead picker, so the ids are always real. Added items list as chips; each removes on its own.
-- **Magic items** come from osrlib's magic-item catalog the same way — the sword +1 in the captain's strongbox, placed by name. The picker groups by category and marks the cursed forms, so placing one is a choice rather than a surprise. What you name is the item alone: its secrets — a wand's charges, a scroll's spells, a sword's sentience — roll when the party empties the cache, exactly as a generated hoard's would, and the party still has to identify what it picked up.
+- **Magic items** come from osrlib's magic-item catalog the same way — the sword +1 in the captain's strongbox, placed by name. The picker groups by category and marks the cursed forms, so placing one is a choice rather than a surprise. What you name is the item alone: the game rolls its secrets — a wand's charges, a scroll's spells, a sword's sentience — when the party empties the cache, exactly as it would for a generated hoard, and the party still has to identify what it picked up.
 - **Coins** are counted per denomination — pp, gp, ep, sp, cp.
 - **Valuables** are named things with a gold value, for the gems, jewellery, and objets the module names outright.
 

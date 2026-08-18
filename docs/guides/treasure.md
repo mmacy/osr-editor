@@ -14,11 +14,11 @@ That's also why an encounter's monsters need no treasure card. Their lair hoard 
 
 The card's two modes name two different tables, and they're mutually exclusive — the model enforces that, so a card is one or the other and never both. Switching to the band roll replaces whatever letters you had; switching back clears the card to its empty state, where the next letter you pick starts a fresh declaration.
 
-**Treasure types** are the lettered hoards a monster's entry names. The picker groups all 22 letters the way the SRD does: `hoard` (A–O) is the lair treasure something sits on, `individual` (P–T) is what a single monster carries, and `group` (U–V) is what a band carries between them. A room generates whatever letter you name. Hoard letters are the usual choice for a room; declare `P` and you get one monster's pocket money lying on the floor. This is the mode for a hoard something is sitting on, or for following a printed module's key.
+**Treasure types** are the lettered hoards a monster's entry names. The picker groups all 22 letters the way the SRD does: `hoard` (A–O) is the lair treasure something sits on, `individual` (P–T) is what a single monster carries, and `group` (U–V) is what a band carries between them. The game generates whatever letter you name. Hoard letters are the usual choice for a room; declare `P` and you get one monster's pocket money lying on the floor. This is the mode for a hoard something is sitting on, or for following a printed module's key.
 
 **Unguarded band roll** is the other table: loot lying about with nothing guarding it, which the SRD rolls by *dungeon level* rather than by letter. Levels are grouped into bands — level 1, levels 2–3, 4–5, 6–7, and 8–9 — and the deeper the band, the larger the amounts and the better the odds on gems, jewellery, and magic. A band roll is a roll on the band your room's level falls in.
 
-You don't pick the band. It comes from the level the area sits on, so a room moved to a deeper level rolls richer without the card changing. Level 10 and deeper use the 8–9 band, the last one the table prints.
+You don't pick the band. It comes from the level the area sits on, so move a room to a deeper level and the game rolls richer without the card changing. Level 10 and deeper use the 8–9 band, the last one the table prints.
 
 SRD stocking uses this mode too: an empty or trapped room whose treasure die comes up gets an unguarded declaration rather than a letter.
 
