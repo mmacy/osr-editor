@@ -30,7 +30,7 @@ Every field below is optional, and a trap is the sum of the ones you set. Nothin
 - **Condition** — what the victim is left with: `poisoned`, `paralysed`, `asleep`, `blind`, `petrified`, and the rest of osrlib's condition vocabulary. **Duration** and **Unit** say for how long — a fixed number or a dice expression, in `round`, `turn`, or `day`. Both are available only once a condition is set, and clearing the condition clears them.
 - **Fall (feet)** — the drop, for the pit.
 - **Slide** — where the chute dumps them: pick the destination dungeon, level, cell, and facing, the same target gesture the map's transition tool uses. It relocates the party outright rather than adding a transition to the map, so nothing leads back up. It also applies to the *whole party* whatever the rest of the trap says — the party has one location — so a slide fires on a triggerer-only trap, and fires even when every character saves.
-- **Manual effect** — prose, for what the rules leave to the referee. Everything B/X describes and no field above can express goes here. The engine carries it and never automates it, so it is a note to the human running the game rather than a mechanic.
+- **Manual effect** — prose, for what the rules leave to the referee. Everything B/X describes and no field above can express goes here. The engine holds it and never automates it, so it is a note to the human running the game rather than a mechanic.
 
 The builder holds those dependencies by construction rather than validating after the fact, so the trap you're editing is a legal trap at every keystroke — which is why the dependent fields disable instead of complaining.
 

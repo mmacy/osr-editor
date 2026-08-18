@@ -14,14 +14,14 @@ Two ways in:
 ![The items section: the bundled item list beside the per-kind detail form](../assets/screenshots/items-section-light.png#only-light)
 ![The items section: the bundled item list beside the per-kind detail form](../assets/screenshots/items-section-dark.png#only-dark)
 
-Every item has an **id** — the short machine name shown in the monospace font — and no two items in a game may share one, because in play an id has to mean exactly one thing. "No two items" is meant broadly: your id may not collide with the standard equipment, with any magic item, or with another item of yours. Type a taken id and the editor refuses on the spot, right where you typed it, with the reason — nothing is created or renamed until the id is free. (An adventure that *arrives* carrying a collision, from another tool, still opens and edits; the collision is reported in the diagnostics panel instead of locking the item.)
+Every item has an **id** — the short machine name shown in the monospace font — and no two items in a game may share one, because in play an id has to mean exactly one thing. "No two items" is meant broadly: your id may not collide with the standard equipment, with any magic item, or with another item of yours. Type a taken id and the editor refuses on the spot, right where you typed it, with the reason — nothing is created or renamed until the id is free. (An adventure that *arrives* with a collision, from another tool, still opens and edits; the collision is reported in the diagnostics panel instead of locking the item.)
 
 ## The detail forms
 
 Each kind gets a form covering everything the game knows about it. Like the rest of the editor, it saves as you commit each field — there is no save button — and dice fields check your notation as you type.
 
 - **Weapon** — cost, weight, damage dice, the weapon's qualities, and its material (silver matters to some monsters). Tick the **missile** quality and the form adds the three range bands to fill in; untick it and they go. The two travel together because the rules never allow one without the other, so the form simply doesn't let that state exist.
-- **Armour** — body armour or a shield: pick which, and the form swaps to the right fields. Body armour carries the armour class pair (descending and ascending) and a weight category; a shield carries just its bonus.
+- **Armour** — body armour or a shield: pick which, and the form swaps to the right fields. Body armour has the armour class pair (descending and ascending) and a weight category; a shield has just its bonus.
 - **Gear** — cost, the lot size one purchase buys, an optional container capacity, an optional **combat facet** for gear you can fight with (the torch and burning-oil arrangement: damage, qualities, ranges), and **params** — extra named values some game mechanics read, like a torch's burn time. A param value that reads as a number or true/false is stored as one; anything else is stored as text.
 - **Ammunition** — cost, lot size, weight, and material.
 
@@ -38,4 +38,4 @@ Wherever the editor offers an item picker, your items come first: the treasure-c
 
 ## In converted projects
 
-A project still in [forge-backed review](forge-backed-review.md) — a converted PDF whose corrections flow through `overrides.yaml` — cannot carry custom items: the conversion pipeline has no way to record one, a deliberate gap tracked at [osr-forge#39](https://github.com/mmacy/osr-forge/issues/39). The Items entry still opens; it explains exactly this and offers **Detach to a native project** in place, the crossing that unlocks item authoring (and gates and level guidance with it).
+A project still in [forge-backed review](forge-backed-review.md) — a converted PDF whose corrections flow through `overrides.yaml` — cannot hold custom items: the conversion pipeline has no way to record one, a deliberate gap tracked at [osr-forge#39](https://github.com/mmacy/osr-forge/issues/39). The Items entry still opens; it explains exactly this and offers **Detach to a native project** in place, the crossing that unlocks item authoring (and gates and level guidance with it).

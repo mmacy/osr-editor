@@ -9,7 +9,7 @@ Two ways in:
 - **New monster** starts from scratch: an id and a name get you a valid stock one-hit-die stat block the detail editor then reshapes field by field.
 - **Clone catalog monster** copies any stock monster's whole stat block as the starting point, free id suggested.
 
-The monster picker on an encounter card carries a **Create monster…** shortcut into the same flow, so a monster you haven't made yet never breaks your stocking stride.
+The monster picker on an encounter card offers a **Create monster…** shortcut into the same flow, so a monster you haven't made yet never breaks your stocking stride.
 
 ![The monsters section: the bundled template list beside the stat-block editor](../assets/screenshots/monsters-section-light.png#only-light)
 ![The monsters section: the bundled template list beside the stat-block editor](../assets/screenshots/monsters-section-dark.png#only-dark)
@@ -25,7 +25,7 @@ Dice fields check your notation as you type; the server has the final say when t
 
 ## Renaming and removing
 
-Every monster has an **id** — the short machine name in the monospace font — and no two monsters in a game may share one: not a stock monster's, not another of yours. Type a taken id and the editor refuses right where you typed it, with a prompt to pick another. (An adventure that arrives already carrying a collision still opens and edits; the collision is reported in the diagnostics panel instead of locking the monster.)
+Every monster has an **id** — the short machine name in the monospace font — and no two monsters in a game may share one: not a stock monster's, not another of yours. Type a taken id and the editor refuses right where you typed it, with a prompt to pick another. (An adventure that arrives with a collision still opens and edits; the collision is reported in the diagnostics panel instead of locking the monster.)
 
 To rename a monster, change its id. Every encounter line and wandering-table row that names it follows in the same step, as one undo, and your author note moves with it. Removing a monster something still references warns you first, with the count; the references stay in the document and surface in the diagnostics panel, each one a click away, so nothing is ever lost silently.
 

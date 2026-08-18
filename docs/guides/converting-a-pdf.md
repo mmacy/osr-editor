@@ -36,4 +36,4 @@ Conversion reads the same environment the forge CLI reads:
 
 **Provider settings** (from the convert dialog or the pipeline view) shows what was detected, where each value came from, and whether a provider can be built at all. You can override any field for the session — those values live in memory until the editor closes.
 
-**No credential is ever written to editor config**, and no API response ever carries one: the key surfaces only as "set" or "not set", with its source. This is a contract, not a default.
+**No credential is ever written to editor config**, and no API response ever includes one: the key surfaces only as "set" or "not set", with its source. This is a contract, not a default.

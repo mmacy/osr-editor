@@ -13,10 +13,10 @@ Right-click an area cell for the stocking menu: description, encounter, treasure
 
 Key numbers render hollow until an area is stocked (a description or any content) and carry glyphs for encounters, traps, and treasure. Hovering shows the area's one-line contents in module notation. `F` dims stocked areas so the blanks stand out, and `[` / `]` walk areas in key order — with the filter on, the walk visits unstocked areas only.
 
-![Key numbers on the map, hollow where an area is unstocked and glyphed where it carries content](../assets/screenshots/map-key-glyphs-light.png#only-light)
-![Key numbers on the map, hollow where an area is unstocked and glyphed where it carries content](../assets/screenshots/map-key-glyphs-dark.png#only-dark)
+![Key numbers on the map, hollow where an area is unstocked and glyphed where it holds content](../assets/screenshots/map-key-glyphs-light.png#only-light)
+![Key numbers on the map, hollow where an area is unstocked and glyphed where it holds content](../assets/screenshots/map-key-glyphs-dark.png#only-dark)
 
-Reading a whole room doesn't take a click: rest the pointer on a stocked or named area under the select tool and a hover card raises beside it — the area's id and name, its description, and one line per carried kind — then drops the moment the pointer leaves. The card never takes the pointer, so clicking through it works exactly as if it weren't there, and it stays out of the way while you draw: the drawing tools, an armed library entry, and a drag from the library all keep it down.
+Reading a whole room doesn't take a click: rest the pointer on a stocked or named area under the select tool and a hover card raises beside it — the area's id and name, its description, and one line per kind of content the area holds — then drops the moment the pointer leaves. The card never takes the pointer, so clicking through it works exactly as if it weren't there, and it stays out of the way while you draw: the drawing tools, an armed library entry, and a drag from the library all keep it down.
 
 ![The hover card raised beside a stocked area, listing its encounter and treasure](../assets/screenshots/area-hover-card-light.png#only-light)
 ![The hover card raised beside a stocked area, listing its encounter and treasure](../assets/screenshots/area-hover-card-dark.png#only-dark)

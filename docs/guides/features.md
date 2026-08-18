@@ -4,7 +4,7 @@ A feature is a keyed detail with a location — the loose flagstone, the sealed 
 
 ## What a feature is
 
-Every feature carries an **id**, a **kind**, and a **description**. The id is yours to name and is what the rest of the document refers to; a duplicate, empty, or reserved id is refused inline, right where you typed it, rather than at save time. The description is the prose the referee reads.
+Every feature has an **id**, a **kind**, and a **description**. The id is yours to name and is what the rest of the document refers to; a duplicate, empty, or reserved id is refused inline, right where you typed it, rather than at save time. The description is the prose the referee reads.
 
 The three kinds say what the feature is for, and the kind is load-bearing rather than a label:
 

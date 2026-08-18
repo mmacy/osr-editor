@@ -18,7 +18,7 @@ mill.osr/
 
 ## Forge-backed projects
 
-A forge-backed project is an [osr-forge](https://mmacy.github.io/osr-forge/) workdir — a directory with `run.json` — and the contract flips: the editor never writes `adventure.json` there. Your edits become reasoned `overrides.yaml` entries, and the draft re-assembles through forge's own pure loop, so re-running forge yourself reproduces the session's artifacts byte for byte. The one editor file a workdir carries is the same `editor.json` sidecar. [Forge-backed review](forge-backed-review.md) covers the whole loop.
+A forge-backed project is an [osr-forge](https://mmacy.github.io/osr-forge/) workdir — a directory with `run.json` — and the contract flips: the editor never writes `adventure.json` there. Your edits become reasoned `overrides.yaml` entries, and the draft re-assembles through forge's own pure loop, so re-running forge yourself reproduces the session's artifacts byte for byte. The one editor file a workdir holds is the same `editor.json` sidecar. [Forge-backed review](forge-backed-review.md) covers the whole loop.
 
 ## Always saved, always one undo step
 
