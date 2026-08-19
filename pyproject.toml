@@ -1,6 +1,6 @@
 [project]
 name = "osr-editor"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local GUI editor for creating and modifying osrlib adventure modules."
 readme = "README.md"
 license = "MIT"
