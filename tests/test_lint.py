@@ -4,8 +4,9 @@ import json
 import time
 from pathlib import Path
 
+from osrlib.core.items import Coins, GearTemplate
 from osrlib.crawl.adventure import Adventure, TownSpec, validate_adventure
-from osrlib.crawl.commands import SetFlag, SpawnMonsters
+from osrlib.crawl.commands import AwardXP, GrantCoins, GrantItem, SetFlag, SpawnMonsters
 from osrlib.crawl.dungeon import (
     AreaSpec,
     Direction,
@@ -13,12 +14,13 @@ from osrlib.crawl.dungeon import (
     DungeonSpec,
     Edge,
     EdgeKind,
+    FeatureSpec,
     KeyedEncounter,
     KeyedMonster,
     LevelSpec,
     TransitionSpec,
 )
-from osrlib.crawl.gates import FlagEqualsCondition, GateSpec
+from osrlib.crawl.gates import FlagEqualsCondition, GateSpec, HasItemCondition
 from osrlib.crawl.quests import ObjectiveSpec, QuestSpec, TriggerClause
 from osrlib.crawl.triggers import AreaEnteredPattern, FlagSetPattern, TownEnteredPattern, TriggerSpec
 from osrlib.data import load_equipment, load_monsters
@@ -180,6 +182,8 @@ def test_severity_table_matches_forge() -> None:
         "flag_read_no_writer": "warning",
         "trigger_cycle": "warning",
         "trigger_spawn_collision": "warning",
+        "quest_reward_unpriced": "warning",
+        "key_not_placed": "warning",
     }
 
 
@@ -452,7 +456,10 @@ def flag_gate(key: str, value: str | int | bool = True) -> GateSpec:
 
 
 def authored(
-    *dungeons: DungeonSpec, triggers: tuple[TriggerSpec, ...] = (), quests: tuple[QuestSpec, ...] = ()
+    *dungeons: DungeonSpec,
+    triggers: tuple[TriggerSpec, ...] = (),
+    quests: tuple[QuestSpec, ...] = (),
+    items: tuple[GearTemplate, ...] = (),
 ) -> Adventure:
     return Adventure(
         name="Lint fixture",
@@ -460,6 +467,7 @@ def authored(
         dungeons=dungeons or (DungeonSpec(id="d", levels=(level(),)),),
         triggers=triggers,
         quests=quests,
+        items=items,
     )
 
 
@@ -526,7 +534,10 @@ def test_the_match_is_key_level_and_value_blind() -> None:
     assert "flag_read_no_writer" not in codes(lint_adventure(fixture))
 
 
-def test_quest_owned_readers_are_visible_at_address_none() -> None:
+def test_quest_owned_readers_address_the_owning_quest() -> None:
+    # Phase 17's address upgrade: activation, objective completion, and
+    # reveal clauses alike navigate to `quest:<id>` — the quest detail editor
+    # owns its objectives, so no finer address exists.
     quest = QuestSpec(
         id="q",
         name="The quest",
@@ -537,14 +548,16 @@ def test_quest_owned_readers_are_visible_at_address_none() -> None:
                 when=TriggerClause(
                     pattern=TownEnteredPattern(), conditions=(FlagEqualsCondition(key="unwritten", value=1),)
                 ),
+                hidden=True,
+                reveal_when=TriggerClause(pattern=FlagSetPattern(key="unwritten")),
             ),
         ),
     )
     findings = [
         finding for finding in lint_adventure(authored(quests=(quest,))) if finding.code == "flag_read_no_writer"
     ]
-    assert len(findings) == 2
-    assert all(finding.address is None for finding in findings)
+    assert len(findings) == 3
+    assert all(finding.address == "quest:q" for finding in findings)
 
 
 def test_trigger_cycle_yields_one_finding_per_loop() -> None:
@@ -635,6 +648,202 @@ def test_a_spawn_into_a_dangling_area_is_validations_territory() -> None:
     assert "trigger_spawn_collision" not in codes(lint_adventure(fixture))
 
 
+# --- quest_reward_unpriced: the grid over grant kind × concludes × AwardXP --------
+
+
+def reward_quest(quest_id: str = "q", *, rewards: tuple = (), concludes: bool = False) -> QuestSpec:
+    return QuestSpec(
+        id=quest_id,
+        name="The quest",
+        objectives=(ObjectiveSpec(id="o", when=TriggerClause(pattern=TownEnteredPattern())),),
+        rewards=rewards,
+        concludes_adventure=concludes,
+    )
+
+
+def unpriced(fixture: Adventure) -> list[Finding]:
+    return [finding for finding in lint_adventure(fixture) if finding.code == "quest_reward_unpriced"]
+
+
+def test_a_grant_item_reward_without_award_xp_is_unpriced() -> None:
+    # Granted items value at zero under the engine's XP rule, so nothing ever
+    # prices this payment.
+    quest = reward_quest(rewards=(GrantItem(character_id="@party", item_id="sword"),))
+    findings = unpriced(authored(quests=(quest,)))
+    assert len(findings) == 1
+    assert findings[0].address == "quest:q"
+    assert findings[0].severity == "warning"
+    assert "granted items value at zero" in findings[0].message
+
+
+def test_an_award_xp_anywhere_in_the_tuple_silences_the_quest() -> None:
+    quest = reward_quest(
+        rewards=(GrantItem(character_id="@party", item_id="sword"), AwardXP(character_id="@party", amount=100))
+    )
+    assert unpriced(authored(quests=(quest,))) == []
+
+
+def test_granted_coins_on_a_non_concluding_quest_price_themselves() -> None:
+    # The return-to-town award prices the valuation delta; coins count at
+    # face value there, so no flag.
+    quest = reward_quest(rewards=(GrantCoins(character_id="@party", coins=Coins(gp=500)),))
+    assert unpriced(authored(quests=(quest,))) == []
+
+
+def test_granted_coins_on_a_concluding_quest_are_unpriced() -> None:
+    # The grant lands after victory, where no return-to-town award ever runs.
+    quest = reward_quest(rewards=(GrantCoins(character_id="@party", coins=Coins(gp=500)),), concludes=True)
+    findings = unpriced(authored(quests=(quest,)))
+    assert len(findings) == 1
+    assert findings[0].address == "quest:q"
+    assert "after victory" in findings[0].message
+
+
+def test_an_award_xp_silences_the_concluding_coins() -> None:
+    quest = reward_quest(
+        rewards=(GrantCoins(character_id="@party", coins=Coins(gp=500)), AwardXP(character_id="@party", amount=200)),
+        concludes=True,
+    )
+    assert unpriced(authored(quests=(quest,))) == []
+
+
+def test_a_grant_item_on_a_concluding_quest_is_unpriced_too() -> None:
+    quest = reward_quest(rewards=(GrantItem(character_id="@party", item_id="sword"),), concludes=True)
+    assert len(unpriced(authored(quests=(quest,)))) == 1
+
+
+def test_flag_only_rewards_are_silent() -> None:
+    quest = reward_quest(rewards=(SetFlag(key="k", value=True),))
+    assert unpriced(authored(quests=(quest,))) == []
+
+
+def test_a_trigger_grant_item_never_flags() -> None:
+    # The check reads quest rewards alone: a trigger's GrantItem is a key or
+    # a tool, not a payment — flagging it would false-positive on the exact
+    # lever-and-key wiring phase 16 exists for.
+    granting = TriggerSpec(
+        id="lever",
+        when=TownEnteredPattern(),
+        consequences=(GrantItem(character_id="@party", item_id="sword"),),
+    )
+    assert unpriced(authored(triggers=(granting,))) == []
+
+
+# --- key_not_placed: the satisfier grid ------------------------------------------
+
+
+IDOL = GearTemplate(id="jade-idol", name="Jade idol", cost_gp=0)
+
+
+def idol_door(item_id: str = "jade-idol") -> Edge:
+    return Edge(kind=EdgeKind.DOOR, door=DoorSpec(requires=GateSpec(condition=HasItemCondition(item_id=item_id))))
+
+
+def key_not_placed(fixture: Adventure) -> list[Finding]:
+    return [finding for finding in lint_adventure(fixture) if finding.code == "key_not_placed"]
+
+
+def test_a_gate_on_an_unplaced_bundled_item_flags_the_edge() -> None:
+    fixture = authored(DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door()}),)), items=(IDOL,))
+    findings = key_not_placed(fixture)
+    assert len(findings) == 1
+    assert findings[0].address == "dungeon:d/level:1/edge:1,1:north"
+    assert findings[0].severity == "warning"
+    assert "'jade-idol'" in findings[0].message
+
+
+def test_a_consuming_toll_flags_the_transitions_cell() -> None:
+    # An unplaceable toll is the same authoring mistake as an unplaceable key.
+    toll = transition(
+        requires=GateSpec(condition=HasItemCondition(item_id="jade-idol", consumes=True)), to_level_number=1
+    )
+    fixture = authored(DungeonSpec(id="d", levels=(level(transitions=(toll,)),)), items=(IDOL,))
+    findings = key_not_placed(fixture)
+    assert len(findings) == 1
+    assert findings[0].address == "dungeon:d/level:1/cell:0,0"
+
+
+def test_an_area_cache_satisfies_the_gate() -> None:
+    stocked = AreaSpec(
+        id="1",
+        cells=((1, 1),),
+        features=(FeatureSpec(id="cache", kind="treasure_cache", cell=None, item_ids=("jade-idol",)),),
+    )
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door()}, areas=(stocked,)),)), items=(IDOL,)
+    )
+    assert key_not_placed(fixture) == []
+
+
+def test_a_level_cache_satisfies_the_gate() -> None:
+    cache = FeatureSpec(id="cache", kind="treasure_cache", cell=(0, 0), item_ids=("jade-idol",))
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door()}, features=(cache,)),)), items=(IDOL,)
+    )
+    assert key_not_placed(fixture) == []
+
+
+def test_a_non_cache_features_contents_do_not_satisfy() -> None:
+    # osrlib's take and inspect handlers reject any feature whose kind is not
+    # a treasure cache, so contents a foreign document parks on another kind
+    # are unreachable in play — exactly the shape this check exists to catch.
+    trick = FeatureSpec(id="trick", kind="construction_trick", cell=(0, 0), item_ids=("jade-idol",))
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door()}, features=(trick,)),)), items=(IDOL,)
+    )
+    assert len(key_not_placed(fixture)) == 1
+
+
+def test_a_trigger_grant_satisfies_the_gate() -> None:
+    granting = TriggerSpec(
+        id="lever",
+        when=TownEnteredPattern(),
+        consequences=(GrantItem(character_id="@party", item_id="jade-idol"),),
+    )
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door()}),)),
+        triggers=(granting,),
+        items=(IDOL,),
+    )
+    assert key_not_placed(fixture) == []
+
+
+def test_a_non_concluding_quest_reward_satisfies_the_gate() -> None:
+    quest = reward_quest(rewards=(GrantItem(character_id="@party", item_id="jade-idol"),))
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door()}),)),
+        quests=(quest,),
+        items=(IDOL,),
+    )
+    assert key_not_placed(fixture) == []
+
+
+def test_a_concluding_quests_grant_does_not_satisfy() -> None:
+    # The grant lands after SessionMode.VICTORY — the session is terminal and
+    # no gate is ever read again, so counting it would hide the exact case
+    # where the author is most wrong.
+    quest = reward_quest(rewards=(GrantItem(character_id="@party", item_id="jade-idol"),), concludes=True)
+    fixture = authored(
+        DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door()}),)),
+        quests=(quest,),
+        items=(IDOL,),
+    )
+    assert len(key_not_placed(fixture)) == 1
+
+
+def test_a_shipped_id_gate_is_never_flagged() -> None:
+    # Shipped ids are purchasable in town — the torch toll is a design, not a
+    # mistake.
+    fixture = authored(DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door("torch")}),)))
+    assert key_not_placed(fixture) == []
+
+
+def test_a_dangling_id_gate_is_validations_territory() -> None:
+    # The id names no bundled item: door_gate_unknown_item already covers it.
+    fixture = authored(DungeonSpec(id="d", levels=(level(edges={"1,1:north": idol_door("ghost-key")}),)))
+    assert key_not_placed(fixture) == []
+
+
 def test_the_advisory_groups_follow_area_overlap_in_order() -> None:
     overlapping = (
         AreaSpec(id="1", cells=((1, 1),)),
@@ -651,23 +860,28 @@ def test_the_advisory_groups_follow_area_overlap_in_order() -> None:
         when=AreaEnteredPattern(dungeon_id="d", level_number=1, area_id="2"),
         consequences=(SpawnMonsters(template_id="orc", count_fixed=2, distance_feet=30),),
     )
+    unpriced_quest = reward_quest(rewards=(GrantItem(character_id="@party", item_id="sword"),))
     fixture = authored(
         DungeonSpec(
             id="d",
             levels=(
                 level(
                     areas=overlapping,
-                    edges={"1,0:west": OPEN, "1,1:north": OPEN, "1,1:west": gated_door},
+                    edges={"1,0:west": OPEN, "1,1:north": OPEN, "1,1:west": gated_door, "2,1:west": idol_door()},
                 ),
             ),
         ),
         triggers=(loop, spawn),
+        quests=(unpriced_quest,),
+        items=(IDOL,),
     )
     assert codes(lint_adventure(fixture)) == [
         "area_overlap",
         "flag_read_no_writer",
         "trigger_cycle",
         "trigger_spawn_collision",
+        "quest_reward_unpriced",
+        "key_not_placed",
     ]
 
 

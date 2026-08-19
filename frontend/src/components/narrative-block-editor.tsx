@@ -1,8 +1,8 @@
 // The shared narrative-block editor: the carrier declares its read beats
-// (a gate's are refusal and success; phase 16's triggers read fired and
-// journal, quests offer and completion), and speaker and guidance render for
-// every carrier — attribution and narrator steering are audience fields, not
-// display beats.
+// (a gate's are refusal and success; a trigger's fired and journal; a
+// quest's offer and completion; an objective's offer and progress), and
+// speaker and guidance render for every carrier — attribution and narrator
+// steering are audience fields, not display beats.
 //
 // Non-empty beats *outside* the carrier's read set — a foreign block carrying
 // `fired` on a gate — warn by name with a one-patch clear as the offered
@@ -73,8 +73,8 @@ export function NarrativeBlockEditor({
       {unreadBeats.map((beat) => (
         <div key={beat} className="flex flex-col items-start gap-1.5" aria-label="Unread beat">
           <p className="text-xs text-amber-700 dark:text-amber-400">
-            This block carries <span className="font-mono">{beat}</span> text, which this carrier
-            never reads: <span className="font-serif">“{current[beat]}”</span>
+            This block holds <span className="font-mono">{beat}</span> text, which the engine never
+            reads for this carrier: <span className="font-serif">“{current[beat]}”</span>
           </p>
           <Button variant="outline" size="sm" onClick={() => commitField(beat, '')}>
             Clear the {BEAT_LABELS[beat].toLowerCase()} text

@@ -33,8 +33,9 @@ check id in the vocabulary's order (`check.py:189`), each check doing its own
 full dungeon/level sweep in document order — `edge_invalid`,
 `area_unreachable`, `orphan_cell` (bounding-box scan, y outer),
 `secret_only_access`, `transition_unpaired` — with the editor extensions as
-further groups after them: `area_overlap`, then phase 16's advisory class —
-`flag_read_no_writer`, `trigger_cycle`, and `trigger_spawn_collision`, warning
+further groups after them: `area_overlap`, then the advisory class — phase
+16's `flag_read_no_writer`, `trigger_cycle`, and `trigger_spawn_collision`,
+and phase 17's `quest_reward_unpriced` and `key_not_placed` — warning
 severity by construction, never escalating, never gating. Stable output keeps
 tests exact and the panel steady.
 """
@@ -45,13 +46,22 @@ from collections.abc import Mapping
 from typing import Literal
 
 from osrlib.crawl.adventure import Adventure
-from osrlib.crawl.commands import ConsequenceCommand, SetFlag, SpawnMonsters, SpawnNpcParty
+from osrlib.crawl.commands import (
+    AwardXP,
+    ConsequenceCommand,
+    GrantCoins,
+    GrantItem,
+    SetFlag,
+    SpawnMonsters,
+    SpawnNpcParty,
+)
 from osrlib.crawl.dungeon import Direction, Edge, EdgeKind, LevelSpec, Position, edge_key, step
-from osrlib.crawl.gates import ConditionSpec, FlagEqualsCondition, flag_values_equal
+from osrlib.crawl.gates import ConditionSpec, FlagEqualsCondition, HasItemCondition, flag_values_equal
 from osrlib.crawl.quests import TriggerClause
 from osrlib.crawl.triggers import AreaEnteredPattern, FlagSetPattern, TriggerPattern
 
-from osreditor.addresses import area_address, cell_address, edge_address, level_address, trigger_address
+from osreditor.addresses import area_address, cell_address, edge_address, level_address, quest_address, trigger_address
+from osreditor.catalogs import shipped_item_ids
 from osreditor.ops import Finding
 
 __all__ = ["SEVERITY", "lint_adventure"]
@@ -66,11 +76,14 @@ SEVERITY: Mapping[str, Literal["error", "warning"]] = {
     "flag_read_no_writer": "warning",
     "trigger_cycle": "warning",
     "trigger_spawn_collision": "warning",
+    "quest_reward_unpriced": "warning",
+    "key_not_placed": "warning",
 }
 """Each check's severity — forge's producer-pinned table (`check.py:62-70`), plus the editor extensions.
 
-The last three are phase 16's advisory class: warning severity by
-construction, so they can never escalate and never gate publish.
+The last five are the advisory class — phase 16's three and phase 17's two:
+warning severity by construction, so they can never escalate and never gate
+publish.
 """
 
 _EDGE_KEY_SHAPE = re.compile(r"^(-?[0-9]+),(-?[0-9]+):(north|south|east|west)$")
@@ -278,16 +291,13 @@ def lint_adventure(adventure: Adventure) -> tuple[Finding, ...]:
     findings.extend(_flag_read_no_writer_findings(adventure))
     findings.extend(_trigger_cycle_findings(adventure))
     findings.extend(_trigger_spawn_collision_findings(adventure))
+    findings.extend(_quest_reward_unpriced_findings(adventure))
+    findings.extend(_key_not_placed_findings(adventure))
     return tuple(findings)
 
 
 def _flag_writers(adventure: Adventure) -> set[str]:
-    """Every flag key some `SetFlag` writes — trigger consequences *and* quest rewards.
-
-    The writer set includes quests even before their authoring surface exists:
-    a foreign document whose quest reward writes the key a gate reads must not
-    lint falsely.
-    """
+    """Every flag key some `SetFlag` writes — trigger consequences *and* quest rewards."""
     keys: set[str] = set()
     for trigger in adventure.triggers:
         for consequence in trigger.consequences:
@@ -315,12 +325,12 @@ def _flag_read_no_writer_findings(adventure: Adventure) -> list[Finding]:
     check over keys, a value mismatch is a different and rarer mistake, and
     strict-typed value matching across an open domain invites false positives.
     One finding per reading site, addressed to it — the door's edge, the
-    transition's cell, the trigger — except quest-owned readers, which carry
-    `address=None` until phase 17 grows their grammar: visible and honest,
-    never a navigable lie.
+    transition's cell, the trigger, or the owning quest (activation, objective
+    completion, and reveal clauses alike address `quest:<id>` — the quest
+    detail editor owns its objectives, so no finer address exists).
     """
     writers = _flag_writers(adventure)
-    sites: list[tuple[str, str | None]] = []
+    sites: list[tuple[str, str]] = []
     for dungeon in adventure.dungeons:
         for level in dungeon.levels:
             for key, edge in level.edges.items():
@@ -352,18 +362,16 @@ def _flag_read_no_writer_findings(adventure: Adventure) -> list[Finding]:
         for clause in clauses:
             flag = _pattern_flag_key(clause.pattern)
             if flag is not None:
-                sites.append((flag, None))
+                sites.append((flag, quest_address(quest.id)))
             for condition in clause.conditions:
                 flag = _read_flag_key(condition)
                 if flag is not None:
-                    sites.append((flag, None))
+                    sites.append((flag, quest_address(quest.id)))
     return [
-        Finding(
-            source="lint",
-            code="flag_read_no_writer",
-            severity=SEVERITY["flag_read_no_writer"],
-            message=f"flag {key!r} is read but never written — no trigger consequence or quest reward sets it",
-            address=address,
+        _finding(
+            "flag_read_no_writer",
+            f"flag {key!r} is read but never written — no trigger consequence or quest reward sets it",
+            address,
         )
         for key, address in sites
         if key not in writers
@@ -484,6 +492,146 @@ def _trigger_spawn_collision_findings(adventure: Adventure) -> list[Finding]:
             )
         )
     return findings
+
+
+def _quest_reward_unpriced_findings(adventure: Adventure) -> list[Finding]:
+    """Phase 17's first advisory check: treasure rewards the award machinery will never price.
+
+    The engine's XP-valuation rule is the whole justification: the return
+    award prices the party-valuation *delta* — coins at face value, valuables
+    at `value_gp`, magic items and mundane equipment at zero — and `AwardXP`
+    is the direct instrument. So a `GrantItem` reward never prices anywhere;
+    a `GrantCoins` on a concluding quest lands after victory, where no
+    return-to-town award ever runs; and granted coins on a non-concluding
+    quest price themselves at the return award and stay silent. Either
+    never-priced shape with no `AwardXP` among the same quest's rewards
+    yields one finding per quest. The check reads quest rewards alone, by the
+    spec's own vocabulary — "rewards" and "accompanying" are quest words, and
+    a trigger's `GrantItem` is a key or a tool, not a payment: flagging it
+    would false-positive on the exact lever-and-key wiring phase 16 exists
+    for.
+    """
+    findings: list[Finding] = []
+    for quest in adventure.quests:
+        if any(isinstance(reward, AwardXP) for reward in quest.rewards):
+            continue
+        reasons: list[str] = []
+        if any(isinstance(reward, GrantItem) for reward in quest.rewards):
+            reasons.append("granted items value at zero under the engine's XP rule")
+        if quest.concludes_adventure and any(isinstance(reward, GrantCoins) for reward in quest.rewards):
+            reasons.append("granted coins land after victory, where no return-to-town award ever runs")
+        if not reasons:
+            continue
+        findings.append(
+            _finding(
+                "quest_reward_unpriced",
+                f"rewards pay treasure the award machinery never prices ({'; '.join(reasons)}) "
+                "and no AwardXP accompanies them",
+                quest_address(quest.id),
+            )
+        )
+    return findings
+
+
+def _granted_item_ids(adventure: Adventure) -> set[str]:
+    """Every item id some `GrantItem` places in play — trigger consequences and non-concluding quest rewards.
+
+    A concluding quest's grants place nothing, by decision: they land after
+    `SessionMode.VICTORY`, the session is terminal, and no gate is ever read
+    again — counting one as a satisfier would hide the exact case where the
+    author is most wrong.
+    """
+    ids: set[str] = set()
+    for trigger in adventure.triggers:
+        for consequence in trigger.consequences:
+            if isinstance(consequence, GrantItem):
+                ids.add(consequence.item_id)
+    for quest in adventure.quests:
+        if quest.concludes_adventure:
+            continue
+        for reward in quest.rewards:
+            if isinstance(reward, GrantItem):
+                ids.add(reward.item_id)
+    return ids
+
+
+def _key_not_placed_findings(adventure: Adventure) -> list[Finding]:
+    """Phase 17's second advisory check: a `has_item` gate on a bundled item nothing places.
+
+    Sites are every door and transition `requires` whose condition names a
+    bundled id — shipped ids are purchasable and never flagged, and a
+    dangling id is the validation tier's finding, not this one's. Satisfiers
+    are any area- or level-feature cache naming the id and any `GrantItem` in
+    trigger consequences or the rewards of a non-concluding quest. One
+    finding per gate site, addressed to the carrier (the flag lint's
+    one-per-reading-site posture); a consuming toll flags like any other gate
+    — an unplaceable toll is the same authoring mistake. Advisory forever:
+    trigger-granted items and random treasure make the general problem
+    undecidable, which is also why the check keeps the narrow, high-signal
+    shape — clause `has_item` conditions guard optional wiring rather than
+    passage and stay out.
+    """
+    bundled = {template.id for template in adventure.items}
+    unplaceable = bundled - shipped_item_ids() - _cached_item_ids(adventure) - _granted_item_ids(adventure)
+    if not unplaceable:
+        return []
+    findings: list[Finding] = []
+    for dungeon in adventure.dungeons:
+        for level in dungeon.levels:
+            for key, edge in level.edges.items():
+                door = edge.door
+                if door is None or door.requires is None:
+                    continue
+                condition = door.requires.condition
+                if isinstance(condition, HasItemCondition) and condition.item_id in unplaceable:
+                    findings.append(
+                        _finding(
+                            "key_not_placed",
+                            _key_not_placed_message(condition.item_id),
+                            edge_address(dungeon.id, level.number, key),
+                        )
+                    )
+            for transition in level.transitions:
+                if transition.requires is None:
+                    continue
+                condition = transition.requires.condition
+                if isinstance(condition, HasItemCondition) and condition.item_id in unplaceable:
+                    findings.append(
+                        _finding(
+                            "key_not_placed",
+                            _key_not_placed_message(condition.item_id),
+                            cell_address(dungeon.id, level.number, transition.position),
+                        )
+                    )
+    return findings
+
+
+def _cached_item_ids(adventure: Adventure) -> set[str]:
+    """Every item id some area- or level-feature *cache* holds.
+
+    The kind filter is load-bearing: osrlib's take and inspect handlers
+    reject any feature whose kind is not a treasure cache, so contents a
+    foreign document parks on another kind are unreachable in play and must
+    not satisfy the gate — the exact shape this check exists to catch.
+    """
+    ids: set[str] = set()
+    for dungeon in adventure.dungeons:
+        for level in dungeon.levels:
+            for area in level.areas:
+                for feature in area.features:
+                    if feature.kind == "treasure_cache":
+                        ids.update(feature.item_ids)
+            for feature in level.features:
+                if feature.kind == "treasure_cache":
+                    ids.update(feature.item_ids)
+    return ids
+
+
+def _key_not_placed_message(item_id: str) -> str:
+    return (
+        f"gate requires bundled item {item_id!r}, which no cache holds and no trigger consequence "
+        "or non-concluding quest reward grants"
+    )
 
 
 def _area_overlap_findings(adventure: Adventure) -> list[Finding]:

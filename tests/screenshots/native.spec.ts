@@ -376,7 +376,7 @@ test('import, export, and publish', async ({ page }, testInfo) => {
   await shoot(publishDialog, 'publish-dialog', testInfo)
 })
 
-test('the quests section and the trigger surfaces', async ({ page }, testInfo) => {
+test('the quests section: the triggers, the quest, and the glyph', async ({ page }, testInfo) => {
   test.setTimeout(120_000)
   const projectDir = adventureDir(testInfo, 'trigger-demo.osr')
 
@@ -446,17 +446,67 @@ test('the quests section and the trigger surfaces', async ({ page }, testInfo) =
   await createDialog.getByRole('button', { name: 'Create' }).click()
   await expect(page.getByTestId('trigger-detail-trigger-2')).toBeVisible()
 
-  // The section list: the numbered rows in firing order. The list pane alone
-  // is the subject — the whole section's box is its scroll extent, which
-  // stitches the diagnostics bar into the frame.
+  // The concluding fetch quest, so the pane shot carries both list groups and
+  // the detail shot has activation, objectives, and rewards to picture. The
+  // objective completes on a carried shipped item, so the document stays
+  // validation-clean.
+  await page.getByRole('button', { name: 'New quest' }).click()
+  const questDialog = page.getByRole('dialog')
+  await questDialog.getByLabel('Name').fill('The miller’s idol')
+  await questDialog.getByLabel('Fires').selectOption('item_acquired')
+  await questDialog.getByRole('button', { name: 'Pick item' }).click()
+  await page.getByPlaceholder('Search items…').fill('torch')
+  await page
+    .getByRole('option', { name: /^Torch/ })
+    .first()
+    .click()
+  await questDialog.getByRole('button', { name: 'Create' }).click()
+  await expect(page.getByTestId('quest-detail-quest-1')).toBeVisible()
+  const objectiveName = page.locator('#objective-0-name')
+  await objectiveName.fill('Recover the idol')
+  await objectiveName.press('Tab')
+  await page.getByRole('button', { name: 'Add activation' }).click()
+  await page.locator('#quest-activation-pattern-kind').selectOption('dungeon_entered')
+  await page.locator('#quest-activation-pattern-dungeon').selectOption({ index: 1 })
+  await page.getByRole('button', { name: 'Add reward' }).click()
+  await page.locator('#quest-reward-new-command-kind').selectOption('grant_coins')
+  const rewardGp = page.locator('#quest-reward-0-coins-gp')
+  await rewardGp.fill('200')
+  await rewardGp.press('Tab')
+  await page.getByRole('button', { name: 'Add reward' }).click()
+  await page.locator('#quest-reward-new-command-kind').selectOption('award_xp')
+  const rewardXp = page.locator('#quest-reward-1-xp-amount')
+  await rewardXp.fill('400')
+  await rewardXp.press('Tab')
+  await page.getByRole('checkbox', { name: 'Concludes the adventure' }).click()
+  await expect(page.getByTestId('quest-row-quest-1')).toContainText('concludes')
+  const questOffer = page.locator('#quest-narrative-offer')
+  await questOffer.fill('Bring back the idol and the estate settles every debt.')
+  await questOffer.press('Tab')
+
+  // The section list: the numbered rows in firing order, the quest group
+  // below with its concludes badge. The list pane alone is the subject — the
+  // whole section's box is its scroll extent, which stitches the diagnostics
+  // bar into the frame.
   await page.getByTestId('trigger-row-trigger-1').getByRole('button').first().click()
   await expect(page.getByTestId('trigger-detail-trigger-1')).toBeVisible()
   await expect(page.getByTestId('diagnostics-count')).toHaveText('0')
-  await shoot(page.getByTestId('trigger-list-pane'), 'quests-triggers', testInfo)
+  await shoot(page.getByTestId('quests-triggers-pane'), 'quests-triggers', testInfo)
 
-  // The detail editor alone, tall enough to hold the three builders in frame.
+  // The trigger detail editor alone, tall enough to hold the three builders
+  // in frame.
   await page.setViewportSize({ width: 1280, height: 1700 })
   await shoot(page.getByTestId('trigger-detail-trigger-1'), 'trigger-detail', testInfo)
+
+  // The quest detail editor, staged with activation, objectives, and rewards
+  // open. The subject is taller than the capture primitive's aspect cap, so
+  // the shot clips to its top — the name, the activation clause, and the
+  // first objective — exactly as the monster editor's does; the caption in
+  // the guide names what is in frame.
+  await page.getByTestId('quest-row-quest-1').getByRole('button').first().click()
+  await expect(page.getByTestId('quest-detail-quest-1')).toBeVisible()
+  await page.setViewportSize({ width: 1280, height: 1700 })
+  await shoot(page.getByTestId('quest-detail-quest-1'), 'quest-detail', testInfo)
   await page.setViewportSize({ width: 1280, height: 800 })
 
   // The glyph: back on the map (the nav-scoped locator, because the trigger

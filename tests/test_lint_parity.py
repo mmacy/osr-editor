@@ -6,8 +6,9 @@ shared static checks agree with `lint_adventure` — ids, severities, messages,
 and locations under the address mapping. The citations phase 2 pinned stop
 being the contract; this running comparison becomes it. Delve findings are
 excluded (no editor counterpart), as are the editor extensions: `area_overlap`
-and phase 16's advisory group — `flag_read_no_writer`, `trigger_cycle`, and
-`trigger_spawn_collision`.
+and the advisory class — phase 16's `flag_read_no_writer`, `trigger_cycle`,
+and `trigger_spawn_collision`, and phase 17's `quest_reward_unpriced` and
+`key_not_placed`.
 """
 
 from pathlib import Path

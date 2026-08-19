@@ -48,6 +48,7 @@ __all__ = [
     "equipment_catalog",
     "magic_item_catalog",
     "monster_catalog",
+    "shipped_item_ids",
     "treasure_type_catalog",
 ]
 
@@ -150,6 +151,27 @@ class EncounterTableCatalogResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     tables: tuple[EncounterTable, ...]
+
+
+@cache
+def shipped_item_ids() -> frozenset[str]:
+    """The shipped half of the item domain: the four equipment lists plus the magic-item catalog.
+
+    Exactly the seen-set osrlib's `_effective_equipment` seeds, cached like its
+    loaders. Two consumers, which is why it lives here rather than beside
+    either: the bundled-item collision invariant in
+    [`osreditor.documents`][osreditor.documents], and the `key_not_placed`
+    advisory check in [`osreditor.lint`][osreditor.lint] (which cannot import
+    from `documents` — `documents` imports `diagnostics`, and `diagnostics`
+    imports `lint`).
+
+    Returns:
+        Every shipped item id, equipment and magic alike.
+    """
+    equipment = load_equipment()
+    ids = {template.id for template in (*equipment.weapons, *equipment.armour, *equipment.gear, *equipment.ammunition)}
+    ids.update(template.id for template in load_magic_items().items)
+    return frozenset(ids)
 
 
 @cache

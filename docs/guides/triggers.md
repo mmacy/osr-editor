@@ -1,6 +1,6 @@
 # Triggers
 
-The **Quests** section, beside Items in the section list, is where your module's wiring lives: the lever that raises a portcullis, the boss whose defeat unlocks the shrine, the homecoming beat that fires when the party walks back into town. This phase the section carries its trigger surface; the quest builder joins it in a later release.
+The **Quests** section, beside Items in the section list, is where your module's wiring lives: the lever that raises a portcullis, the boss whose defeat unlocks the shrine, the homecoming beat that fires when the party walks back into town. The section holds two lists — the triggers this page covers, and the [quests](quests.md) built from the same clause vocabulary.
 
 A trigger is an authored binding with three parts: a **pattern** naming the moment it fires on, optional **conditions** that must all hold at that moment, and **consequences** — the referee commands the engine issues when it fires. A trigger with no consequences is a perfectly normal shape: its whole job can be its journal line.
 
@@ -51,10 +51,10 @@ The three commands that give something to a character — grant an item, grant c
 
 A trigger's narrative block holds two beats, for two audiences:
 
-- **Fired** is the referee's line about the wiring — the engine carries it at referee visibility, table talk about what the machinery did. Players don't see it.
+- **Fired** is the referee's line about the wiring — the engine holds it at referee visibility, table talk about what the machinery did. Players don't see it.
 - **Journal** is the players' line about the same moment, written into the party's journal in order of discovery.
 
-Speaker and guidance ride along as on every narrative block: an attribution a renderer may credit the line to, and steering for a narrating front end that is never shown to players verbatim.
+Speaker and guidance are on every narrative block, as always: an attribution a renderer may credit the line to, and steering for a narrating front end that is never shown to players verbatim.
 
 ## Once-only, and what lives in saves
 
@@ -63,7 +63,7 @@ A trigger is **once-only by default**: it fires the first time its pattern match
 Two save-side notes worth knowing:
 
 - The fired mark is written *before* the consequences run. If a consequence is dropped in play — a spawn refused because an encounter is already open — a once-only trigger's one firing is still spent.
-- Renaming a trigger orphans any fired mark an existing save recorded under the old id: the renamed trigger will fire again for that save. Fresh sessions are unaffected.
+- Renaming a trigger orphans any fired mark recorded in an existing save under the old id: the renamed trigger will fire again for that save. Fresh sessions are unaffected.
 
 ## Placing triggers from the map
 
@@ -80,7 +80,7 @@ The other patterns — dungeon, town, item, monster, flag — have no natural pl
 
 ## The advisory lints
 
-Three advisory checks watch the trigger layer. They are warnings by construction: they never block publishing, because each one describes something that is legal and occasionally intentional — but far more often a mistake.
+Three advisory checks watch the trigger layer ([two more](quests.md#the-advisory-lints) watch the quest layer). They are warnings by construction: they never block publishing, because each one describes something that is legal and occasionally intentional — but far more often a mistake.
 
 - **A flag nobody writes** (`flag_read_no_writer`) — a door gate, a stair gate, or a trigger names a flag key that no trigger consequence (and no quest reward) writes. The gate can never be satisfied; the trigger can never fire. The finding sits on the reading site, one per reader.
 - **A trigger cycle** (`trigger_cycle`) — triggers whose flag writes fire each other in a loop. In play the engine cuts the cascade off at a depth bound and drops the rest with a note, so the loop won't hang a game — but circular wiring is almost always an accident. One finding per loop, naming its members.
@@ -88,4 +88,4 @@ Three advisory checks watch the trigger layer. They are warnings by construction
 
 ## In converted projects
 
-A project still in [forge-backed review](forge-backed-review.md) cannot hold triggers: the conversion pipeline's correction vocabulary has no authored-layer surface, a deliberate gap tracked at [osr-forge#39](https://github.com/mmacy/osr-forge/issues/39). The Quests entry still opens; it explains exactly this and offers **Detach to a native project** in place — the crossing that unlocks trigger authoring, and quests after it.
+A project still in [forge-backed review](forge-backed-review.md) cannot hold triggers: the conversion pipeline's correction vocabulary has no authored-layer surface, a deliberate gap tracked at [osr-forge#39](https://github.com/mmacy/osr-forge/issues/39). The Quests entry still opens; it explains exactly this and offers **Detach to a native project** in place — the crossing that unlocks trigger and quest authoring.

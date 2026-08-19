@@ -14,13 +14,19 @@ publish suites cover `Adventure.monsters` permanently); and the authored layer
 item — the miller's key — cached in room 1's strongbox, the treasure-room
 secret door gated on carrying it with authored refusal, success, and speaker,
 the stairs down gated on a toll that consumes a torch, and level 1 guidance
-prose; and the trigger layer (phase 16's growth, the milestone's
+prose; the trigger layer (phase 16's growth, the milestone's
 lever-opens-portcullis pairing): a once-only `area_entered` trigger on the
 wheel room whose one consequence writes the portcullis flag, with authored
 fired and journal beats and a speaker, and the portcullis door into the tail
 race gated `flag_equals` on that key with authored refusal and success text —
-so the flag has a writer by construction and the advisory lints stay silent.
-Town, hooks, and
+so the flag has a writer by construction and the advisory lints stay silent;
+and the quest layer (phase 17's growth, the milestone's winnable shape): a
+second bundled gear item — the millstone idol — cached in the miller's chest,
+and one concluding fetch quest activating on `dungeon_entered`, its one
+objective completing on `item_acquired` of the idol's id with an authored
+name, rewards granting coins and awarding XP (the award silences
+`quest_reward_unpriced` by construction), offer and completion beats with a
+speaker, and objective offer and progress beats. Town, hooks, and
 services filled. Validation-clean, and lint-clean except the one finding it is
 built to carry: the secret-only treasure room *is* the `secret_only_access`
 trigger — the spec's own publish rule ("secret-only access is sometimes the
@@ -53,7 +59,7 @@ from osrlib.core.monsters import (
 from osrlib.core.spells import SaveSpec
 from osrlib.core.tables import ReactionResult
 from osrlib.crawl.adventure import Adventure, TownSpec, validate_adventure
-from osrlib.crawl.commands import SetFlag
+from osrlib.crawl.commands import AwardXP, GrantCoins, SetFlag
 from osrlib.crawl.dungeon import (
     AreaSpec,
     AreaTreasureSpec,
@@ -74,7 +80,8 @@ from osrlib.crawl.dungeon import (
 )
 from osrlib.crawl.gates import FlagEqualsCondition, GateSpec, HasItemCondition
 from osrlib.crawl.narrative import NarrativeBlock
-from osrlib.crawl.triggers import AreaEnteredPattern, TriggerSpec
+from osrlib.crawl.quests import ObjectiveSpec, QuestSpec, TriggerClause
+from osrlib.crawl.triggers import AreaEnteredPattern, DungeonEnteredPattern, ItemAcquiredPattern, TriggerSpec
 from osrlib.data import load_encounter_tables, load_equipment, load_monsters
 from osrlib.errors import ContentValidationError
 
@@ -202,7 +209,7 @@ def _level_one() -> LevelSpec:
                 kind="treasure_cache",
                 description="The brass-bound chest, its lock plate scratched around the keyhole.",
                 cell=None,
-                item_ids=("sword",),
+                item_ids=("sword", "millstone-idol"),
                 coins=Coins(gp=120, sp=30),
                 valuables=(
                     ValuableSpec(kind="gem", name="", value_gp=50),
@@ -432,6 +439,13 @@ def build_small_module() -> Adventure:
                 name="The miller's brass key",
                 cost_gp=0,
             ),
+            # The milestone's fetch-quest object, cached in the miller's
+            # brass-bound chest behind the gated secret door.
+            GearTemplate(
+                id="millstone-idol",
+                name="The millstone idol",
+                cost_gp=0,
+            ),
         ),
         triggers=(
             # The milestone's lever half: once-only (the default), entering
@@ -447,6 +461,43 @@ def build_small_module() -> Adventure:
                         "iron rose grinding from its groove."
                     ),
                     speaker="The drowned miller",
+                ),
+            ),
+        ),
+        quests=(
+            # The milestone's concluding fetch quest: activation on entering
+            # the dungeon, one objective on acquiring the idol, coins granted
+            # and XP awarded (the award silences quest_reward_unpriced by
+            # construction), victory on completion.
+            QuestSpec(
+                id="the-millers-idol",
+                name="The miller's idol",
+                activation=TriggerClause(pattern=DungeonEnteredPattern(dungeon_id="mill-caves")),
+                objectives=(
+                    ObjectiveSpec(
+                        id="recover-idol",
+                        name="Recover the millstone idol",
+                        when=TriggerClause(pattern=ItemAcquiredPattern(item_id="millstone-idol")),
+                        narrative=NarrativeBlock(
+                            offer="The idol is said to sit in the miller's cache, behind walls that count.",
+                            progress="The idol is cold in your pack, and the mill feels lighter for it.",
+                        ),
+                    ),
+                ),
+                rewards=(
+                    GrantCoins(character_id="@party", coins=Coins(gp=200)),
+                    AwardXP(character_id="@party", amount=400),
+                ),
+                concludes_adventure=True,
+                narrative=NarrativeBlock(
+                    offer=(
+                        "Bring back the miller's stone idol and the estate settles every debt — "
+                        "proof of what became of him, and payment for the trouble."
+                    ),
+                    completion=(
+                        "The idol changes hands and the ledgers close; whatever walks the mill owes nobody now."
+                    ),
+                    speaker="The creditors' clerk",
                 ),
             ),
         ),

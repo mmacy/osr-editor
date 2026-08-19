@@ -29,14 +29,20 @@ make the grammar ambiguous — the builders live in
 [`osreditor.addresses`][osreditor.addresses]. Segments: `town`, `monsters`,
 `monster:<id>` (phase 4's finer bundled-template scope), `items` and
 `item:<id>` (phase 15's bundled-item scopes), `triggers` and `trigger:<id>`
-(phase 16's authored-trigger scopes), `dungeon:<id>`,
-`dungeon:<id>/level:<n>`, `dungeon:<id>/level:<n>/area:<id>`, plus the `cell:`
-and `edge:` geometry segments phase 2 added. Trigger-owned lines classify
-under the enumeration discipline (every one opens `trigger {id!r}: `, and the
-owner id confirms by rendering each of the document's trigger ids exactly as
-osrlib reprs it); quest-error strings degrade to `validation_unclassified`
-verbatim rows until phase 17 grows their grammar — visible, honest, never
-navigable lies.
+(phase 16's authored-trigger scopes), `quests` and `quest:<id>` (phase 17's
+authored-quest scopes), `dungeon:<id>`, `dungeon:<id>/level:<n>`,
+`dungeon:<id>/level:<n>/area:<id>`, plus the `cell:` and `edge:` geometry
+segments phase 2 added. Trigger-owned lines classify under the enumeration
+discipline (every one opens `trigger {id!r}: `, and the owner id confirms by
+rendering each of the document's trigger ids exactly as osrlib reprs it).
+Quest-owned lines classify one level deeper: osrlib builds three site
+prefixes — `quest {id!r}: ` for the activation clause, the rewards, and the
+uniqueness line, and per objective `quest {id!r} objective {oid!r}: ` and
+`quest {id!r} objective {oid!r} reveal: ` — so both the quest id and, where
+the site carries one, the objective id must confirm by enumeration, the
+objective against the confirmed quest's own objectives. The address is
+`quest:<id>` in every case — the quest detail editor owns its objectives, so
+no finer address exists to lie about.
 
 Every validation finding carries `severity="error"` — `validate_adventure`
 output gates publish, which is what error means here.
@@ -47,6 +53,7 @@ import re
 from osrforge.contracts.report import LintFinding
 from osrlib.crawl.adventure import Adventure, validate_adventure
 from osrlib.crawl.dungeon import LevelSpec
+from osrlib.crawl.quests import QuestSpec
 from osrlib.data import load_equipment, load_monsters
 from osrlib.errors import ContentValidationError
 
@@ -58,6 +65,7 @@ from osreditor.addresses import (
     item_address,
     level_address,
     monster_address,
+    quest_address,
     trigger_address,
 )
 from osreditor.lint import lint_adventure
@@ -319,6 +327,111 @@ def _classify_trigger_scoped(line: str, adventure: Adventure) -> Finding | None:
     return None
 
 
+# Quest-owned shapes: the tails osrlib's shared clause and consequence checks
+# append after the quest family's site prefixes. The clause tails (pattern and
+# condition) appear at all three sites — `quest {id!r}: ` for the activation,
+# `quest {id!r} objective {oid!r}: ` for a completion clause, and
+# `quest {id!r} objective {oid!r} reveal: ` for a reveal clause — while the
+# uniqueness line and the reward tails appear only at the quest's own prefix.
+# The tails are byte-identical to the trigger tails after each family's own
+# site prefix, except one word of the site: a reward line reads `reward {n}`
+# where a trigger's reads `consequence {n}` — so this is its own table, never
+# a reuse of `_TRIGGER_SHAPES`. Ordered most-specific first, the trigger
+# table's discipline; the dangling ids inside the tails are unconfirmable by
+# definition and stay message text.
+_QUEST_CLAUSE_SHAPES: tuple[tuple[str, str], ...] = (
+    ("quest_pattern_unknown_area", r"pattern references unknown area .+ on .+ level \d+"),
+    ("quest_pattern_unknown_dungeon", r"pattern references unknown dungeon .+"),
+    ("quest_pattern_unknown_item", r"pattern references unknown item .+"),
+    ("quest_pattern_unknown_monster", r"pattern references unknown monster .+"),
+    ("quest_pattern_unknown_level", r"pattern references unknown .+ level \d+"),
+    ("quest_condition_unknown_item", r"condition references unknown item .+"),
+)
+
+_QUEST_OWNER_SHAPES: tuple[tuple[str, str], ...] = (
+    ("quest_id_not_unique", r"id is not unique"),
+    *_QUEST_CLAUSE_SHAPES,
+    (
+        "quest_selector_violation",
+        r"reward \d+ names character .+; an authored consequence addresses '@party' or '@first'",
+    ),
+    ("quest_reward_unknown_item", r"reward \d+ references unknown item .+"),
+    ("quest_reward_unknown_monster", r"reward \d+ references unknown monster .+"),
+    ("quest_reward_unknown_level", r"reward \d+ references unknown .+ level \d+"),
+    ("quest_reward_no_door", rf"reward \d+ names no door at {_POSITION} (north|east|south|west)"),
+    ("quest_reward_out_of_bounds", rf"reward \d+ places the party out of bounds at {_POSITION}"),
+)
+
+_QUEST_OWNER_TAILS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (code, re.compile(tail)) for code, tail in _QUEST_OWNER_SHAPES
+)
+
+_QUEST_CLAUSE_TAILS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (code, re.compile(tail)) for code, tail in _QUEST_CLAUSE_SHAPES
+)
+
+# The degrade shapes: whole-line matches for lines no document id confirms.
+# The greedy `.+` between `quest ` and the last `: ` absorbs any objective and
+# reveal segment, so one shape per code covers every site.
+_QUEST_GENERIC: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (code, re.compile(rf"quest .+: {tail}")) for code, tail in _QUEST_OWNER_SHAPES
+)
+
+
+def _quest_code_for(quest: QuestSpec, line: str) -> str | None:
+    """The shape code this quest's rendered site prefixes confirm for the line, or `None`.
+
+    The two-level enumeration: the quest's own prefix admits all thirteen
+    tails; an objective or reveal prefix — rendered per objective of *this*
+    quest, exactly as osrlib reprs both ids — admits the six clause tails only.
+    """
+    base = f"quest {quest.id!r}"
+    prefix = f"{base}: "
+    if line.startswith(prefix):
+        rest = line[len(prefix) :]
+        for code, tail in _QUEST_OWNER_TAILS:
+            if tail.fullmatch(rest):
+                return code
+    for objective in quest.objectives:
+        for suffix in (": ", " reveal: "):
+            prefix = f"{base} objective {objective.id!r}{suffix}"
+            if not line.startswith(prefix):
+                continue
+            rest = line[len(prefix) :]
+            for code, tail in _QUEST_CLAUSE_TAILS:
+                if tail.fullmatch(rest):
+                    return code
+    return None
+
+
+def _classify_quest_scoped(line: str, adventure: Adventure) -> Finding | None:
+    """Classify a quest-owned line under two-level enumeration confirmation.
+
+    Exactly one confirmed distinct quest id addresses `quest:<id>` (duplicate
+    ids render identical prefixes and dedupe — the uniqueness line's own
+    case); a line no id confirms but a whole-line shape still matches degrades
+    to the bare `quests` scope — always true, never a lie; anything else
+    answers `None` and falls through. Trigger-owned lines never arrive here:
+    their owner prefix opens `trigger {id!r}`, which a start-anchored
+    `quest ` render cannot produce — and the reverse holds in
+    `_classify_trigger_scoped`, which runs first.
+    """
+    hits: dict[str, str] = {}
+    for quest in adventure.quests:
+        if quest.id in hits:
+            continue
+        code = _quest_code_for(quest, line)
+        if code is not None:
+            hits[quest.id] = code
+    if len(hits) == 1:
+        quest_id, code = next(iter(hits.items()))
+        return Finding(source="validation", code=code, severity="error", message=line, address=quest_address(quest_id))
+    for code, shape in _QUEST_GENERIC:
+        if shape.fullmatch(line):
+            return Finding(source="validation", code=code, severity="error", message=line, address="quests")
+    return None
+
+
 def _classify_bundled_item_collision(line: str, adventure: Adventure) -> Finding:
     """Address an item-collision line to `item:<id>` — enumeration-confirmed, degrading to the coarse scope.
 
@@ -350,6 +463,9 @@ def _classify(line: str, adventure: Adventure) -> Finding:
     if finding is not None:
         return finding
     finding = _classify_trigger_scoped(line, adventure)
+    if finding is not None:
+        return finding
+    finding = _classify_quest_scoped(line, adventure)
     if finding is not None:
         return finding
     if _BUNDLED_RE.match(line):

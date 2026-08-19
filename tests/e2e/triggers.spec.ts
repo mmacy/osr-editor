@@ -215,7 +215,7 @@ test('the forge posture: the Quests explanation body, and a map add-trigger bloc
   // — no list, since a forge-assembled document can never carry triggers; the
   // gap is forge's recorded decision, with detach in place.
   await page.getByRole('button', { name: 'Quests', exact: true }).click()
-  await expect(page.getByText(/carries no triggers or quests/)).toBeVisible()
+  await expect(page.getByText(/holds no triggers or quests/)).toBeVisible()
   await expect(page.getByRole('link', { name: 'osr-forge#39' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Detach to a native project…' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'New trigger' })).toHaveCount(0)

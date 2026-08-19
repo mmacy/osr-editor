@@ -1476,6 +1476,32 @@ export interface components {
             template: components["schemas"]["MonsterTemplate"];
         };
         /**
+         * AddQuest
+         * @description Add an authored quest, appended to `Adventure.quests`.
+         *
+         *     Adventure-scoped, the trigger quartet's shape over the whole
+         *     [`QuestSpec`][osrlib.crawl.quests.QuestSpec]. Appending is the only
+         *     insertion: authored order is seeding and walk order (the interpreter walks
+         *     all triggers first and then all quests, each in document order), and a
+         *     misplaced quest moves after the fact with
+         *     [`MoveQuest`][osreditor.ops.MoveQuest]. The spec's internal validity — the
+         *     required name, at least one objective, quest-scoped objective-id
+         *     uniqueness, the never-consuming clause conditions, the reveal clause only
+         *     on a hidden objective, the no-authored-source rule on rewards, the closed
+         *     nine-command reward union — is the model's own, enforced at request parse.
+         *     Invariant at apply: the id free among the rest of `Adventure.quests`.
+         *     Trigger ids are a separate namespace that imposes nothing; an empty id or
+         *     name rejects at parse (`QuestSpec` carries `min_length=1` on both).
+         */
+        AddQuest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "add_quest";
+            quest: components["schemas"]["QuestSpec"];
+        };
+        /**
          * AddTransition
          * @description Add a transition, carrying the full [`TransitionSpec`][osrlib.crawl.dungeon.TransitionSpec].
          *
@@ -4020,6 +4046,31 @@ export interface components {
             condition: string;
         };
         /**
+         * MoveQuest
+         * @description Move one quest to a new position in `Adventure.quests`.
+         *
+         *     Order is semantics twice over — quests seed in document order and the
+         *     interpreter walks them in document order after the triggers, and the
+         *     player view ships authored order — so reorder is a first-class edit, the
+         *     [`MoveTrigger`][osreditor.ops.MoveTrigger] mirror. `index` is the quest's
+         *     0-based position in the reordered list: splice out, insert at `index`. An
+         *     out-of-range index is rejected as `op_invariant` naming the valid range —
+         *     the reject-don't-clamp posture. A same-position move applies as a harmless
+         *     no-change batch; the UI never posts one (the arrows disable at the ends).
+         *     First-match among foreign duplicate ids.
+         */
+        MoveQuest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "move_quest";
+            /** Quest Id */
+            quest_id: string;
+            /** Index */
+            index: number;
+        };
+        /**
          * MoveTrigger
          * @description Move one trigger to a new position in `Adventure.triggers`.
          *
@@ -4260,7 +4311,7 @@ export interface components {
             /** Revision */
             revision: string;
             /** Ops */
-            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["AddMonsterTemplate"] | components["schemas"]["SetMonsterTemplate"] | components["schemas"]["RemoveMonsterTemplate"] | components["schemas"]["AddItemTemplate"] | components["schemas"]["SetItemTemplate"] | components["schemas"]["RemoveItemTemplate"] | components["schemas"]["AddTrigger"] | components["schemas"]["SetTrigger"] | components["schemas"]["MoveTrigger"] | components["schemas"]["RemoveTrigger"] | components["schemas"]["SetLevelField"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["SetEncounter"] | components["schemas"]["SetTrap"] | components["schemas"]["SetTreasure"] | components["schemas"]["AddFeature"] | components["schemas"]["SetFeature"] | components["schemas"]["RemoveFeature"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
+            ops: (components["schemas"]["SetAdventureField"] | components["schemas"]["SetTownField"] | components["schemas"]["AddMonsterTemplate"] | components["schemas"]["SetMonsterTemplate"] | components["schemas"]["RemoveMonsterTemplate"] | components["schemas"]["AddItemTemplate"] | components["schemas"]["SetItemTemplate"] | components["schemas"]["RemoveItemTemplate"] | components["schemas"]["AddTrigger"] | components["schemas"]["SetTrigger"] | components["schemas"]["MoveTrigger"] | components["schemas"]["RemoveTrigger"] | components["schemas"]["AddQuest"] | components["schemas"]["SetQuest"] | components["schemas"]["MoveQuest"] | components["schemas"]["RemoveQuest"] | components["schemas"]["SetLevelField"] | components["schemas"]["SetWandering"] | components["schemas"]["SetEdges"] | components["schemas"]["SetEntrance"] | components["schemas"]["CreateArea"] | components["schemas"]["SetAreaCells"] | components["schemas"]["SetAreaField"] | components["schemas"]["RemoveArea"] | components["schemas"]["SetEncounter"] | components["schemas"]["SetTrap"] | components["schemas"]["SetTreasure"] | components["schemas"]["AddFeature"] | components["schemas"]["SetFeature"] | components["schemas"]["RemoveFeature"] | components["schemas"]["AddTransition"] | components["schemas"]["RemoveTransition"] | components["schemas"]["AddDungeon"] | components["schemas"]["SetDungeonField"] | components["schemas"]["RenameDungeon"] | components["schemas"]["RemoveDungeon"] | components["schemas"]["AddLevel"] | components["schemas"]["RenumberLevel"] | components["schemas"]["ResizeLevel"] | components["schemas"]["RemoveLevel"])[];
         };
         /**
          * OpBatchResult
@@ -5002,6 +5053,24 @@ export interface components {
             address: string;
         };
         /**
+         * RemoveQuest
+         * @description Remove one quest; first-match among foreign duplicate ids.
+         *
+         *     Nothing in the document references a quest id, so removal dangles nothing;
+         *     the one external consequence — an existing save's lifecycle state for the
+         *     id orphans, and the interpreter skips the missing quest silently — is
+         *     osrlib's own posture. The UI's two-step row confirm is the only guard.
+         */
+        RemoveQuest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "remove_quest";
+            /** Quest Id */
+            quest_id: string;
+        };
+        /**
          * RemoveStashPack
          * @description Delete one stash pack by id.
          *
@@ -5674,6 +5743,34 @@ export interface components {
             address: string;
             /** Text */
             text: string;
+        };
+        /**
+         * SetQuest
+         * @description Replace one quest whole; a differing `quest.id` is a rename.
+         *
+         *     Whole-value replacement at the detail editor's commit grain — the
+         *     [`SetTrigger`][osreditor.ops.SetTrigger] reasoning, and the grain that
+         *     carries objective and reward order without reorder ops of their own:
+         *     objective-scoped edits — add, remove, rename, reorder, every field — ride
+         *     this op whole. A rename falls under
+         *     [`AddQuest`][osreditor.ops.AddQuest]'s id rule but cascades nowhere in the
+         *     document: no document field references a quest id (lifecycle state lives
+         *     in saves, `source` stamps are runtime), so only the sidecar's `quest:<id>`
+         *     note key moves and the delta pointer stays `/quests` even on rename. The
+         *     uniqueness invariant guards **new or changed ids only**: a foreign
+         *     document's duplicate ids open, edit, and navigate, resolved first-match in
+         *     authored order, flagged by the `quest_id_not_unique` diagnostic, never
+         *     locked.
+         */
+        SetQuest: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "set_quest";
+            /** Quest Id */
+            quest_id: string;
+            quest: components["schemas"]["QuestSpec"];
         };
         /**
          * SetReason

@@ -257,7 +257,8 @@
                     "description": "The brass-bound chest, its lock plate scratched around the keyhole.",
                     "cell": null,
                     "item_ids": [
-                      "sword"
+                      "sword",
+                      "millstone-idol"
                     ],
                     "magic_item_ids": [],
                     "coins": {
@@ -919,6 +920,17 @@
         "combat": null,
         "params": {},
         "overrides_applied": []
+      },
+      {
+        "item_type": "gear",
+        "id": "millstone-idol",
+        "name": "The millstone idol",
+        "cost_gp": 0,
+        "lot_size": 1,
+        "capacity_coins": null,
+        "combat": null,
+        "params": {},
+        "overrides_applied": []
       }
     ],
     "triggers": [
@@ -953,6 +965,77 @@
         }
       }
     ],
-    "quests": []
+    "quests": [
+      {
+        "id": "the-millers-idol",
+        "name": "The miller's idol",
+        "activation": {
+          "pattern": {
+            "pattern_type": "dungeon_entered",
+            "dungeon_id": "mill-caves"
+          },
+          "conditions": []
+        },
+        "objectives": [
+          {
+            "id": "recover-idol",
+            "name": "Recover the millstone idol",
+            "when": {
+              "pattern": {
+                "pattern_type": "item_acquired",
+                "item_id": "millstone-idol"
+              },
+              "conditions": []
+            },
+            "hidden": false,
+            "reveal_when": null,
+            "narrative": {
+              "refusal": "",
+              "success": "",
+              "fired": "",
+              "offer": "The idol is said to sit in the miller's cache, behind walls that count.",
+              "progress": "The idol is cold in your pack, and the mill feels lighter for it.",
+              "completion": "",
+              "journal": "",
+              "guidance": "",
+              "speaker": ""
+            }
+          }
+        ],
+        "rewards": [
+          {
+            "command_type": "grant_coins",
+            "source": null,
+            "character_id": "@party",
+            "coins": {
+              "pp": 0,
+              "gp": 200,
+              "ep": 0,
+              "sp": 0,
+              "cp": 0
+            }
+          },
+          {
+            "command_type": "award_xp",
+            "source": null,
+            "character_id": "@party",
+            "amount": 400
+          }
+        ],
+        "completion": "all",
+        "concludes_adventure": true,
+        "narrative": {
+          "refusal": "",
+          "success": "",
+          "fired": "",
+          "offer": "Bring back the miller's stone idol and the estate settles every debt — proof of what became of him, and payment for the trouble.",
+          "progress": "",
+          "completion": "The idol changes hands and the ledgers close; whatever walks the mill owes nobody now.",
+          "journal": "",
+          "guidance": "",
+          "speaker": "The creditors' clerk"
+        }
+      }
+    ]
   }
 }

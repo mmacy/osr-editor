@@ -236,6 +236,19 @@ export type SetTrigger = components['schemas']['SetTrigger']
 export type MoveTrigger = components['schemas']['MoveTrigger']
 export type RemoveTrigger = components['schemas']['RemoveTrigger']
 
+// Phase 17: quests — the spec, its objectives, the shared matching clause,
+// and the quest quartet, riding the generated types. A clause's `pattern` is
+// the TriggerPattern union already derived below and its `conditions` the
+// ConditionSpec union — pinned by type-level assertions in
+// translations.test.ts so the builders' reuse cannot drift silently.
+export type QuestSpec = components['schemas']['QuestSpec']
+export type ObjectiveSpec = components['schemas']['ObjectiveSpec']
+export type TriggerClause = components['schemas']['TriggerClause']
+export type AddQuest = components['schemas']['AddQuest']
+export type SetQuest = components['schemas']['SetQuest']
+export type MoveQuest = components['schemas']['MoveQuest']
+export type RemoveQuest = components['schemas']['RemoveQuest']
+
 // The discriminated aid unions, composed from their members (the route bodies
 // and responses carry the union, not a named schema — the AnyEditOp pattern).
 export type AidsPreviewRequest =

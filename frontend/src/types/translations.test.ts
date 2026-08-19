@@ -52,6 +52,7 @@ import type {
   MonsterTemplate,
   NarrativeBlock,
   NumberAppearingValue,
+  ObjectiveSpec,
   OpBatchResult,
   PartyLocation,
   ProjectState,
@@ -59,6 +60,7 @@ import type {
   ProviderFieldStatus,
   ProviderSettingsRequest,
   ProviderStatus,
+  QuestSpec,
   ReactionResult,
   ReviewMark,
   RunConversionRequest,
@@ -77,6 +79,7 @@ import type {
   TimeUnit,
   TransitionSpec,
   TrapSpec,
+  TriggerClause,
   TriggerPattern,
   TriggerSpec,
   WanderingSpec,
@@ -137,6 +140,10 @@ test('the op vocabulary translations hold', () => {
     | 'set_trigger'
     | 'move_trigger'
     | 'remove_trigger'
+    | 'add_quest'
+    | 'set_quest'
+    | 'move_quest'
+    | 'remove_quest'
     | 'set_level_field'
   >()
   expectTypeOf<Extract<AnyEditOp, { op: 'set_adventure_field' }>>().toHaveProperty('field')
@@ -153,6 +160,9 @@ test('the op vocabulary translations hold', () => {
   expectTypeOf<Extract<AnyEditOp, { op: 'add_trigger' }>['trigger']>().toEqualTypeOf<TriggerSpec>()
   expectTypeOf<Extract<AnyEditOp, { op: 'set_trigger' }>>().toHaveProperty('trigger_id')
   expectTypeOf<Extract<AnyEditOp, { op: 'move_trigger' }>['index']>().toEqualTypeOf<number>()
+  expectTypeOf<Extract<AnyEditOp, { op: 'add_quest' }>['quest']>().toEqualTypeOf<QuestSpec>()
+  expectTypeOf<Extract<AnyEditOp, { op: 'set_quest' }>>().toHaveProperty('quest_id')
+  expectTypeOf<Extract<AnyEditOp, { op: 'move_quest' }>['index']>().toEqualTypeOf<number>()
 
   // The item-template union discriminates on item_type over the four kinds.
   expectTypeOf<ItemTemplate['item_type']>().toEqualTypeOf<
@@ -243,6 +253,30 @@ test('the trigger translations hold', () => {
   // A trigger's conditions ride the same gate condition union.
   expectTypeOf<TriggerSpec['conditions']>().toEqualTypeOf<ConditionSpec[]>()
   expectTypeOf<TriggerSpec['repeatable']>().toEqualTypeOf<boolean>()
+})
+
+test('the quest translations hold', () => {
+  // The clause is the trigger vocabulary re-fielded: its `pattern` is the
+  // identical seven-member union and its `conditions` the identical
+  // three-member gate union — the builders' reuse cannot drift silently.
+  expectTypeOf<TriggerClause['pattern']>().toEqualTypeOf<TriggerPattern>()
+  expectTypeOf<TriggerClause['conditions'][number]>().toEqualTypeOf<ConditionSpec>()
+
+  // The quest's shape: an optional activation clause (null is the standing
+  // charge), at least-one objectives riding the wire as a plain array, the
+  // rewards over the identical closed nine-command union, and the closed
+  // completion rule.
+  expectTypeOf<QuestSpec['activation']>().toEqualTypeOf<TriggerClause | null | undefined>()
+  expectTypeOf<QuestSpec['objectives']>().toEqualTypeOf<ObjectiveSpec[]>()
+  expectTypeOf<QuestSpec['rewards']>().toEqualTypeOf<ConsequenceCommand[]>()
+  expectTypeOf<QuestSpec['completion']>().toEqualTypeOf<'all' | 'any'>()
+  expectTypeOf<QuestSpec['concludes_adventure']>().toEqualTypeOf<boolean>()
+
+  // An objective's completion clause is required; its reveal clause is
+  // nullable — the hidden/reveal pair's shape.
+  expectTypeOf<ObjectiveSpec['when']>().toEqualTypeOf<TriggerClause>()
+  expectTypeOf<ObjectiveSpec['reveal_when']>().toEqualTypeOf<TriggerClause | null | undefined>()
+  expectTypeOf<ObjectiveSpec['hidden']>().toEqualTypeOf<boolean>()
 })
 
 test('the catalog and publish translations hold', () => {
