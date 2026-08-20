@@ -68,9 +68,19 @@ export async function drag(page: Page, from: Point, to: Point): Promise<void> {
   await page.mouse.up()
 }
 
-/** Drag a room rectangle between two cells, leaving the select tool active. */
+/**
+ * Drag a room rectangle between two cells, leaving the select tool active.
+ *
+ * Returns only once the room's op has committed, which the revision badge
+ * reports. Hit tests and the stocking context menu read committed state, so a
+ * gesture arriving before the round-trip lands finds no area under the cell —
+ * and a right-click that finds none is swallowed outright rather than retried.
+ */
 export async function drawRoom(page: Page, a: [number, number], b: [number, number]): Promise<void> {
   await page.getByRole('button', { name: 'Room tool' }).click()
+  const revision = page.getByTestId('revision')
+  const before = (await revision.textContent()) ?? ''
   await drag(page, await cellCenter(page, ...a), await cellCenter(page, ...b))
+  await expect(revision).not.toHaveText(before)
   await page.getByRole('button', { name: 'Select tool' }).click()
 }
