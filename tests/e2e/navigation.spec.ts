@@ -62,10 +62,33 @@ async function wheel(
   )
 }
 
-/** The cell the hover readout names under a page point — the transform, observed. */
+/**
+ * The cell the hover readout names under a page point — the transform, observed.
+ *
+ * The readout is React state a pointer event drives, so it settles a frame or
+ * more after `mouse.move` resolves. Reading it straight through races that
+ * render and returns the previous pointer's cell, so wait for a painted frame.
+ * Prefer `expectCellUnder`, which polls; this is for the rare read whose
+ * expected value is not known up front.
+ */
 async function cellUnder(page: Page, at: Point): Promise<string> {
   await page.mouse.move(at.x, at.y)
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
   return (await page.getByTestId('hover-ref').textContent()) ?? ''
+}
+
+/**
+ * Assert the cell the hover readout names under a page point.
+ *
+ * Polls rather than reading once, which is what keeps the assertion honest
+ * without a sleep: the pan or zoom under test lands asynchronously, and a
+ * one-shot read can catch the readout a frame before it updates.
+ */
+async function expectCellUnder(page: Page, at: Point, expected: string): Promise<void> {
+  await page.mouse.move(at.x, at.y)
+  await expect(page.getByTestId('hover-ref')).toHaveText(expected)
 }
 
 async function freshMap(page: Page, name: string): Promise<void> {
@@ -82,7 +105,7 @@ async function gridPoint(page: Page, x: number, y: number): Promise<Point> {
 test('a two-finger drag pans, and every frame of the burst lands', async ({ page }) => {
   await freshMap(page, 'pad-pan')
   const probe = await gridPoint(page, 4, 4)
-  expect(await cellUnder(page, probe)).toBe('(4, 4)')
+  await expectCellUnder(page, probe, '(4, 4)')
 
   // A pad frame: whole but far under a notch, no horizontal component. Ten of
   // them at 24 px is CELL_SIZE * 10, so the probe must land exactly ten cells
@@ -92,11 +115,11 @@ test('a two-finger drag pans, and every frame of the burst lands', async ({ page
     probe,
     Array.from({ length: 10 }, () => ({ deltaY: CELL_SIZE })),
   )
-  expect(await cellUnder(page, probe)).toBe('(4, 14)')
+  await expectCellUnder(page, probe, '(4, 14)')
 
   // Horizontal too, and back: a pad drag carries both axes.
   await wheel(page, probe, [{ deltaX: -2 * CELL_SIZE, deltaY: -10 * CELL_SIZE }])
-  expect(await cellUnder(page, probe)).toBe('(2, 4)')
+  await expectCellUnder(page, probe, '(2, 4)')
 })
 
 test('the wheel zooms about the pointer, and ctrl-scroll forces it', async ({ page }) => {
@@ -108,16 +131,16 @@ test('the wheel zooms about the pointer, and ctrl-scroll forces it', async ({ pa
   await page.getByRole('button', { name: 'Pan tool' }).click()
   const anchor = await gridPoint(page, 5, 5)
   const probe = await gridPoint(page, 10, 10)
-  expect(await cellUnder(page, anchor)).toBe('(5, 5)')
-  expect(await cellUnder(page, probe)).toBe('(10, 10)')
+  await expectCellUnder(page, anchor, '(5, 5)')
+  await expectCellUnder(page, probe, '(10, 10)')
 
   // One notch in, anchored on (5, 5). The cell under the anchor is unchanged —
   // that is what "about the pointer" means — while the probe, 5 cells of page
   // distance away, now spans 5 / 1.15 = 4.35 cells from the anchor's centre at
   // 5.5, landing at grid 9.85: cell (9, 9).
   await wheel(page, anchor, [{ deltaY: -100 }])
-  expect(await cellUnder(page, anchor)).toBe('(5, 5)')
-  expect(await cellUnder(page, probe)).toBe('(9, 9)')
+  await expectCellUnder(page, anchor, '(5, 5)')
+  await expectCellUnder(page, probe, '(9, 9)')
 
   // Resetting the view does not reset the gain ramp — it is a property of the
   // gesture stream, not of the camera — so each independent measurement below
@@ -126,18 +149,18 @@ test('the wheel zooms about the pointer, and ctrl-scroll forces it', async ({ pa
   const settle = () => page.waitForTimeout(750)
   await page.getByRole('button', { name: 'Reset zoom' }).click()
   await settle()
-  expect(await cellUnder(page, probe)).toBe('(10, 10)')
+  await expectCellUnder(page, probe, '(10, 10)')
 
   // The escape hatch: a fractional delta is pad-shaped and would pan, but zooms
   // under the modifier. This frame is the first of its burst, so it is ungained —
   // 29.5 px on the pinch rate is e^0.221 = 1.248, putting the probe at grid 9.51.
   await wheel(page, anchor, [{ deltaY: -29.5, ctrlKey: true }])
-  expect(await cellUnder(page, anchor)).toBe('(5, 5)')
-  expect(await cellUnder(page, probe)).toBe('(9, 9)')
+  await expectCellUnder(page, anchor, '(5, 5)')
+  await expectCellUnder(page, probe, '(9, 9)')
 
   await page.getByRole('button', { name: 'Reset zoom' }).click()
   await settle()
-  expect(await cellUnder(page, probe)).toBe('(10, 10)')
+  await expectCellUnder(page, probe, '(10, 10)')
 
   // The gain ramp, wired end to end: twenty pad-shaped frames under the modifier
   // in one burst reach scale 4.55 and put the probe at grid 6.60. The same twenty
@@ -148,14 +171,14 @@ test('the wheel zooms about the pointer, and ctrl-scroll forces it', async ({ pa
     anchor,
     Array.from({ length: 20 }, () => ({ deltaY: -6, ctrlKey: true })),
   )
-  expect(await cellUnder(page, anchor)).toBe('(5, 5)')
-  expect(await cellUnder(page, probe)).toBe('(6, 6)')
+  await expectCellUnder(page, anchor, '(5, 5)')
+  await expectCellUnder(page, probe, '(6, 6)')
 })
 
 test('a left-drag pans under select — including from empty paper', async ({ page }) => {
   await freshMap(page, 'drag-pan')
   const probe = await gridPoint(page, 4, 4)
-  expect(await cellUnder(page, probe)).toBe('(4, 4)')
+  await expectCellUnder(page, probe, '(4, 4)')
 
   // Empty paper is off the grid entirely, where hit testing answers nothing —
   // and it is where a hand reaches to move a map, so it must still pan. The
@@ -169,19 +192,19 @@ test('a left-drag pans under select — including from empty paper', async ({ pa
     x: canvas.x + canvas.width - 20,
     y: canvas.y + canvas.height - 20,
   }
-  expect(await cellUnder(page, outside)).toBe('')
+  await expectCellUnder(page, outside, '')
   await page.mouse.move(outside.x, outside.y)
   await page.mouse.down()
   await page.mouse.move(outside.x, outside.y - 2 * CELL_SIZE, { steps: 6 })
   await page.mouse.up()
-  expect(await cellUnder(page, probe)).toBe('(4, 6)')
+  await expectCellUnder(page, probe, '(4, 6)')
 
   // And over the grid, where the same press would otherwise be a selection.
   await page.mouse.move(probe.x, probe.y)
   await page.mouse.down()
   await page.mouse.move(probe.x, probe.y + 2 * CELL_SIZE, { steps: 6 })
   await page.mouse.up()
-  expect(await cellUnder(page, probe)).toBe('(4, 4)')
+  await expectCellUnder(page, probe, '(4, 4)')
   // The drag panned instead of selecting, so the inspector stayed empty.
   await expect(page.getByLabel('Inspector')).toContainText('Select something on the map')
 })
@@ -211,7 +234,7 @@ test('a press that does not travel still selects', async ({ page }) => {
   await page.mouse.move(x + 2, y + 2)
   await page.mouse.up()
   await expect(page.getByLabel('Inspector').getByLabel('Key')).toHaveValue('1')
-  expect(await cellUnder(page, probe)).toBe(before)
+  await expectCellUnder(page, probe, before)
 })
 
 test('the pan tool and a middle-click-and-hold drag both pan', async ({ page }) => {
@@ -223,7 +246,7 @@ test('the pan tool and a middle-click-and-hold drag both pan', async ({ page }) 
   await page.mouse.down()
   await page.mouse.move(probe.x, probe.y - 3 * CELL_SIZE, { steps: 6 })
   await page.mouse.up()
-  expect(await cellUnder(page, probe)).toBe('(4, 7)')
+  await expectCellUnder(page, probe, '(4, 7)')
 
   // Middle-click-and-hold pans under every tool, drawing ones included.
   await page.getByRole('button', { name: 'Room tool' }).click()
@@ -231,7 +254,7 @@ test('the pan tool and a middle-click-and-hold drag both pan', async ({ page }) 
   await page.mouse.down({ button: 'middle' })
   await page.mouse.move(probe.x, probe.y + 3 * CELL_SIZE, { steps: 6 })
   await page.mouse.up({ button: 'middle' })
-  expect(await cellUnder(page, probe)).toBe('(4, 4)')
+  await expectCellUnder(page, probe, '(4, 4)')
   // The middle-drag drew nothing — the room tool never saw a gesture.
   await expect(page.getByTestId('revision')).toHaveText('r1')
 })
@@ -253,7 +276,8 @@ test('fit level reframes the whole level, and reset zoom still pins 100%', async
   for (let step = 0; step < 3; step += 1) {
     await page.getByRole('button', { name: 'Zoom in' }).click()
   }
-  expect(await cellUnder(page, northwest)).not.toBe('(0, 0)')
+  await page.mouse.move(northwest.x, northwest.y)
+  await expect(page.getByTestId('hover-ref')).not.toHaveText('(0, 0)')
 
   await page.getByRole('button', { name: 'Fit level' }).click()
 
@@ -265,14 +289,14 @@ test('fit level reframes the whole level, and reset zoom still pins 100%', async
     x: canvas.x + fitted.offsetX + (x + 0.5) * CELL_SIZE * fitted.scale,
     y: canvas.y + fitted.offsetY + (y + 0.5) * CELL_SIZE * fitted.scale,
   })
-  expect(await cellUnder(page, at(0, 0))).toBe('(0, 0)')
-  expect(await cellUnder(page, at(15, 15))).toBe('(15, 15)')
-  expect(await cellUnder(page, at(29, 29))).toBe('(29, 29)')
+  await expectCellUnder(page, at(0, 0), '(0, 0)')
+  await expectCellUnder(page, at(15, 15), '(15, 15)')
+  await expectCellUnder(page, at(29, 29), '(29, 29)')
 
   // And the control it sits beside is untouched: still a hard 100% at the
   // pinned margin, from a fitted view as from any other.
   await page.getByRole('button', { name: 'Reset zoom' }).click()
-  expect(await cellUnder(page, await gridPoint(page, 6, 6))).toBe('(6, 6)')
+  await expectCellUnder(page, await gridPoint(page, 6, 6), '(6, 6)')
 })
 
 test('reset zoom pins the transform the coordinate helpers assume', async ({ page }) => {
@@ -285,11 +309,13 @@ test('reset zoom pins the transform the coordinate helpers assume', async ({ pag
   // at the reset margin plus whole cells, at scale 1.
   const canvas = await page.getByTestId('map-canvas').boundingBox()
   if (!canvas) throw new Error('the map canvas has no bounding box')
-  expect(await cellUnder(page, probe)).toBe('(6, 6)')
-  expect(
-    await cellUnder(page, {
+  await expectCellUnder(page, probe, '(6, 6)')
+  await expectCellUnder(
+    page,
+    {
       x: canvas.x + RESET_MARGIN + 0.5 * CELL_SIZE,
       y: canvas.y + RESET_MARGIN + 0.5 * CELL_SIZE,
-    }),
-  ).toBe('(0, 0)')
+    },
+    '(0, 0)',
+  )
 })
