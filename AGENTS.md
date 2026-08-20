@@ -15,6 +15,10 @@ osr-editor is a local GUI application for creating and modifying adventure modul
 
 Each roadmap phase in `docs/spec.md` ships as two PRs — a plan, then an implementation — and both follow the same create → rubber-duck → revise-until-solid → PR loop. "Work up a plan for phase N" or "implement the plan for phase N" means run this loop end to end, unprompted. The full runbook — planning, implementing, and the rubber-duck review loop — is `.claude/skills/phase-loop/SKILL.md`. The workflow mirrors osrlib-python's `AGENTS.md`; keep parity with it unless this file says otherwise.
 
+## Stocking adventures
+
+Stocking a module — keying areas, monsters, treasure, traps, gates, triggers, and quests into an `adventure.json` against an XP budget, then playtesting it to completion through scripted osrlib sessions — is content authoring, not editor development, and has its own runbook: `.claude/skills/stock-dungeon/SKILL.md`. Use it whenever asked to stock, populate, or key a dungeon level, or to prove an authored adventure plays through without blockers.
+
 ## Toolchain
 
 - Python ≥ 3.14. Package management with `uv` exclusively (`uv add`, `uv sync`, `uv run`) — never `pip`.
