@@ -1,7 +1,7 @@
 {
   "kind": "adventure",
   "schema_version": 3,
-  "engine_version": "1.6.0",
+  "engine_version": "1.7.0",
   "payload": {
     "name": "The mill on the moor",
     "description": "A ruined mill hides the entrance to the caves its miller dug too deep.",
