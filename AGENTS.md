@@ -11,9 +11,9 @@ osr-editor is a local GUI application for creating and modifying adventure modul
 - osr-web (a sibling checkout at `../osr-web`) is the reference consumer; "publish" means satisfying its `adventures/` discovery rules.
 - Frontend types under `frontend/src/types/generated/` are generated from the pydantic models. Never hand-edit them and never hand-write a TypeScript mirror of an osrlib schema.
 
-## The phase loop
+## Working method
 
-Each roadmap phase in `docs/spec.md` ships as two PRs — a plan, then an implementation — and both follow the same create → rubber-duck → revise-until-solid → PR loop. "Work up a plan for phase N" or "implement the plan for phase N" means run this loop end to end, unprompted. The full runbook — planning, implementing, and the rubber-duck review loop — is `.claude/skills/phase-loop/SKILL.md`. The workflow mirrors osrlib-python's `AGENTS.md`; keep parity with it unless this file says otherwise.
+Work is divided into chunks that the lead role packets to coder roles, with acceptance tests written before the implementation by a different agent and committed marked expected-to-fail. The method, the roles, the packet, and the worktree rules are in the suite guide at `../CLAUDE.md`, and the role definitions are in `../.claude/agents/`. Each roadmap phase in `docs/spec.md` is a batch of chunks. The plans under `docs/phase-N-plan.md` are the record of phases already built.
 
 ## Stocking adventures
 
