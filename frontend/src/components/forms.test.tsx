@@ -58,7 +58,7 @@ function partyOp(value: Party | null): AnyEditOp[] {
   return [{ op: 'set_adventure_field', field: 'party', value }]
 }
 
-test.skip('a document with no party offers to add a level-1 party', () => {
+test('a document with no party offers to add a level-1 party', () => {
   const document = makeDocument({ party: null })
   render(<AdventureForm document={document} />)
   expect(screen.queryByLabelText('Lowest level')).toBeNull()
@@ -68,7 +68,7 @@ test.skip('a document with no party offers to add a level-1 party', () => {
   )
 })
 
-test.skip('the party fields show the document party', () => {
+test('the party fields show the document party', () => {
   render(<AdventureForm document={makeDocument({ party: PARTY })} />)
   expect(screen.getByLabelText('Lowest level')).toHaveProperty('value', '1')
   expect(screen.getByLabelText('Highest level')).toHaveProperty('value', '3')
@@ -77,7 +77,7 @@ test.skip('the party fields show the document party', () => {
   expect(screen.queryByRole('button', { name: 'Add party' })).toBeNull()
 })
 
-test.skip('editing a level commits the whole party', () => {
+test('editing a level commits the whole party', () => {
   const document = makeDocument({ party: PARTY })
   render(<AdventureForm document={document} />)
   const field = screen.getByLabelText('Highest level')
@@ -86,7 +86,7 @@ test.skip('editing a level commits the whole party', () => {
   expect(committedOps(document)).toEqual(partyOp({ ...PARTY, max_level: 4 }))
 })
 
-test.skip('emptying a size field commits that size as unstated', () => {
+test('emptying a size field commits that size as unstated', () => {
   const document = makeDocument({ party: PARTY })
   render(<AdventureForm document={document} />)
   const field = screen.getByLabelText('Most characters')
@@ -95,14 +95,14 @@ test.skip('emptying a size field commits that size as unstated', () => {
   expect(committedOps(document)).toEqual(partyOp({ ...PARTY, max_size: null }))
 })
 
-test.skip('remove party clears it', () => {
+test('remove party clears it', () => {
   const document = makeDocument({ party: PARTY })
   render(<AdventureForm document={document} />)
   fireEvent.click(screen.getByRole('button', { name: 'Remove party' }))
   expect(committedOps(document)).toEqual(partyOp(null))
 })
 
-test.skip('in forge mode, add party routes to the blocked-op dialog', () => {
+test('in forge mode, add party routes to the blocked-op dialog', () => {
   useForgeProject()
   render(<AdventureForm document={makeDocument({ party: null })} />)
   fireEvent.click(screen.getByRole('button', { name: 'Add party' }))
@@ -110,7 +110,7 @@ test.skip('in forge mode, add party routes to the blocked-op dialog', () => {
   expect(commit).not.toHaveBeenCalled()
 })
 
-test.skip('in forge mode, a party field routes to the blocked-op dialog on entry', () => {
+test('in forge mode, a party field routes to the blocked-op dialog on entry', () => {
   useForgeProject()
   render(<AdventureForm document={makeDocument({ party: PARTY })} />)
   fireEvent.focus(screen.getByLabelText('Lowest level'))

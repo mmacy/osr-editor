@@ -122,6 +122,7 @@ export function navTargetFor(
   document: Adventure,
 ): NavTarget | null {
   if (!address) return null
+  if (address === 'adventure') return { kind: 'adventure' }
   if (address === 'town') return { kind: 'town' }
   if (address === 'monsters') return { kind: 'monsters' }
   if (address === 'items') return { kind: 'items' }

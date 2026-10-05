@@ -249,6 +249,9 @@ export type SetQuest = components['schemas']['SetQuest']
 export type MoveQuest = components['schemas']['MoveQuest']
 export type RemoveQuest = components['schemas']['RemoveQuest']
 
+// osrlib 1.8: the character levels and party size an adventure is written for.
+export type PartySpec = components['schemas']['PartySpec']
+
 // The discriminated aid unions, composed from their members (the route bodies
 // and responses carry the union, not a named schema — the AnyEditOp pattern).
 export type AidsPreviewRequest =
