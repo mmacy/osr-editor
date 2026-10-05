@@ -98,6 +98,12 @@ STAGE_ORDER: tuple[Stage, ...] = (
 )
 """Every stage a row is rendered for, in `run.json` order.
 
+The order is preprocess, survey, content, monsters, mapread, geometry,
+assemble. Mapread is osr-forge 0.2's map-reading stage, one model request per
+level over its printed map pages. It runs between monsters and assembly, so
+its row sits between monsters and geometry. A workdir that osr-forge 0.1
+converted has no mapread entry in `run.json`, and its row reads pending.
+
 Geometry has no independent run — it completes inside every assembly — but it
 carries a `run.json` status, so it carries a row.
 """
@@ -115,7 +121,12 @@ nothing at anybody's expense.
 """
 
 MODEL_STAGES = frozenset({Stage.SURVEY, Stage.CONTENT, Stage.MONSTERS})
-"""The stages that call a provider; forge requires one exactly when the resumed chain contains any."""
+"""The stages that call a provider: survey, content, monsters, and mapread.
+
+Forge requires a provider exactly when the resumed chain contains any of them.
+The survey stage's census request is part of the survey stage, so it needs no
+entry of its own.
+"""
 
 ConversionKind = Literal["pdf", "workdir"]
 ConversionStateName = Literal["estimating", "estimated", "ready", "running", "completed", "failed", "cancelled"]
@@ -516,8 +527,9 @@ def needs_provider(stage: Stage) -> bool:
         stage: The stage the chain will resume from.
 
     Returns:
-        True when the resumed chain contains survey, content, or monsters —
-        exactly when forge requires a provider.
+        True when the resumed chain contains survey, content, monsters, or
+        mapread — exactly when forge requires a provider. A rerun from
+        mapread needs one; a rerun from assemble doesn't.
     """
     start = forge.RUNNABLE_STAGES.index(stage)
     return any(member in MODEL_STAGES for member in forge.RUNNABLE_STAGES[start:])

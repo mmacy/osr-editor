@@ -35,6 +35,35 @@ describe('parseFlag', () => {
     expect(parseFlag('not_a_flag:whatever')).toBeNull()
     expect(parseFlag('geometry_synthesized:')).toBeNull()
   })
+
+  // chunk: forge-0.2. osr-forge 0.2.0 adds three flags to the report's
+  // vocabulary, and the queue badges them like the flags it already knows.
+  // Remove `.skip` when the chunk merges.
+  test.skip("parses osr-forge 0.2's three new flags", () => {
+    expect(
+      parseFlag('map_disputed:door 17–18 prose-stated door; the map shows none — kept'),
+    ).toEqual({
+      flag: 'map_disputed',
+      detail: 'door 17–18 prose-stated door; the map shows none — kept',
+    })
+    expect(parseFlag("survey_disputed:census names 'old-mill'; survey does not")).toEqual({
+      flag: 'survey_disputed',
+      detail: "census names 'old-mill'; survey does not",
+    })
+    expect(
+      parseFlag('resolution_suspect:gnoll females → gnoll, printed AC 15 read as 4 [15] vs 5 [14]'),
+    ).toEqual({
+      flag: 'resolution_suspect',
+      detail: 'gnoll females → gnoll, printed AC 15 read as 4 [15] vs 5 [14]',
+    })
+  })
+
+  test("parses low_confidence's self-assessed detail", () => {
+    expect(parseFlag('low_confidence:0.55 self-assessed')).toEqual({
+      flag: 'low_confidence',
+      detail: '0.55 self-assessed',
+    })
+  })
 })
 
 describe('buildReviewRows', () => {

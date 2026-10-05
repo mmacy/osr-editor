@@ -17,6 +17,7 @@ from osrforge.settings import ConversionSettings
 import osreditor.forge
 from osreditor.config import load_config
 from osreditor.conversions import (
+    STAGE_ORDER,
     ConversionRegistry,
     ConversionSession,
     begin_run,
@@ -30,6 +31,7 @@ from osreditor.conversions import (
     require_runnable,
     run_chain,
     run_estimate,
+    seed_stage_rows,
     validate_settings_updates,
     validate_stage,
 )
@@ -44,6 +46,11 @@ from osreditor.errors import (
     ProjectExistsError,
 )
 from osreditor.store import LocalProjectStore
+
+# Chunk forge-0.2: the editor's conversion layer catches up with osr-forge
+# 0.2.0, which adds the census request to the survey stage and the mapread
+# model stage between monsters and assembly.
+FORGE_02 = pytest.mark.xfail(reason="chunk: forge-0.2", strict=True)
 
 
 @pytest.fixture
@@ -93,6 +100,7 @@ class CancellingProvider:
 # --- the pdf lifecycle --------------------------------------------------------
 
 
+@FORGE_02
 def test_the_estimate_prices_the_conversion_and_leaves_the_workdir_warm(minimod_pdf: Path, tmp_path: Path) -> None:
     session = pdf_session(minimod_pdf, tmp_path / "minimod.forge")
     run_estimate(session)
@@ -106,10 +114,18 @@ def test_the_estimate_prices_the_conversion_and_leaves_the_workdir_warm(minimod_
     # What is pinned is coherence — the totals are the parts.
     assert estimate.text_tokens > 0 and estimate.image_tokens > 0
     assert estimate.input_tokens == (
-        estimate.survey_input_tokens + estimate.content_input_tokens + estimate.monsters_input_tokens
+        estimate.survey_input_tokens
+        + estimate.census_input_tokens
+        + estimate.content_input_tokens
+        + estimate.monsters_input_tokens
+        + estimate.mapread_input_tokens
     )
     assert estimate.output_tokens == (
-        estimate.survey_output_tokens + estimate.content_output_tokens + estimate.monsters_output_tokens
+        estimate.survey_output_tokens
+        + estimate.census_output_tokens
+        + estimate.content_output_tokens
+        + estimate.monsters_output_tokens
+        + estimate.mapread_output_tokens
     )
     assert estimate.usd > 0
 
@@ -120,6 +136,7 @@ def test_the_estimate_prices_the_conversion_and_leaves_the_workdir_warm(minimod_
         "survey": "pending",
         "content": "pending",
         "monsters": "pending",
+        "mapread": "pending",
         "geometry": "pending",
         "assemble": "pending",
     }
@@ -160,6 +177,7 @@ def test_a_page_cap_breach_is_the_same_session_failure(minimod_pdf: Path, tmp_pa
 # --- the chain ----------------------------------------------------------------
 
 
+@FORGE_02
 def test_confirm_then_run_completes_the_chain_over_the_warm_workdir(
     service: DocumentService, warm_workdir: Path, minimod_fixtures: Path
 ) -> None:
@@ -177,6 +195,7 @@ def test_confirm_then_run_completes_the_chain_over_the_warm_workdir(
         "survey",
         "content",
         "monsters",
+        "mapread",
         "geometry",
         "assemble",
     ]
@@ -240,6 +259,7 @@ def test_a_failed_session_re_runs(service: DocumentService, warm_workdir: Path, 
 # --- cancellation -------------------------------------------------------------
 
 
+@FORGE_02
 def test_cancel_takes_effect_at_the_next_stage_boundary_and_the_conversion_resumes(
     service: DocumentService, warm_workdir: Path, minimod_fixtures: Path
 ) -> None:
@@ -250,13 +270,15 @@ def test_cancel_takes_effect_at_the_next_stage_boundary_and_the_conversion_resum
 
     state = session.snapshot()
     assert state.state == "cancelled"
-    # The stage in flight finished; the next never started.
-    assert provider.tags == ["survey"]
+    # The stage in flight finished, its census request included; the next
+    # stage never started.
+    assert provider.tags == ["survey", "census"]
     assert stage_states(session) == {
         "preprocess": "completed",
         "survey": "completed",
         "content": "pending",
         "monsters": "pending",
+        "mapread": "pending",
         "geometry": "pending",
         "assemble": "pending",
     }
@@ -398,6 +420,40 @@ def test_a_provider_is_required_exactly_when_the_resumed_chain_has_a_model_stage
     assert needs_provider(Stage.ASSEMBLE) is False
 
 
+@FORGE_02
+def test_a_rerun_from_mapread_needs_a_provider() -> None:
+    assert needs_provider(Stage.MAPREAD) is True
+
+
+def test_mapread_is_a_runnable_stage() -> None:
+    assert validate_stage(Stage.MAPREAD) is Stage.MAPREAD
+
+
+@FORGE_02
+def test_the_stage_rows_carry_mapread_between_monsters_and_geometry() -> None:
+    expected = (
+        Stage.PREPROCESS,
+        Stage.SURVEY,
+        Stage.CONTENT,
+        Stage.MONSTERS,
+        Stage.MAPREAD,
+        Stage.GEOMETRY,
+        Stage.ASSEMBLE,
+    )
+    assert expected == STAGE_ORDER
+    assert tuple(row.stage for row in seed_stage_rows(None)) == expected
+
+
+@FORGE_02
+def test_a_forge_0_1_run_reads_mapread_as_pending(warm_workdir: Path) -> None:
+    # A workdir converted by osr-forge 0.1 has no mapread entry in run.json.
+    run = RunMeta.model_validate_json((warm_workdir / "run.json").read_text())
+    stages = {stage: status for stage, status in run.stages.items() if stage is not Stage.MAPREAD}
+    legacy = run.model_copy(update={"stages": stages})
+    rows = {row.stage: row.status.status for row in seed_stage_rows(legacy)}
+    assert rows[Stage.MAPREAD] == "pending"
+
+
 def test_a_knob_owned_upstream_is_refused_with_forges_remedy(warm_workdir: Path) -> None:
     run = require_run_meta(workdir_session(warm_workdir))
     validate_settings_updates(run, Stage.MONSTERS, {"custom_monsters": "off"})
@@ -483,6 +539,7 @@ def test_a_message_less_failure_still_names_itself(
 # --- previews in the state the control exists for ----------------------------
 
 
+@FORGE_02
 def test_previews_render_in_the_pre_assemble_state(
     service: DocumentService, warm_workdir: Path, minimod_fixtures: Path
 ) -> None:
