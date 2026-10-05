@@ -22,8 +22,6 @@ from osreditor.store import LocalProjectStore
 from test_overrides import batch as forge_batch
 from test_overrides import open_forge
 
-STUB = pytest.mark.xfail(reason="chunk: adventure-party", raises=NotImplementedError, strict=True)
-
 PARTY = PartySpec(min_level=1, max_level=3, min_size=6, max_size=8)
 PARTY_JSON = {"min_level": 1, "max_level": 3, "min_size": 6, "max_size": 8}
 BLOCKED_MESSAGE = "the adventure party has no override kind"
@@ -50,22 +48,18 @@ def saved_payload(service: DocumentService, project: OpenProject) -> dict:
 
 
 class TestThePartyField:
-    @STUB
     def test_takes_a_party_spec(self) -> None:
         assert SetAdventureField(field="party", value=PARTY).value == PARTY
 
-    @STUB
     def test_parses_a_party_from_json(self) -> None:
         parsed = OpBatch.model_validate(
             {"revision": "r1", "ops": [{"op": "set_adventure_field", "field": "party", "value": PARTY_JSON}]}
         )
         assert parsed.ops[0] == SetAdventureField(field="party", value=PARTY)
 
-    @STUB
     def test_takes_none_to_clear(self) -> None:
         assert SetAdventureField(field="party", value=None).value is None
 
-    @STUB
     @pytest.mark.parametrize("value", ["levels 1 to 3", ("levels 1 to 3",)])
     def test_rejects_a_string_or_a_tuple(self, value: str | tuple[str, ...]) -> None:
         with pytest.raises(ValidationError):
@@ -97,7 +91,6 @@ class TestThePartyField:
 
 
 class TestNativeProject:
-    @STUB
     def test_sets_the_party_and_persists_it(self, service: DocumentService, project: OpenProject) -> None:
         result = service.apply_batch(project, batch(project, SetAdventureField(field="party", value=PARTY)))
         assert project.adventure.party == PARTY
@@ -107,7 +100,6 @@ class TestNativeProject:
         keys = list(payload)
         assert keys.index("party") == keys.index("hooks") + 1
 
-    @STUB
     def test_clears_the_party(self, service: DocumentService, project: OpenProject) -> None:
         service.apply_batch(project, batch(project, SetAdventureField(field="party", value=PARTY)))
         result = service.apply_batch(project, batch(project, SetAdventureField(field="party", value=None)))
@@ -115,7 +107,6 @@ class TestNativeProject:
         assert result.delta == (SubtreeChange(path="/party", value=None),)
         assert saved_payload(service, project)["party"] is None
 
-    @STUB
     def test_undo_and_redo_the_party(self, service: DocumentService, project: OpenProject) -> None:
         service.apply_batch(project, batch(project, SetAdventureField(field="party", value=PARTY)))
         service.undo(project)
@@ -123,7 +114,6 @@ class TestNativeProject:
         service.redo(project)
         assert project.adventure.party == PARTY
 
-    @STUB
     def test_the_party_survives_reopening(self, service: DocumentService, project: OpenProject) -> None:
         service.apply_batch(project, batch(project, SetAdventureField(field="party", value=PARTY)))
         written = service.store.read_artifact(str(project.path), "adventure.json")
@@ -133,7 +123,6 @@ class TestNativeProject:
 
 
 class TestForgeBackedProject:
-    @STUB
     @pytest.mark.parametrize("value", [PARTY_JSON, None], ids=["set", "clear"])
     def test_a_party_edit_blocks_with_the_detach_offer(self, forge_workdir: Path, value: dict | None) -> None:
         service, project = open_forge(forge_workdir)
@@ -147,7 +136,6 @@ class TestForgeBackedProject:
         assert not (forge_workdir / "overrides.yaml").exists()
         assert project.revision == "r1"
 
-    @STUB
     def test_a_party_edit_rejects_the_whole_batch(self, forge_workdir: Path) -> None:
         service, project = open_forge(forge_workdir)
         with pytest.raises(OpUnsupportedForgeError):

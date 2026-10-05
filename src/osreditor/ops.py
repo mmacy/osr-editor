@@ -153,8 +153,9 @@ class SetAdventureField(EditOp):
     @model_validator(mode="after")
     def _value_matches_field(self) -> SetAdventureField:
         if self.field == "party":
-            raise NotImplementedError("chunk: adventure-party")
-        if self.field == "hooks":
+            if self.value is not None and not isinstance(self.value, PartySpec):
+                raise ValueError("party takes a party spec or null")
+        elif self.field == "hooks":
             if not isinstance(self.value, tuple):
                 raise ValueError("hooks takes a tuple of strings")
         elif not isinstance(self.value, str):

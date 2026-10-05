@@ -1,12 +1,15 @@
+import { useState } from 'react'
+
 import { ListEditor } from '@/components/list-editor'
 import { ProseAssistant } from '@/components/prose-assistant'
 import { TravelTurnsEditor } from '@/components/travel-turns-editor'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useCommittedField } from '@/hooks/use-committed-field'
+import { integerInRange, useCommittedField } from '@/hooks/use-committed-field'
 import { projectStore, useProjectStore } from '@/store/project-store'
-import type { Adventure } from '@/types'
+import type { Adventure, PartySpec } from '@/types'
 
 // Every form commits through the store's single-flight queue: one committed
 // field, one op batch, one undo step. Scalar sets carry their value directly;
@@ -28,6 +31,42 @@ function commitHooks(update: (current: string[]) => string[]): void {
     .commit((document) => [
       { op: 'set_adventure_field', field: 'hooks', value: update([...document.hooks]) },
     ])
+}
+
+// Mirrors the server's message for a party edit in a forge-backed project
+// (ensure_forge_supported in overrides.py), so the party controls open the
+// blocked-op dialog before anything posts. Change both together.
+const PARTY_BLOCKED_MESSAGE = 'the adventure party has no override kind'
+
+function blockPartyEdit(): void {
+  projectStore.getState().setBlockedOp({
+    op: 'set_adventure_field',
+    address: 'adventure',
+    message: PARTY_BLOCKED_MESSAGE,
+  })
+}
+
+// A party edit commits the whole PartySpec. A field edit is a builder over
+// the document current at post time, so it never revives a party that
+// another tab cleared in the meantime.
+function commitParty(update: (current: PartySpec) => PartySpec | null): Promise<boolean> {
+  return projectStore
+    .getState()
+    .commit((document) =>
+      document.party
+        ? [{ op: 'set_adventure_field', field: 'party', value: update(document.party) }]
+        : [],
+    )
+}
+
+function commitNewParty(): void {
+  void projectStore.getState().commit([
+    {
+      op: 'set_adventure_field',
+      field: 'party',
+      value: { min_level: 1, max_level: 1, min_size: null, max_size: null },
+    },
+  ])
 }
 
 function commitServices(update: (current: string[]) => string[]): void {
@@ -93,7 +132,147 @@ export function AdventureForm({ document }: { document: Adventure }) {
           />
         )}
       </div>
+      <PartyEditor party={document.party ?? null} />
     </section>
+  )
+}
+
+// A size field may be empty, which commits the size as unstated (null).
+function sizeOrEmpty(draft: string): string | null {
+  return draft.trim() === '' ? '' : integerInRange(1)(draft)
+}
+
+function PartyEditor({ party }: { party: PartySpec | null }) {
+  const forge = useProjectStore((state) => state.project?.forge != null)
+  // The server checks the ranges (a highest level below the lowest, say). A
+  // rejected edit bumps the generation, which remounts the fields so they
+  // show the document's party again instead of the refused draft.
+  const [generation, setGeneration] = useState(0)
+  const commitField = (key: keyof PartySpec, value: number | null) => {
+    void commitParty((current) => ({ ...current, [key]: value })).then((committed) => {
+      if (!committed) setGeneration((count) => count + 1)
+    })
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>Party</Label>
+      <p className="text-xs text-muted-foreground">
+        The character levels and number of characters the adventure is written for. Leave a number
+        of characters empty when the adventure doesn't say.
+      </p>
+      {party ? (
+        <>
+          <div key={generation} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <PartyNumberField
+              id="party-min-level"
+              label="Lowest level"
+              value={party.min_level}
+              forge={forge}
+              normalize={integerInRange(1)}
+              onCommit={(value) => commitField('min_level', value)}
+            />
+            <PartyNumberField
+              id="party-max-level"
+              label="Highest level"
+              value={party.max_level}
+              forge={forge}
+              normalize={integerInRange(1)}
+              onCommit={(value) => commitField('max_level', value)}
+            />
+            <PartyNumberField
+              id="party-min-size"
+              label="Fewest characters"
+              value={party.min_size ?? null}
+              forge={forge}
+              normalize={sizeOrEmpty}
+              onCommit={(value) => commitField('min_size', value)}
+            />
+            <PartyNumberField
+              id="party-max-size"
+              label="Most characters"
+              value={party.max_size ?? null}
+              forge={forge}
+              normalize={sizeOrEmpty}
+              onCommit={(value) => commitField('max_size', value)}
+            />
+          </div>
+          <div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (forge) {
+                  blockPartyEdit()
+                  return
+                }
+                void commitParty(() => null)
+              }}
+            >
+              Remove party
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (forge) {
+                blockPartyEdit()
+                return
+              }
+              commitNewParty()
+            }}
+          >
+            Add party
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PartyNumberField({
+  id,
+  label,
+  value,
+  forge,
+  normalize,
+  onCommit,
+}: {
+  id: string
+  label: string
+  value: number | null
+  forge: boolean
+  normalize: (draft: string) => string | null
+  onCommit: (value: number | null) => void
+}) {
+  const field = useCommittedField(
+    value === null ? '' : String(value),
+    (draft) => onCommit(draft === '' ? null : Number(draft)),
+    normalize,
+  )
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id} className="font-normal">
+        {label}
+      </Label>
+      <Input
+        id={id}
+        className="font-mono"
+        type="number"
+        min={1}
+        {...field}
+        onFocus={(event) => {
+          // Forge mode blocks every party edit, so entering a field opens
+          // the blocked-op dialog rather than letting a draft be typed.
+          if (!forge) return
+          event.currentTarget.blur()
+          blockPartyEdit()
+        }}
+      />
+    </div>
   )
 }
 
