@@ -4,8 +4,7 @@
 `PartySpec` or `None`. A native project sets and clears `Adventure.party`
 like any other adventure field.
 
-The forge-backed tests are the acceptance tests for chunk `forge-party`. In a
-forge-backed project a party edit becomes the `party` field of the `module:`
+In a forge-backed project a party edit becomes the `party` field of the `module:`
 override, the way name, description, and hooks do: a mapping replaces the
 survey's party whole, its omitted sizes become null, and an explicit `null`
 clears it. The `forge_workdir` fixture's survey states a party (levels 1 to
@@ -31,7 +30,6 @@ from test_overrides import batch as forge_batch
 PARTY = PartySpec(min_level=1, max_level=3, min_size=6, max_size=8)
 PARTY_JSON = {"min_level": 1, "max_level": 3, "min_size": 6, "max_size": 8}
 SURVEY_PARTY = PartySpec(min_level=1, max_level=3, min_size=4, max_size=6)
-FORGE_PARTY = pytest.mark.xfail(reason="chunk: forge-party", strict=True)
 
 
 @pytest.fixture
@@ -138,7 +136,6 @@ class TestForgeBackedProject:
         _, project = open_forge(forge_workdir)
         assert project.adventure.party == SURVEY_PARTY
 
-    @FORGE_PARTY
     def test_setting_the_party_writes_the_module_entry(self, forge_workdir: Path) -> None:
         service, project = open_forge(forge_workdir)
         apply_and_check_roundtrip(service, project, set_party(PARTY_JSON))
@@ -154,7 +151,6 @@ class TestForgeBackedProject:
         )
         assert project.revision == "r2"
 
-    @FORGE_PARTY
     def test_a_party_without_sizes_replaces_the_survey_party_whole(self, forge_workdir: Path) -> None:
         service, project = open_forge(forge_workdir)
         apply_and_check_roundtrip(
@@ -164,7 +160,6 @@ class TestForgeBackedProject:
         assert project.adventure.party == PartySpec(min_level=2, max_level=4)
         assert overrides_data(forge_workdir)["module"]["party"] == {"min_level": 2, "max_level": 4}
 
-    @FORGE_PARTY
     def test_clearing_the_party_writes_an_explicit_null(self, forge_workdir: Path) -> None:
         service, project = open_forge(forge_workdir)
         apply_and_check_roundtrip(service, project, set_party(None))
@@ -173,7 +168,6 @@ class TestForgeBackedProject:
             "module:\n  party: null\n  reason: module party corrected\n"
         )
 
-    @FORGE_PARTY
     def test_a_later_edit_replaces_the_party_in_the_same_entry(self, forge_workdir: Path) -> None:
         service, project = open_forge(forge_workdir)
         service.apply_batch(project, forge_batch(project, set_party(PARTY_JSON)))
@@ -181,7 +175,6 @@ class TestForgeBackedProject:
         assert project.adventure.party is None
         assert overrides_data(forge_workdir) == {"module": {"party": None, "reason": "module party corrected"}}
 
-    @FORGE_PARTY
     def test_the_party_merges_with_the_other_module_fields(self, forge_workdir: Path) -> None:
         service, project = open_forge(forge_workdir)
         apply_and_check_roundtrip(
@@ -195,7 +188,6 @@ class TestForgeBackedProject:
         assert module["party"] == PARTY_JSON
         assert module["reason"] == "module name, party corrected"
 
-    @FORGE_PARTY
     def test_undo_and_redo_the_party(self, forge_workdir: Path) -> None:
         service, project = open_forge(forge_workdir)
         service.apply_batch(project, forge_batch(project, set_party(PARTY_JSON)))
@@ -212,7 +204,6 @@ class TestForgeBackedProject:
         assert project.adventure.party == PARTY
         assert (forge_workdir / "overrides.yaml").read_bytes() == written
 
-    @FORGE_PARTY
     @pytest.mark.parametrize("value", [PARTY_JSON, None], ids=["set", "clear"])
     def test_the_party_survives_reopening(self, forge_workdir: Path, value: dict | None) -> None:
         service, project = open_forge(forge_workdir)

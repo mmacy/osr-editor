@@ -173,13 +173,6 @@ _TRIGGER_BLOCKED = "triggers have no override kind — the overrides vocabulary 
 # nothing routes client-side, so the server's 422 is the whole story.
 _QUEST_BLOCKED = "quests have no override kind — the overrides vocabulary has no authored-layer surface"
 
-# Mirrored verbatim by the frontend's PARTY_BLOCKED_MESSAGE
-# (components/forms.tsx). Change both together.
-# Contract: chunk forge-party deletes this message, its use in
-# ensure_forge_supported, and the frontend mirror. The docstrings of
-# ensure_forge_supported and translate_batch state the behavior without it.
-_PARTY_BLOCKED = "the adventure party has no override kind"
-
 _BLOCKED_MESSAGES: dict[type, str] = {
     SetWandering: "wandering-monster parameters have no override kind",
     SetDungeonField: "dungeon fields have no override kind",
@@ -268,8 +261,6 @@ def ensure_forge_supported(ops: Sequence[AnyEditOp]) -> None:
         message = _BLOCKED_MESSAGES.get(type(op))
         if message is not None:
             raise OpUnsupportedForgeError(message, op=op.op, address=_blocked_address(op))
-        if isinstance(op, SetAdventureField) and op.field == "party":
-            raise OpUnsupportedForgeError(_PARTY_BLOCKED, op=op.op, address="adventure")
         if isinstance(op, SetAreaField) and op.field == "id":
             raise OpUnsupportedForgeError(
                 "area re-keying has no override kind — override addressing is by key",

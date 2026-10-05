@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- On the adventure form, you can set the party an adventure is written for: the lowest and highest character level, and the fewest and most characters. **Add party** starts a party at level 1 with no number of characters. Each field saves when you leave it, and an empty number of characters means the adventure doesn't say. **Remove party** clears it. The editor saves it in osrlib's `Adventure.party`. In a forge-backed project, every party control opens the detach offer instead, because osr-forge's overrides have no field for the party.
+- On the adventure form, you can set the party an adventure is written for: the lowest and highest character level, and the fewest and most characters. **Add party** starts a party at level 1 with no number of characters. Each field saves when you leave it, and an empty number of characters means the adventure doesn't say. **Remove party** clears it. In a native project, the editor saves the party in osrlib's `Adventure.party`. In a forge-backed project, the editor saves a party edit as the `party` field of the `module:` entry in `overrides.yaml`, which replaces the party osr-forge's survey found. **Remove party** writes `party: null` there, which clears it.
 
 ### Changed
 

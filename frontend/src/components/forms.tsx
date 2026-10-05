@@ -33,19 +33,6 @@ function commitHooks(update: (current: string[]) => string[]): void {
     ])
 }
 
-// Mirrors the server's message for a party edit in a forge-backed project
-// (ensure_forge_supported in overrides.py), so the party controls open the
-// blocked-op dialog before anything posts. Change both together.
-const PARTY_BLOCKED_MESSAGE = 'the adventure party has no override kind'
-
-function blockPartyEdit(): void {
-  projectStore.getState().setBlockedOp({
-    op: 'set_adventure_field',
-    address: 'adventure',
-    message: PARTY_BLOCKED_MESSAGE,
-  })
-}
-
 // A party edit commits the whole PartySpec. A field edit is a builder over
 // the document current at post time, so it never revives a party that
 // another tab cleared in the meantime.
@@ -143,7 +130,6 @@ function sizeOrEmpty(draft: string): string | null {
 }
 
 function PartyEditor({ party }: { party: PartySpec | null }) {
-  const forge = useProjectStore((state) => state.project?.forge != null)
   // The server checks the ranges (a highest level below the lowest, say). A
   // rejected edit bumps the generation, which remounts the fields so they
   // show the document's party again instead of the refused draft.
@@ -167,7 +153,6 @@ function PartyEditor({ party }: { party: PartySpec | null }) {
               id="party-min-level"
               label="Lowest level"
               value={party.min_level}
-              forge={forge}
               normalize={integerInRange(1)}
               onCommit={(value) => commitField('min_level', value)}
             />
@@ -175,7 +160,6 @@ function PartyEditor({ party }: { party: PartySpec | null }) {
               id="party-max-level"
               label="Highest level"
               value={party.max_level}
-              forge={forge}
               normalize={integerInRange(1)}
               onCommit={(value) => commitField('max_level', value)}
             />
@@ -183,7 +167,6 @@ function PartyEditor({ party }: { party: PartySpec | null }) {
               id="party-min-size"
               label="Fewest characters"
               value={party.min_size ?? null}
-              forge={forge}
               normalize={sizeOrEmpty}
               onCommit={(value) => commitField('min_size', value)}
             />
@@ -191,40 +174,19 @@ function PartyEditor({ party }: { party: PartySpec | null }) {
               id="party-max-size"
               label="Most characters"
               value={party.max_size ?? null}
-              forge={forge}
               normalize={sizeOrEmpty}
               onCommit={(value) => commitField('max_size', value)}
             />
           </div>
           <div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (forge) {
-                  blockPartyEdit()
-                  return
-                }
-                void commitParty(() => null)
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={() => void commitParty(() => null)}>
               Remove party
             </Button>
           </div>
         </>
       ) : (
         <div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (forge) {
-                blockPartyEdit()
-                return
-              }
-              commitNewParty()
-            }}
-          >
+          <Button variant="outline" size="sm" onClick={commitNewParty}>
             Add party
           </Button>
         </div>
@@ -237,14 +199,12 @@ function PartyNumberField({
   id,
   label,
   value,
-  forge,
   normalize,
   onCommit,
 }: {
   id: string
   label: string
   value: number | null
-  forge: boolean
   normalize: (draft: string) => string | null
   onCommit: (value: number | null) => void
 }) {
@@ -258,20 +218,7 @@ function PartyNumberField({
       <Label htmlFor={id} className="font-normal">
         {label}
       </Label>
-      <Input
-        id={id}
-        className="font-mono"
-        type="number"
-        min={1}
-        {...field}
-        onFocus={(event) => {
-          // Forge mode blocks every party edit, so entering a field opens
-          // the blocked-op dialog rather than letting a draft be typed.
-          if (!forge) return
-          event.currentTarget.blur()
-          blockPartyEdit()
-        }}
-      />
+      <Input id={id} className="font-mono" type="number" min={1} {...field} />
     </div>
   )
 }
