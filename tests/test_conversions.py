@@ -47,11 +47,6 @@ from osreditor.errors import (
 )
 from osreditor.store import LocalProjectStore
 
-# Chunk forge-0.2: the editor's conversion layer catches up with osr-forge
-# 0.2.0, which adds the census request to the survey stage and the mapread
-# model stage between monsters and assembly.
-FORGE_02 = pytest.mark.xfail(reason="chunk: forge-0.2", strict=True)
-
 
 @pytest.fixture
 def service() -> DocumentService:
@@ -100,7 +95,6 @@ class CancellingProvider:
 # --- the pdf lifecycle --------------------------------------------------------
 
 
-@FORGE_02
 def test_the_estimate_prices_the_conversion_and_leaves_the_workdir_warm(minimod_pdf: Path, tmp_path: Path) -> None:
     session = pdf_session(minimod_pdf, tmp_path / "minimod.forge")
     run_estimate(session)
@@ -177,7 +171,6 @@ def test_a_page_cap_breach_is_the_same_session_failure(minimod_pdf: Path, tmp_pa
 # --- the chain ----------------------------------------------------------------
 
 
-@FORGE_02
 def test_confirm_then_run_completes_the_chain_over_the_warm_workdir(
     service: DocumentService, warm_workdir: Path, minimod_fixtures: Path
 ) -> None:
@@ -259,7 +252,6 @@ def test_a_failed_session_re_runs(service: DocumentService, warm_workdir: Path, 
 # --- cancellation -------------------------------------------------------------
 
 
-@FORGE_02
 def test_cancel_takes_effect_at_the_next_stage_boundary_and_the_conversion_resumes(
     service: DocumentService, warm_workdir: Path, minimod_fixtures: Path
 ) -> None:
@@ -420,7 +412,6 @@ def test_a_provider_is_required_exactly_when_the_resumed_chain_has_a_model_stage
     assert needs_provider(Stage.ASSEMBLE) is False
 
 
-@FORGE_02
 def test_a_rerun_from_mapread_needs_a_provider() -> None:
     assert needs_provider(Stage.MAPREAD) is True
 
@@ -429,7 +420,6 @@ def test_mapread_is_a_runnable_stage() -> None:
     assert validate_stage(Stage.MAPREAD) is Stage.MAPREAD
 
 
-@FORGE_02
 def test_the_stage_rows_carry_mapread_between_monsters_and_geometry() -> None:
     expected = (
         Stage.PREPROCESS,
@@ -444,7 +434,6 @@ def test_the_stage_rows_carry_mapread_between_monsters_and_geometry() -> None:
     assert tuple(row.stage for row in seed_stage_rows(None)) == expected
 
 
-@FORGE_02
 def test_a_forge_0_1_run_reads_mapread_as_pending(warm_workdir: Path) -> None:
     # A workdir converted by osr-forge 0.1 has no mapread entry in run.json.
     run = RunMeta.model_validate_json((warm_workdir / "run.json").read_text())
@@ -539,7 +528,6 @@ def test_a_message_less_failure_still_names_itself(
 # --- previews in the state the control exists for ----------------------------
 
 
-@FORGE_02
 def test_previews_render_in_the_pre_assemble_state(
     service: DocumentService, warm_workdir: Path, minimod_fixtures: Path
 ) -> None:

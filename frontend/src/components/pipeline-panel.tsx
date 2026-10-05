@@ -20,7 +20,15 @@ import { refreshProviderStatus, setProviderStatus, useProviderStatus } from '@/l
 import { projectStore, useProjectStore } from '@/store/project-store'
 import type { ConversionStageRow, ProjectState, Stage } from '@/types'
 
-const STAGE_ORDER: Stage[] = ['preprocess', 'survey', 'content', 'monsters', 'geometry', 'assemble']
+const STAGE_ORDER: Stage[] = [
+  'preprocess',
+  'survey',
+  'content',
+  'monsters',
+  'mapread',
+  'geometry',
+  'assemble',
+]
 
 function toastApiError(error: unknown): void {
   if (error instanceof ApiRequestError) {

@@ -33,7 +33,7 @@ Every edit you commit gets an auto-drafted, page-anchored reason: redrawing geom
 
 ## Monster resolution
 
-**Monster resolution** offers each unresolved or custom monster name the two corrections forge defines, as an either/or per name: remap to a catalog monster, or correct the printed stat block in the page's own notation (pre-mapping, per forge's contract). The Monsters section stays present as a review view of the derived bundle.
+**Monster resolution** offers each unresolved or custom monster name the two corrections forge defines, as an either/or per name: remap to a catalog monster, or correct the printed stat block in the page's own notation (pre-mapping, per forge's contract). When osr-forge's stat-block veto discarded the catalog monster it picked for a name, because the printed stat block contradicts it, that name's row also shows the discarded pick and the veto's detail. The Monsters section stays present as a review view of the derived bundle.
 
 ![The monster resolution panel offering remap or stat-block correction for an unresolved name](../assets/screenshots/monster-resolution-light.png#only-light)
 ![The monster resolution panel offering remap or stat-block correction for an unresolved name](../assets/screenshots/monster-resolution-dark.png#only-dark)

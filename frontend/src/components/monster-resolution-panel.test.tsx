@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
-// The monster-resolution panel's vetoed picks (chunk: forge-0.2). Every test is
-// skipped until that chunk merges; the merge removes each `.skip`.
+// The monster-resolution panel's vetoed picks.
 //
 // The contract: osr-forge 0.2.0's stat-block veto discards a catalog pick
 // whose printed Hit Dice contradict it, and the report lists each discarded
@@ -25,7 +24,7 @@ function renderPanel(
   render(<MonsterResolutionPanel project={makeProjectState({ type: 'forge', forge })} />)
 }
 
-test.skip("a vetoed name's row shows the discarded pick and the veto's detail", () => {
+test("a vetoed name's row shows the discarded pick and the veto's detail", () => {
   renderPanel([
     {
       name: 'rat king',
@@ -38,7 +37,7 @@ test.skip("a vetoed name's row shows the discarded pick and the veto's detail", 
   expect(row.getByText('rat king → giant_rat, printed HD 3 vs ½')).toBeInTheDocument()
 })
 
-test.skip('a custom row shows its vetoed pick too, and a veto with no detail shows the pick alone', () => {
+test('a custom row shows its vetoed pick too, and a veto with no detail shows the pick alone', () => {
   renderPanel([{ name: 'mill wisp', vetoed_template_id: 'will_o_wisp', detail: null }])
   const row = within(screen.getByTestId('monster-mill wisp'))
   expect(row.getByText('vetoed: will_o_wisp')).toBeInTheDocument()

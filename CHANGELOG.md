@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- osr-editor requires osr-forge 0.2 or later. A conversion's survey stage now also sends a census request, and a map-reading stage, mapread, runs between monsters and assembly. The review queue can show a new `low_confidence` flag for an area whose own confidence is below 0.6, with the value in its detail.
+- osr-editor requires osr-forge 0.2 or later. A conversion's survey stage now also sends a census request, and a map-reading stage, mapread, runs between monsters and assembly. The review queue can show a new `low_confidence` flag for an area whose own confidence is below 0.6, with the value in its detail. The pipeline panel and the conversion screen show a mapread row between monsters and geometry, and a rerun from mapread asks for a provider. The estimate card lists the census and mapread requests as rows of their own, so its rows add up to its totals. The review queue shows osr-forge 0.2's three new flags, `resolution_suspect`, `survey_disputed`, and `map_disputed`, the way it shows the others. When osr-forge's stat-block veto discards the catalog monster it picked for a name, the monster-resolution panel shows the discarded pick and the veto's detail on that name's row. **Regenerate previews** no longer fails on the `previews/index.html` page that osr-forge 0.2 writes beside the level previews.
 - osr-editor requires osrlib 1.8 or later. A document the editor writes is stamped with engine 1.8.0 and gains `party: null`, the field osrlib 1.8 adds for the party an adventure is written for.
 
 ## [0.2.0] - 2026-08-18
