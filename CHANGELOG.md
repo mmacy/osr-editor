@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- osr-editor requires osrlib 1.8 or later. A document the editor writes is stamped with engine 1.8.0 and gains `party: null`, the field osrlib 1.8 adds for the party an adventure is written for.
+
 ## [0.2.0] - 2026-08-18
 
 ### Added

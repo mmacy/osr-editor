@@ -1,7 +1,7 @@
 {
   "kind": "adventure",
   "schema_version": 3,
-  "engine_version": "1.7.0",
+  "engine_version": "1.8.0",
   "payload": {
     "name": "The Mill on the Moor",
     "description": "A ruined mill above a wind-scoured hamlet hides the caves its miller dug, died in, and never left.",
@@ -9,6 +9,7 @@
       "The miller vanished a fortnight ago; his creditors will pay for proof either way.",
       "Orcs have been trading flour nobody grinds anymore."
     ],
+    "party": null,
     "town": {
       "name": "Dusthollow",
       "description": "A crossroads hamlet of stubborn farmers under a big grey sky.",

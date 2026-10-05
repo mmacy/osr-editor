@@ -1631,6 +1631,7 @@ export interface components {
              * @default []
              */
             hooks: string[];
+            party?: components["schemas"]["PartySpec"] | null;
             town: components["schemas"]["TownSpec"];
             /** Dungeons */
             dungeons: components["schemas"]["DungeonSpec"][];
@@ -4477,6 +4478,43 @@ export interface components {
                 number
             ] | null;
             facing?: components["schemas"]["Direction"] | null;
+        };
+        /**
+         * PartySpec
+         * @description The party an adventure is written for: the character levels, and how many characters.
+         *
+         *     A published module states this on its cover or in its introduction, such as "for 6 to 8
+         *     characters of levels 1 to 3". Nothing in the engine reads it. It's here so a front end, a
+         *     converter, or a playtest can pick a party that fits the adventure.
+         *
+         *     Attributes:
+         *         min_level: The lowest character level the adventure is written for.
+         *         max_level: The highest.
+         *         min_size: The fewest characters, or `None` when the adventure doesn't say.
+         *         max_size: The most characters, or `None` when the adventure doesn't say.
+         *
+         *     Raises:
+         *         ValueError: If `max_level` is below `min_level`, or `max_size` is below `min_size` when
+         *             both are given.
+         *
+         *     Examples:
+         *         ```python
+         *         from osrlib.crawl.adventure import PartySpec
+         *
+         *         party = PartySpec(min_level=1, max_level=3, min_size=6, max_size=8)
+         *         print(party.max_level)
+         *         # 3
+         *         ```
+         */
+        PartySpec: {
+            /** Min Level */
+            min_level: number;
+            /** Max Level */
+            max_level: number;
+            /** Min Size */
+            min_size?: number | null;
+            /** Max Size */
+            max_size?: number | null;
         };
         /**
          * PickerLocation
