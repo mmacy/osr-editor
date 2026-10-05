@@ -6,9 +6,18 @@ import type { ConversionStageRow, ConversionStateName, CostEstimate, Stage } fro
 
 // Forge's RUNNABLE_STAGES, in chain order: geometry has no independent run —
 // it completes inside every assembly.
-export const RUNNABLE_STAGES: Stage[] = ['preprocess', 'survey', 'content', 'monsters', 'assemble']
+export const RUNNABLE_STAGES: Stage[] = [
+  'preprocess',
+  'survey',
+  'content',
+  'monsters',
+  'mapread',
+  'assemble',
+]
 
-export const MODEL_STAGES: Stage[] = ['survey', 'content', 'monsters']
+// The stages that call the model. The survey stage's census request belongs
+// to the survey stage, so it has no entry of its own.
+export const MODEL_STAGES: Stage[] = ['survey', 'content', 'monsters', 'mapread']
 
 // The two states that hold a worker. Everything else is idle: the run control
 // is live, and polling stops.
@@ -73,13 +82,20 @@ export interface EstimateRow {
   output: number
 }
 
-// The per-stage token rows the estimate card lists, in chain order.
+// The token rows the estimate card lists, one per priced request in chain
+// order, so they sum to the estimate's totals. Census is the survey stage's
+// second request.
 export function estimateRows(estimate: CostEstimate): EstimateRow[] {
   return [
     {
       label: 'survey',
       input: estimate.survey_input_tokens,
       output: estimate.survey_output_tokens,
+    },
+    {
+      label: 'census',
+      input: estimate.census_input_tokens,
+      output: estimate.census_output_tokens,
     },
     {
       label: 'content',
@@ -90,6 +106,11 @@ export function estimateRows(estimate: CostEstimate): EstimateRow[] {
       label: 'monsters',
       input: estimate.monsters_input_tokens,
       output: estimate.monsters_output_tokens,
+    },
+    {
+      label: 'mapread',
+      input: estimate.mapread_input_tokens,
+      output: estimate.mapread_output_tokens,
     },
   ]
 }

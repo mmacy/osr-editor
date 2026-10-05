@@ -287,7 +287,6 @@ def test_a_warm_workdir_opens_into_the_pipeline_view_rather_than_a_dead_end(
 # --- the chain through the API -----------------------------------------------
 
 
-@pytest.mark.xfail(reason="chunk: forge-0.2", strict=True)
 def test_the_chain_runs_to_completion_and_the_workdir_then_opens_into_review(
     client: TestClient, spawn: SpawnRecorder, warm_workdir: Path, fixtures_provider: None
 ) -> None:
@@ -480,9 +479,8 @@ def test_a_bound_session_can_be_reattached_by_the_lookup_after_a_reload(
 # --- previews -----------------------------------------------------------------
 
 
-# Chunk forge-0.2: osr-forge 0.2.0 also writes previews/index.html, which the
-# route must not read as a level preview.
-@pytest.mark.xfail(reason="chunk: forge-0.2", strict=True)
+# osr-forge 0.2.0 also writes previews/index.html, which the route must not
+# read as a level preview.
 def test_previews_are_gated_on_the_caches_they_are_rendered_from(
     client: TestClient, spawn: SpawnRecorder, warm_workdir: Path, fixtures_provider: None
 ) -> None:

@@ -7,11 +7,9 @@
 // "Remove party" button. Each field commits the whole party on blur, an empty
 // size field commits that size as null, and Remove party commits null.
 //
-// The forge-mode tests are the acceptance tests for chunk forge-party, skipped
-// until it merges; the merge removes each `.skip`. A forge-backed project
-// commits the same ops as a native one, because the server turns a party edit
-// into the module override's party, so no party control opens the blocked-op
-// dialog.
+// In forge mode, a project commits the same ops as a native one, because the
+// server turns a party edit into the module override's party, so no party
+// control opens the blocked-op dialog.
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
@@ -100,7 +98,7 @@ test('remove party clears it', () => {
   expect(committedOps(document)).toEqual(partyOp(null))
 })
 
-test.skip('in forge mode, add party commits a level-1 party', () => {
+test('in forge mode, add party commits a level-1 party', () => {
   useForgeProject()
   const document = makeDocument({ party: null })
   render(<AdventureForm document={document} />)
@@ -111,7 +109,7 @@ test.skip('in forge mode, add party commits a level-1 party', () => {
   )
 })
 
-test.skip('in forge mode, a party field edits and commits the whole party', () => {
+test('in forge mode, a party field edits and commits the whole party', () => {
   useForgeProject()
   const document = makeDocument({ party: PARTY })
   render(<AdventureForm document={document} />)
@@ -124,7 +122,7 @@ test.skip('in forge mode, a party field edits and commits the whole party', () =
   expect(committedOps(document)).toEqual(partyOp({ ...PARTY, min_level: 2 }))
 })
 
-test.skip('in forge mode, remove party commits null', () => {
+test('in forge mode, remove party commits null', () => {
   useForgeProject()
   const document = makeDocument({ party: PARTY })
   render(<AdventureForm document={document} />)

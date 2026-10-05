@@ -41,9 +41,9 @@ describe('PipelinePanel', () => {
     expect(screen.getByText('fixture-model-1')).toBeInTheDocument()
   })
 
-  // chunk: forge-0.2. run.json's mapread entry renders as its own row,
-  // between monsters and geometry. Remove `.skip` when the chunk merges.
-  test.skip("renders run.json's mapread row in chain order", () => {
+  // run.json's mapread entry renders as its own row, between monsters and
+  // geometry.
+  test("renders run.json's mapread row in chain order", () => {
     render(<PipelinePanel project={forgeProject()} />)
     const rows = screen.getAllByTestId(/^stage-row-/).map((row) => row.dataset.testid)
     expect(rows).toEqual([

@@ -57,10 +57,9 @@ describe('the lifecycle predicates', () => {
     expect(firstIncompleteStage(done)).toBe('assemble')
   })
 
-  // chunk: forge-0.2. osr-forge 0.2.0 runs a mapread model stage between
-  // monsters and assemble, so a resume can start there and a resume from
-  // earlier runs it. Remove `.skip` when the chunk merges.
-  test.skip('a chain complete through monsters resumes from mapread', () => {
+  // osr-forge 0.2.0 runs a mapread model stage between monsters and
+  // assemble, so a resume can start there and a resume from earlier runs it.
+  test('a chain complete through monsters resumes from mapread', () => {
     expect(
       firstIncompleteStage(
         makeStageRows({ survey: 'completed', content: 'completed', monsters: 'completed' }),
@@ -68,8 +67,7 @@ describe('the lifecycle predicates', () => {
     ).toBe('mapread')
   })
 
-  // chunk: forge-0.2. Remove `.skip` when the chunk merges.
-  test.skip('the model stages a resume runs are what the confirm copy names', () => {
+  test('the model stages a resume runs are what the confirm copy names', () => {
     expect(modelStagesFrom('preprocess')).toEqual(['survey', 'content', 'monsters', 'mapread'])
     expect(modelStagesFrom('monsters')).toEqual(['monsters', 'mapread'])
     expect(modelStagesFrom('mapread')).toEqual(['mapread'])
@@ -93,11 +91,10 @@ describe('the estimate formatting', () => {
     expect(formatUsd(0)).toBe('$0.00')
   })
 
-  // chunk: forge-0.2. osr-forge 0.2.0 prices the survey's census request and
-  // the mapread stage, and the estimate's totals include both. Each gets a
-  // row in chain order, so the rows add up to the totals. Remove `.skip` when
-  // the chunk merges.
-  test.skip('the per-stage rows are every priced request, in chain order, and sum to the totals', () => {
+  // osr-forge 0.2.0 prices the survey's census request and the mapread
+  // stage, and the estimate's totals include both. Each gets a row in chain
+  // order, so the rows add up to the totals.
+  test('the per-stage rows are every priced request, in chain order, and sum to the totals', () => {
     const estimate = makeCostEstimate()
     const rows = estimateRows(estimate)
     expect(rows).toEqual([

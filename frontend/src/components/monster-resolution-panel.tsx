@@ -2,7 +2,8 @@
 // surface. Per name, the two corrections as a stated either/or — remap
 // through the monster picker, or the printed-notation form over forge's
 // StatBlockOverride fields (corrections land pre-mapping; reviewing against
-// the printed page is the point).
+// the printed page is the point). A name whose catalog pick the stat-block
+// veto discarded also shows that pick and the veto's detail on its row.
 import { useState } from 'react'
 
 import { MonsterPicker } from '@/components/monster-picker'
@@ -60,6 +61,9 @@ export function MonsterResolutionPanel({ project }: { project: ProjectState }) {
   const names = new Set<string>(report.monsters.unresolved)
   const customByName = new Map(report.monsters.custom.map((record) => [record.name, record]))
   for (const record of report.monsters.custom) names.add(record.name)
+  const vetoedByName = new Map(
+    report.monsters.vetoed.map((record) => [normalizeName(record.name), record]),
+  )
   return (
     <section
       aria-label="Monster resolution"
@@ -80,6 +84,7 @@ export function MonsterResolutionPanel({ project }: { project: ProjectState }) {
           {[...names].map((name) => {
             const custom = customByName.get(name)
             const existing = overrideFor(project, name)
+            const veto = vetoedByName.get(normalizeName(name))
             return (
               <li
                 key={name}
@@ -105,6 +110,14 @@ export function MonsterResolutionPanel({ project }: { project: ProjectState }) {
                     </span>
                   )}
                 </div>
+                {veto && (
+                  <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="outline" className="font-mono text-[10px]">
+                      vetoed: {veto.vetoed_template_id}
+                    </Badge>
+                    {veto.detail && <span>{veto.detail}</span>}
+                  </p>
+                )}
                 {custom && custom.derived.length > 0 && (
                   <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                     derived:

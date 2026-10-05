@@ -93,6 +93,7 @@ STAGE_ORDER: tuple[Stage, ...] = (
     Stage.SURVEY,
     Stage.CONTENT,
     Stage.MONSTERS,
+    Stage.MAPREAD,
     Stage.GEOMETRY,
     Stage.ASSEMBLE,
 )
@@ -120,7 +121,7 @@ folder before converting into it" into a refusal would be the guard protecting
 nothing at anybody's expense.
 """
 
-MODEL_STAGES = frozenset({Stage.SURVEY, Stage.CONTENT, Stage.MONSTERS})
+MODEL_STAGES = frozenset({Stage.SURVEY, Stage.CONTENT, Stage.MONSTERS, Stage.MAPREAD})
 """The stages that call a provider: survey, content, monsters, and mapread.
 
 Forge requires a provider exactly when the resumed chain contains any of them.

@@ -7,7 +7,7 @@ facade names from `osrforge`; `rerun`, `RUNNABLE_STAGES`, and `KNOB_STAGES`
 from `osrforge.convert`; `render_previews` from `osrforge.assemble`; the
 provider classes from their `osrforge.providers` homes; contracts from their
 `osrforge.contracts` homes — documented, stable module homes outside the
-five-name facade by forge's own design, with the `>=0.1,<0.2` pin containing
+five-name facade by forge's own design, with the `>=0.2,<0.3` pin containing
 the interim risk. `convert` is deliberately *not* imported: no editor path
 calls it. `estimate()` leaves the workdir preprocess-warm, so a new conversion
 is estimate-then-`rerun(SURVEY)`, and every other resume is `rerun` over the
@@ -398,11 +398,12 @@ def render_workdir_previews(path: Path) -> tuple[Path, ...]:
         ForgeOverrideInvalidError: If an override entry cannot take effect.
     """
     try:
-        return render_previews(path)
+        written = render_previews(path)
     except OverrideError as error:
         raise ForgeOverrideInvalidError(str(error)) from error
     except ValueError as error:
         raise ForgeWorkdirInvalidError(str(error)) from error
+    return tuple(preview for preview in written if preview.suffix == ".svg")
 
 
 def entra_available() -> bool:

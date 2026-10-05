@@ -17,6 +17,9 @@ export const FLAGS = [
   'transition_guessed',
   'treasure_unparsed',
   'page_unreadable',
+  'resolution_suspect',
+  'survey_disputed',
+  'map_disputed',
 ] as const
 
 export type FlagKind = (typeof FLAGS)[number]

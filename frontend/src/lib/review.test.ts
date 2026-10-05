@@ -36,10 +36,9 @@ describe('parseFlag', () => {
     expect(parseFlag('geometry_synthesized:')).toBeNull()
   })
 
-  // chunk: forge-0.2. osr-forge 0.2.0 adds three flags to the report's
-  // vocabulary, and the queue badges them like the flags it already knows.
-  // Remove `.skip` when the chunk merges.
-  test.skip("parses osr-forge 0.2's three new flags", () => {
+  // osr-forge 0.2.0 adds three flags to the report's vocabulary, and the
+  // queue badges them like the flags it already knows.
+  test("parses osr-forge 0.2's three new flags", () => {
     expect(
       parseFlag('map_disputed:door 17–18 prose-stated door; the map shows none — kept'),
     ).toEqual({
