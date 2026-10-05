@@ -35,6 +35,7 @@ from osrforge.contracts.report import ExtractionReport
 from osrforge.contracts.run import RunMeta
 from osrlib.core.items import ItemTemplate
 from osrlib.core.monsters import MonsterTemplate
+from osrlib.crawl.adventure import PartySpec
 from osrlib.crawl.dungeon import (
     AreaTreasureSpec,
     Edge,
@@ -125,15 +126,34 @@ class SetAdventureField(EditOp):
     """Set one adventure-scope metadata field.
 
     `hooks` takes the whole tuple (list editors commit the full value); `name`
-    and `description` take a string.
+    and `description` take a string. `party` takes a whole
+    [`PartySpec`][osrlib.crawl.adventure.PartySpec], the party the adventure
+    is written for, or `None` to clear it. A size left out of a `party`
+    mapping is `None`, `PartySpec`'s default, not the document's current size.
+    Any other value for `party`, and `None` for any other field, is rejected
+    at parse. `PartySpec`'s own range checks (`max_level` below `min_level`,
+    `max_size` below `min_size`, a value below 1) reject the batch the same
+    way, so the document never holds an invalid party.
+
+    In a forge-backed project a `party` set blocks the whole batch with the
+    detach offer:
+    [`ensure_forge_supported`][osreditor.overrides.ensure_forge_supported]
+    raises [`OpUnsupportedForgeError`][osreditor.errors.OpUnsupportedForgeError]
+    with the message `the adventure party has no override kind` at the bare
+    `adventure` address. That stays true until an osr-forge release whose
+    `ModuleOverride` has a `party` field ships and this project's osr-forge
+    pin includes it; the other three fields translate to the `module:`
+    override as before.
     """
 
     op: Literal["set_adventure_field"] = "set_adventure_field"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
-    field: Literal["name", "description", "hooks"]
-    value: str | tuple[str, ...]
+    field: Literal["name", "description", "hooks", "party"]
+    value: str | tuple[str, ...] | PartySpec | None
 
     @model_validator(mode="after")
     def _value_matches_field(self) -> SetAdventureField:
+        if self.field == "party":
+            raise NotImplementedError("chunk: adventure-party")
         if self.field == "hooks":
             if not isinstance(self.value, tuple):
                 raise ValueError("hooks takes a tuple of strings")

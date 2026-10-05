@@ -193,3 +193,10 @@ test('percent-encoded ids decode before resolution', () => {
     dungeonId: 'deep caves',
   })
 })
+
+// chunk: adventure-party. The forge-backed party block answers the bare
+// `adventure` address, which lands on the adventure form. Remove `.skip` when
+// the chunk merges.
+test.skip('the adventure scope lands on the adventure form', () => {
+  expect(navTargetFor('adventure', makeDocument())).toEqual({ kind: 'adventure' })
+})
