@@ -30,7 +30,7 @@ classifiers = [
 ]
 dependencies = [
     "osrlib>=1.8,<2",
-    "osr-forge>=0.1,<0.2",
+    "osr-forge>=0.2,<0.3",
     "pydantic>=2",
     "pyyaml>=6",
     "fastapi>=0.139",

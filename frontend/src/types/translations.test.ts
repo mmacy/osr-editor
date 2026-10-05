@@ -398,7 +398,7 @@ test('the conversion translations hold', () => {
   expectTypeOf<ConversionStageRow['stage']>().toEqualTypeOf<Stage>()
   expectTypeOf<ConversionStageRow['status']>().toEqualTypeOf<StageStatus>()
   expectTypeOf<Stage>().toEqualTypeOf<
-    'preprocess' | 'survey' | 'content' | 'monsters' | 'geometry' | 'assemble'
+    'preprocess' | 'survey' | 'content' | 'monsters' | 'mapread' | 'geometry' | 'assemble'
   >()
 
   // Every knob the run request can carry is one forge owns.

@@ -2215,6 +2215,12 @@ export interface components {
              */
             custom_monsters: "emit" | "off";
             /**
+             * Map Reading
+             * @default read
+             * @enum {string}
+             */
+            map_reading: "read" | "off";
+            /**
              * Unresolved Fallback
              * @default best-effort
              * @enum {string}
@@ -2294,16 +2300,25 @@ export interface components {
          *         image_tokens: Estimated page-image tokens, all pages.
          *         survey_window_count: How many requests the survey runs as — 1 at or
          *             under `survey_max_pages` pages, one per chunked page window above.
+         *             The census runs over the same windows.
          *         survey_input_tokens: Estimated survey input, all windows.
          *         survey_output_tokens: Estimated survey output, all windows.
+         *         census_input_tokens: Estimated census input, all windows — the
+         *             survey's page-image-dominated input with a smaller overhead.
+         *         census_output_tokens: Estimated census output, all windows.
          *         content_input_tokens: Estimated content-pass input, all batches.
          *         content_output_tokens: Estimated content output.
-         *         monsters_input_tokens: The flat monsters-stage input constant.
-         *         monsters_output_tokens: The flat monsters-stage output constant.
+         *         monsters_input_tokens: Estimated monsters-stage input — the flat LLM
+         *             tier plus the page-count-priced stat-block pass.
+         *         monsters_output_tokens: Estimated monsters-stage output, same terms.
+         *         mapread_input_tokens: Estimated map-reading input — one request per
+         *             level, levels priced from page count.
+         *         mapread_output_tokens: Estimated map-reading output, same terms.
          *         input_tokens: The input total.
          *         output_tokens: The output total.
-         *         usd: The estimated cost, with each survey window priced at the doubled
-         *             tier when that window's estimated input crosses the 272K cliff.
+         *         usd: The estimated cost, with each survey and census window priced at
+         *             the doubled tier when that window's estimated input crosses the
+         *             272K cliff.
          */
         CostEstimate: {
             /** Page Count */
@@ -2318,6 +2333,10 @@ export interface components {
             survey_input_tokens: number;
             /** Survey Output Tokens */
             survey_output_tokens: number;
+            /** Census Input Tokens */
+            census_input_tokens: number;
+            /** Census Output Tokens */
+            census_output_tokens: number;
             /** Content Input Tokens */
             content_input_tokens: number;
             /** Content Output Tokens */
@@ -2326,6 +2345,10 @@ export interface components {
             monsters_input_tokens: number;
             /** Monsters Output Tokens */
             monsters_output_tokens: number;
+            /** Mapread Input Tokens */
+            mapread_input_tokens: number;
+            /** Mapread Output Tokens */
+            mapread_output_tokens: number;
             /** Input Tokens */
             input_tokens: number;
             /** Output Tokens */
@@ -3719,7 +3742,7 @@ export interface components {
         };
         /**
          * ModuleOverride
-         * @description Replace adventure metadata fields: name, description, hooks.
+         * @description Replace adventure metadata fields: name, description, hooks, party.
          */
         ModuleOverride: {
             /** Name */
@@ -3728,6 +3751,7 @@ export interface components {
             description?: string | null;
             /** Hooks */
             hooks?: string[] | null;
+            party?: components["schemas"]["PartySpec"] | null;
             /** Reason */
             reason: string;
         };
@@ -3920,7 +3944,8 @@ export interface components {
          *
          *     `custom` records the emitted templates actually bundled into the draft —
          *     additive and defaulted, so reports written before emission existed still
-         *     validate.
+         *     validate; `vetoed` (likewise additive and defaulted) records the picks
+         *     the stat-block veto discarded, straight from the monsters cache.
          */
         MonsterSummary: {
             /** Resolved */
@@ -3935,6 +3960,11 @@ export interface components {
              * @default []
              */
             custom: components["schemas"]["CustomMonsterRecord"][];
+            /**
+             * Vetoed
+             * @default []
+             */
+            vetoed: components["schemas"]["VetoedResolution"][];
         };
         /**
          * MonsterTemplate
@@ -6173,7 +6203,7 @@ export interface components {
          *     a failure in the build leaves an honest `geometry: completed`.
          * @enum {string}
          */
-        Stage: "preprocess" | "survey" | "content" | "monsters" | "geometry" | "assemble";
+        Stage: "preprocess" | "survey" | "content" | "monsters" | "mapread" | "geometry" | "assemble";
         /**
          * StageStatus
          * @description One stage's status entry in `run.json`.
@@ -6950,6 +6980,22 @@ export interface components {
             kind: "gem" | "jewellery";
             /** Value Gp */
             value_gp: number;
+        };
+        /**
+         * VetoedResolution
+         * @description One resolution the stat-block veto discarded.
+         *
+         *     The vetoed pick's review record: the extracted name, the discarded
+         *     catalog pick, and the both-readings detail. `unresolved` stays a tuple of
+         *     strings — no existing surface re-shapes.
+         */
+        VetoedResolution: {
+            /** Name */
+            name: string;
+            /** Vetoed Template Id */
+            vetoed_template_id: string;
+            /** Detail */
+            detail?: string | null;
         };
         /**
          * ViewState

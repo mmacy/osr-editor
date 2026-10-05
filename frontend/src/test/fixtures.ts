@@ -117,6 +117,7 @@ export function makeForgeReport(overrides: Partial<ExtractionReport> = {}): Extr
       resolved: 2,
       unresolved: ['rat king'],
       custom: [{ id: 'mill_wisp', name: 'mill wisp', source_pages: [2], derived: ['xp', 'saves'] }],
+      vetoed: [],
     },
     usage: { input_tokens: 7400, output_tokens: 1320 },
     flags: ['low_confidence:module title unstated'],
@@ -144,6 +145,7 @@ export function makeForgeState(overrides: Partial<ForgeState> = {}): ForgeState 
         monster_fuzzy_threshold: 0.85,
         monster_llm_top_k: 8,
         custom_monsters: 'emit',
+        map_reading: 'read',
         unresolved_fallback: 'best-effort',
       },
       provider: 'FixtureProvider',
@@ -171,6 +173,13 @@ export function makeForgeState(overrides: Partial<ForgeState> = {}): ForgeState 
           usage: null,
         },
         monsters: {
+          status: 'completed',
+          error: null,
+          started_at: null,
+          finished_at: null,
+          usage: null,
+        },
+        mapread: {
           status: 'completed',
           error: null,
           started_at: null,
@@ -211,7 +220,15 @@ export function makeForgeState(overrides: Partial<ForgeState> = {}): ForgeState 
 export function makeStageRows(
   states: Partial<Record<Stage, StageStatus['status']>> = {},
 ): ConversionStageRow[] {
-  const order: Stage[] = ['preprocess', 'survey', 'content', 'monsters', 'geometry', 'assemble']
+  const order: Stage[] = [
+    'preprocess',
+    'survey',
+    'content',
+    'monsters',
+    'mapread',
+    'geometry',
+    'assemble',
+  ]
   return order.map((stage) => ({
     stage,
     status: {
@@ -232,12 +249,16 @@ export function makeCostEstimate(overrides: Partial<CostEstimate> = {}): CostEst
     survey_window_count: 1,
     survey_input_tokens: 8925,
     survey_output_tokens: 350,
+    census_input_tokens: 7425,
+    census_output_tokens: 150,
     content_input_tokens: 8657,
     content_output_tokens: 2750,
     monsters_input_tokens: 5000,
     monsters_output_tokens: 500,
-    input_tokens: 22582,
-    output_tokens: 3600,
+    mapread_input_tokens: 2500,
+    mapread_output_tokens: 400,
+    input_tokens: 32507,
+    output_tokens: 4150,
     usd: 0.11,
     ...overrides,
   }
