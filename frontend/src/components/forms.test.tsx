@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
-// The adventure form's party controls (chunk: adventure-party). Every test is
-// skipped until that chunk merges; the merge removes each `.skip`.
+// The adventure form's party controls.
 //
 // The contract: a document with no party offers an "Add party" button that
 // commits a level-1 party. A document with a party shows four number fields
