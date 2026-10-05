@@ -62,7 +62,12 @@ test('the run confirm names the model stages and says cost is not re-estimated',
 
 test('an assemble-only resume says it costs nothing', () => {
   renderView({
-    stages: makeStageRows({ survey: 'completed', content: 'completed', monsters: 'completed' }),
+    stages: makeStageRows({
+      survey: 'completed',
+      content: 'completed',
+      monsters: 'completed',
+      mapread: 'completed',
+    }),
   })
   expect(screen.getByLabelText('Resume from')).toHaveValue('assemble')
   expect(screen.getByTestId('run-confirm-copy')).toHaveTextContent('costs nothing')

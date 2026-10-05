@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- osr-editor requires osr-forge 0.2 or later. A conversion's survey stage now also sends a census request, and a map-reading stage, mapread, runs between monsters and assembly. The review queue can show a new `low_confidence` flag for an area whose own confidence is below 0.6, with the value in its detail.
 - osr-editor requires osrlib 1.8 or later. A document the editor writes is stamped with engine 1.8.0 and gains `party: null`, the field osrlib 1.8 adds for the party an adventure is written for.
 
 ## [0.2.0] - 2026-08-18

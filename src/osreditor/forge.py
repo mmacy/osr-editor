@@ -387,7 +387,10 @@ def render_workdir_previews(path: Path) -> tuple[Path, ...]:
         path: The workdir root.
 
     Returns:
-        The written preview paths, in survey order.
+        The written level previews (`previews/<dungeon>.<level>.svg`), in
+        survey order. Forge also writes `previews/index.html`, a page that
+        links the level previews; it is not a level preview and is not
+        returned.
 
     Raises:
         ForgeWorkdirInvalidError: If the survey or a level's content cache is

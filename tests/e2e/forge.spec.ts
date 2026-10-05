@@ -35,9 +35,9 @@ test('the forge review loop: flags to corrected, resolved, checked, published', 
   await expect(page.getByRole('heading', { name: 'The Millstone Warrens' })).toBeVisible()
   await expect(page.getByTestId('revision')).toHaveText('r1')
 
-  // The review queue: the fixture raises twelve flags across five areas.
-  await page.getByRole('button', { name: 'Review (12)' }).click()
-  await expect(page.getByTestId('review-count')).toHaveText('12 flags to review')
+  // The review queue: the fixture raises thirteen flags across five areas.
+  await page.getByRole('button', { name: 'Review (13)' }).click()
+  await expect(page.getByTestId('review-count')).toHaveText('13 flags to review')
   await expect(page.getByTestId('review-row-millstone-warrens/1/2')).toContainText(
     'treasure_unparsed',
   )
@@ -133,12 +133,12 @@ test('the forge review loop: flags to corrected, resolved, checked, published', 
 
   // Dismiss a reviewed flag; the honest work-remaining count drops.
   await page.getByRole('button', { name: /^Review/ }).click()
-  await expect(page.getByTestId('review-count')).toHaveText('11 flags to review')
+  await expect(page.getByTestId('review-count')).toHaveText('12 flags to review')
   await page
     .getByTestId('review-row-millstone-warrens/1/1')
     .getByLabel('Dismiss connection_ambiguous:no target stated')
     .click()
-  await expect(page.getByTestId('review-count')).toHaveText('10 flags to review')
+  await expect(page.getByTestId('review-count')).toHaveText('11 flags to review')
 
   // Publish symlink-mode through the warnings confirm — validation is clean;
   // lint and forge findings prompt but never block.

@@ -12,8 +12,8 @@ Undo and redo work on the same terms: each step is a snapshot pair of the overri
 
 **Review** lists `report.json`'s flags as a work list. Selecting a row jumps to the flagged area with its printed pages rendered alongside, and each flag has its own dismissal mark — reviewed-and-fine is recorded, not remembered.
 
-![The review queue listing twelve flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-light.png#only-light)
-![The review queue listing twelve flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-dark.png#only-dark)
+![The review queue listing thirteen flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-light.png#only-light)
+![The review queue listing thirteen flags across five areas, each with its confidence and flag kind](../assets/screenshots/review-queue-dark.png#only-dark)
 
 Correction happens against the page. Here a different conversion — *The Root Cellar of Old Wenna* — has a flagged area open with the printed page it came from rendered beside it:
 

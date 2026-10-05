@@ -26,10 +26,10 @@ test('the forge review chrome', async ({ page }, testInfo) => {
   await page.getByRole('dialog').getByRole('button', { name: 'Open' }).click()
   await expect(page.getByRole('heading', { name: 'The Millstone Warrens' })).toBeVisible()
 
-  // The review queue: the fixture raises twelve flags across five areas, which is
+  // The review queue: the fixture raises thirteen flags across five areas, which is
   // the work list the guide describes.
-  await page.getByRole('button', { name: 'Review (12)' }).click()
-  await expect(page.getByTestId('review-count')).toHaveText('12 flags to review')
+  await page.getByRole('button', { name: 'Review (13)' }).click()
+  await expect(page.getByTestId('review-count')).toHaveText('13 flags to review')
   await expect(page.getByTestId('review-row-millstone-warrens/1/2')).toContainText(
     'treasure_unparsed',
   )

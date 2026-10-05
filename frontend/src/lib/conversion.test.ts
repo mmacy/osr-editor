@@ -50,15 +50,29 @@ describe('the lifecycle predicates', () => {
       survey: 'completed',
       content: 'completed',
       monsters: 'completed',
+      mapread: 'completed',
       geometry: 'completed',
       assemble: 'completed',
     })
     expect(firstIncompleteStage(done)).toBe('assemble')
   })
 
-  test('the model stages a resume runs are what the confirm copy names', () => {
-    expect(modelStagesFrom('preprocess')).toEqual(['survey', 'content', 'monsters'])
-    expect(modelStagesFrom('monsters')).toEqual(['monsters'])
+  // chunk: forge-0.2. osr-forge 0.2.0 runs a mapread model stage between
+  // monsters and assemble, so a resume can start there and a resume from
+  // earlier runs it. Remove `.skip` when the chunk merges.
+  test.skip('a chain complete through monsters resumes from mapread', () => {
+    expect(
+      firstIncompleteStage(
+        makeStageRows({ survey: 'completed', content: 'completed', monsters: 'completed' }),
+      ),
+    ).toBe('mapread')
+  })
+
+  // chunk: forge-0.2. Remove `.skip` when the chunk merges.
+  test.skip('the model stages a resume runs are what the confirm copy names', () => {
+    expect(modelStagesFrom('preprocess')).toEqual(['survey', 'content', 'monsters', 'mapread'])
+    expect(modelStagesFrom('monsters')).toEqual(['monsters', 'mapread'])
+    expect(modelStagesFrom('mapread')).toEqual(['mapread'])
     expect(modelStagesFrom('assemble')).toEqual([])
   })
 
@@ -79,12 +93,22 @@ describe('the estimate formatting', () => {
     expect(formatUsd(0)).toBe('$0.00')
   })
 
-  test('the per-stage rows are the three model stages, in chain order', () => {
-    expect(estimateRows(makeCostEstimate()).map((row) => row.label)).toEqual([
-      'survey',
-      'content',
-      'monsters',
+  // chunk: forge-0.2. osr-forge 0.2.0 prices the survey's census request and
+  // the mapread stage, and the estimate's totals include both. Each gets a
+  // row in chain order, so the rows add up to the totals. Remove `.skip` when
+  // the chunk merges.
+  test.skip('the per-stage rows are every priced request, in chain order, and sum to the totals', () => {
+    const estimate = makeCostEstimate()
+    const rows = estimateRows(estimate)
+    expect(rows).toEqual([
+      { label: 'survey', input: 8925, output: 350 },
+      { label: 'census', input: 7425, output: 150 },
+      { label: 'content', input: 8657, output: 2750 },
+      { label: 'monsters', input: 5000, output: 500 },
+      { label: 'mapread', input: 2500, output: 400 },
     ])
+    expect(rows.reduce((sum, row) => sum + row.input, 0)).toBe(estimate.input_tokens)
+    expect(rows.reduce((sum, row) => sum + row.output, 0)).toBe(estimate.output_tokens)
   })
 })
 
