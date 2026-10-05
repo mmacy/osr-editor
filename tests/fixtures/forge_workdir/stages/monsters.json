@@ -3,15 +3,21 @@
   "resolutions": {
     "goblin": {
       "template_id": "goblin",
-      "method": "exact"
+      "method": "exact",
+      "vetoed_template_id": null,
+      "veto_detail": null
     },
     "mill wisp": {
       "template_id": null,
-      "method": "unresolved"
+      "method": "unresolved",
+      "vetoed_template_id": null,
+      "veto_detail": null
     },
     "rat king": {
       "template_id": null,
-      "method": "unresolved"
+      "method": "unresolved",
+      "vetoed_template_id": null,
+      "veto_detail": null
     }
   }
 }
