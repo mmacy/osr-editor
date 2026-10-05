@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "osrforge_version": "0.1.0",
+  "osrforge_version": "0.2.0",
   "source_sha256": "6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d",
   "source_bytes": 2048,
   "page_count": 2,
@@ -14,6 +14,7 @@
     "monster_fuzzy_threshold": 0.85,
     "monster_llm_top_k": 8,
     "custom_monsters": "emit",
+    "map_reading": "read",
     "unresolved_fallback": "best-effort"
   },
   "provider": "FixtureProvider",
@@ -55,6 +56,13 @@
         "input_tokens": 800,
         "output_tokens": 120
       }
+    },
+    "mapread": {
+      "status": "pending",
+      "error": null,
+      "started_at": null,
+      "finished_at": null,
+      "usage": null
     },
     "geometry": {
       "status": "pending",

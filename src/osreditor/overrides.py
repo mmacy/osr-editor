@@ -175,6 +175,9 @@ _QUEST_BLOCKED = "quests have no override kind — the overrides vocabulary has 
 
 # Mirrored verbatim by the frontend's PARTY_BLOCKED_MESSAGE
 # (components/forms.tsx). Change both together.
+# Contract: chunk forge-party deletes this message, its use in
+# ensure_forge_supported, and the frontend mirror. The docstrings of
+# ensure_forge_supported and translate_batch state the behavior without it.
 _PARTY_BLOCKED = "the adventure party has no override kind"
 
 _BLOCKED_MESSAGES: dict[type, str] = {
@@ -249,13 +252,10 @@ def ensure_forge_supported(ops: Sequence[AnyEditOp]) -> None:
     detach offer", and the atomicity rule: the batch rejects whole, before any
     translation side effect.
 
-    A [`SetAdventureField`][osreditor.ops.SetAdventureField] whose `field` is
-    `party` blocks with the message `the adventure party has no override
-    kind` at the bare `adventure` address, whatever its value, a clear
-    included. The pinned osr-forge's `ModuleOverride` has no `party` field,
-    so there is nothing to translate the edit into. The block stays until an
-    osr-forge release with `ModuleOverride.party` ships and the project's
-    osr-forge pin includes it.
+    Every [`SetAdventureField`][osreditor.ops.SetAdventureField] passes,
+    `party` included, because each of its four fields has a `module:`
+    override field to translate into
+    ([`translate_batch`][osreditor.overrides.translate_batch]).
 
     Args:
         ops: The batch's ops.
@@ -360,6 +360,17 @@ def translate_batch(ops: Sequence[AnyEditOp], state: ForgeTranslationState) -> T
     over the current overrides: one entry per address always, successive edits
     merging into the entry, a remove superseding prior replacements, a
     remove-then-create of one survey key collapsing to a replacement.
+
+    A [`SetAdventureField`][osreditor.ops.SetAdventureField] sets the field
+    of the same name on the `module:` entry: `name`, `description`, `hooks`,
+    or `party`. The batch's adventure fields merge over the fields the entry
+    already sets, and the last value for a field wins. The entry's reason is
+    redrafted to name every field the batch set (`module party corrected`),
+    unless a person has written the entry's reason, which is kept. A
+    `party` value replaces the survey's party whole and is written as a
+    mapping whose unstated sizes are left out, which forge reads as `null`.
+    A `party` of `None` is written as an explicit `party: null`, which
+    clears the survey's party in the draft.
 
     Args:
         ops: The batch's ops, already applied to `state.applied` and already

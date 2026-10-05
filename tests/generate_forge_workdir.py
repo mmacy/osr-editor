@@ -9,7 +9,9 @@ usable printed block emits a custom template), `monster_unresolved` (the rat
 king's explicit-null block marker falls to the stand-in machinery),
 `low_confidence` (an unstated encounter count), `connection_ambiguous` (a
 target-less connection), `transition_guessed` (a `to_level` stairs mention),
-and `treasure_unparsed` (an unparseable treasure string).
+and `treasure_unparsed` (an unparseable treasure string). The survey states
+the party the module is written for (levels 1 to 3, four to six characters),
+so a forge-backed party edit has a survey party to replace or clear.
 
 Run only on a deliberate regeneration (an intended forge cache-shape change):
 
@@ -42,6 +44,7 @@ from osrforge.contracts.stages import (
 )
 from osrforge.settings import ConversionSettings
 from osrforge.workdir import Workdir, write_json_artifact
+from osrlib.crawl.adventure import PartySpec
 from PIL import Image, ImageDraw
 
 FORGE_WORKDIR_PATH = Path(__file__).parent / "fixtures" / "forge_workdir"
@@ -93,6 +96,7 @@ def build_survey() -> SurveyIndex:
         title="The Millstone Warrens",
         description="A derelict watermill hides a smugglers' warren beneath its grinding floor.",
         hooks=("The miller's ghost is said to walk the sluice gate at dusk.",),
+        party=PartySpec(min_level=1, max_level=3, min_size=4, max_size=6),
         town=TownInfo(
             name="Bran's Ford",
             description="A ford-side hamlet of eel-catchers and carters.",

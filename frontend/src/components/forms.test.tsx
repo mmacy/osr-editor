@@ -5,9 +5,13 @@
 // commits a level-1 party. A document with a party shows four number fields
 // (Lowest level, Highest level, Fewest characters, Most characters) and a
 // "Remove party" button. Each field commits the whole party on blur, an empty
-// size field commits that size as null, and Remove party commits null. In a
-// forge-backed project every party control routes to the blocked-op dialog
-// with the server's message and commits nothing.
+// size field commits that size as null, and Remove party commits null.
+//
+// The forge-mode tests are the acceptance tests for chunk forge-party, skipped
+// until it merges; the merge removes each `.skip`. A forge-backed project
+// commits the same ops as a native one, because the server turns a party edit
+// into the module override's party, so no party control opens the blocked-op
+// dialog.
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
@@ -25,11 +29,6 @@ let commit: ReturnType<typeof vi.fn<CommitAction>>
 type Party = NonNullable<Adventure['party']>
 
 const PARTY: Party = { min_level: 1, max_level: 3, min_size: 6, max_size: 8 }
-const BLOCKED = {
-  op: 'set_adventure_field',
-  address: 'adventure',
-  message: 'the adventure party has no override kind',
-}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -101,19 +100,35 @@ test('remove party clears it', () => {
   expect(committedOps(document)).toEqual(partyOp(null))
 })
 
-test('in forge mode, add party routes to the blocked-op dialog', () => {
+test.skip('in forge mode, add party commits a level-1 party', () => {
   useForgeProject()
-  render(<AdventureForm document={makeDocument({ party: null })} />)
+  const document = makeDocument({ party: null })
+  render(<AdventureForm document={document} />)
   fireEvent.click(screen.getByRole('button', { name: 'Add party' }))
-  expect(projectStore.getState().blockedOp).toEqual(BLOCKED)
-  expect(commit).not.toHaveBeenCalled()
+  expect(projectStore.getState().blockedOp).toBeNull()
+  expect(committedOps(document)).toEqual(
+    partyOp({ min_level: 1, max_level: 1, min_size: null, max_size: null }),
+  )
 })
 
-test('in forge mode, a party field routes to the blocked-op dialog on entry', () => {
+test.skip('in forge mode, a party field edits and commits the whole party', () => {
   useForgeProject()
-  render(<AdventureForm document={makeDocument({ party: PARTY })} />)
-  fireEvent.focus(screen.getByLabelText('Lowest level'))
-  expect(projectStore.getState().blockedOp).toEqual(BLOCKED)
+  const document = makeDocument({ party: PARTY })
+  render(<AdventureForm document={document} />)
+  const field = screen.getByLabelText('Lowest level')
+  fireEvent.focus(field)
+  expect(projectStore.getState().blockedOp).toBeNull()
+  fireEvent.change(field, { target: { value: '2' } })
+  fireEvent.blur(field)
+  expect(projectStore.getState().blockedOp).toBeNull()
+  expect(committedOps(document)).toEqual(partyOp({ ...PARTY, min_level: 2 }))
+})
+
+test.skip('in forge mode, remove party commits null', () => {
+  useForgeProject()
+  const document = makeDocument({ party: PARTY })
+  render(<AdventureForm document={document} />)
   fireEvent.click(screen.getByRole('button', { name: 'Remove party' }))
-  expect(commit).not.toHaveBeenCalled()
+  expect(projectStore.getState().blockedOp).toBeNull()
+  expect(committedOps(document)).toEqual(partyOp(null))
 })

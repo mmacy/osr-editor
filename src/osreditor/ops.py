@@ -135,15 +135,12 @@ class SetAdventureField(EditOp):
     `max_size` below `min_size`, a value below 1) reject the batch the same
     way, so the document never holds an invalid party.
 
-    In a forge-backed project a `party` set blocks the whole batch with the
-    detach offer:
-    [`ensure_forge_supported`][osreditor.overrides.ensure_forge_supported]
-    raises [`OpUnsupportedForgeError`][osreditor.errors.OpUnsupportedForgeError]
-    with the message `the adventure party has no override kind` at the bare
-    `adventure` address. That stays true until an osr-forge release whose
-    `ModuleOverride` has a `party` field ships and this project's osr-forge
-    pin includes it; the other three fields translate to the `module:`
-    override as before.
+    In a forge-backed project all four fields, `party` included, become fields
+    of the `module:` override in `overrides.yaml`:
+    [`translate_batch`][osreditor.overrides.translate_batch] writes them, and
+    undo restores the file as it was before the batch. A `party` value
+    replaces the survey's party whole, and `None` writes an explicit
+    `party: null` that clears it.
     """
 
     op: Literal["set_adventure_field"] = "set_adventure_field"  # pyright: ignore[reportIncompatibleVariableOverride] — frozen models; pydantic sanctions the narrow
