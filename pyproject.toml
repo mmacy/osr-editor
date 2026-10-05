@@ -29,7 +29,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "osrlib>=1.6,<2",
+    "osrlib>=1.8,<2",
     "osr-forge>=0.1,<0.2",
     "pydantic>=2",
     "pyyaml>=6",

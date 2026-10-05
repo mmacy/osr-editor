@@ -1631,6 +1631,7 @@ export interface components {
              * @default []
              */
             hooks: string[];
+            party?: components["schemas"]["PartySpec"] | null;
             town: components["schemas"]["TownSpec"];
             /** Dungeons */
             dungeons: components["schemas"]["DungeonSpec"][];
@@ -4479,6 +4480,43 @@ export interface components {
             facing?: components["schemas"]["Direction"] | null;
         };
         /**
+         * PartySpec
+         * @description The party an adventure is written for: the character levels, and how many characters.
+         *
+         *     A published module states this on its cover or in its introduction, such as "for 6 to 8
+         *     characters of levels 1 to 3". Nothing in the engine reads it. It's here so a front end, a
+         *     converter, or a playtest can pick a party that fits the adventure.
+         *
+         *     Attributes:
+         *         min_level: The lowest character level the adventure is written for.
+         *         max_level: The highest.
+         *         min_size: The fewest characters, or `None` when the adventure doesn't say.
+         *         max_size: The most characters, or `None` when the adventure doesn't say.
+         *
+         *     Raises:
+         *         ValueError: If `max_level` is below `min_level`, or `max_size` is below `min_size` when
+         *             both are given.
+         *
+         *     Examples:
+         *         ```python
+         *         from osrlib.crawl.adventure import PartySpec
+         *
+         *         party = PartySpec(min_level=1, max_level=3, min_size=6, max_size=8)
+         *         print(party.max_level)
+         *         # 3
+         *         ```
+         */
+        PartySpec: {
+            /** Min Level */
+            min_level: number;
+            /** Max Level */
+            max_level: number;
+            /** Min Size */
+            min_size?: number | null;
+            /** Max Size */
+            max_size?: number | null;
+        };
+        /**
          * PickerLocation
          * @description One remembered picker location.
          */
@@ -5339,7 +5377,24 @@ export interface components {
          * @description Set one adventure-scope metadata field.
          *
          *     `hooks` takes the whole tuple (list editors commit the full value); `name`
-         *     and `description` take a string.
+         *     and `description` take a string. `party` takes a whole
+         *     [`PartySpec`][osrlib.crawl.adventure.PartySpec], the party the adventure
+         *     is written for, or `None` to clear it. A size left out of a `party`
+         *     mapping is `None`, `PartySpec`'s default, not the document's current size.
+         *     Any other value for `party`, and `None` for any other field, is rejected
+         *     at parse. `PartySpec`'s own range checks (`max_level` below `min_level`,
+         *     `max_size` below `min_size`, a value below 1) reject the batch the same
+         *     way, so the document never holds an invalid party.
+         *
+         *     In a forge-backed project a `party` set blocks the whole batch with the
+         *     detach offer:
+         *     [`ensure_forge_supported`][osreditor.overrides.ensure_forge_supported]
+         *     raises [`OpUnsupportedForgeError`][osreditor.errors.OpUnsupportedForgeError]
+         *     with the message `the adventure party has no override kind` at the bare
+         *     `adventure` address. That stays true until an osr-forge release whose
+         *     `ModuleOverride` has a `party` field ships and this project's osr-forge
+         *     pin includes it; the other three fields translate to the `module:`
+         *     override as before.
          */
         SetAdventureField: {
             /**
@@ -5351,9 +5406,9 @@ export interface components {
              * Field
              * @enum {string}
              */
-            field: "name" | "description" | "hooks";
+            field: "name" | "description" | "hooks" | "party";
             /** Value */
-            value: string | string[];
+            value: string | string[] | components["schemas"]["PartySpec"] | null;
         };
         /**
          * SetAreaCells

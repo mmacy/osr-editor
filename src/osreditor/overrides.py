@@ -245,6 +245,14 @@ def ensure_forge_supported(ops: Sequence[AnyEditOp]) -> None:
     detach offer", and the atomicity rule: the batch rejects whole, before any
     translation side effect.
 
+    A [`SetAdventureField`][osreditor.ops.SetAdventureField] whose `field` is
+    `party` blocks with the message `the adventure party has no override
+    kind` at the bare `adventure` address, whatever its value, a clear
+    included. The pinned osr-forge's `ModuleOverride` has no `party` field,
+    so there is nothing to translate the edit into. The block stays until an
+    osr-forge release with `ModuleOverride.party` ships and the project's
+    osr-forge pin includes it.
+
     Args:
         ops: The batch's ops.
 

@@ -1,13 +1,14 @@
 {
   "kind": "adventure",
   "schema_version": 3,
-  "engine_version": "1.7.0",
+  "engine_version": "1.8.0",
   "payload": {
     "name": "The mill on the moor",
     "description": "A ruined mill hides the entrance to the caves its miller dug too deep.",
     "hooks": [
       "The miller of Dusthollow vanished a fortnight ago; his creditors offer 50 gp for the deed to his mill."
     ],
+    "party": null,
     "town": {
       "name": "Dusthollow",
       "description": "A wind-scoured crossroads hamlet of a dozen households.",
