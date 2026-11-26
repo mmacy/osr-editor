@@ -15,6 +15,8 @@ osr-editor is a local GUI application for creating and modifying adventure modul
 
 Work is divided into chunks that the lead role packets to coder roles, with acceptance tests written before the implementation by a different agent and committed marked expected-to-fail. The method, the roles, the packet, and the worktree rules are in the suite guide at `../CLAUDE.md`, and the role definitions are in `../.claude/agents/`. Each roadmap phase in `docs/spec.md` is a batch of chunks. The plans under `docs/phase-N-plan.md` are the record of phases already built.
 
+Clean up after your own branches. When a pull request you opened merges, or you abandon its branch, remove the worktree you made for it with `git worktree remove`, delete the local branch with `git branch -D`, and delete the remote branch if GitHub has not already. Use `-D` rather than `-d`, because git reports a squash-merged branch as unmerged. Do this before you report the work finished. Leave alone any worktree or branch that you did not make, that has uncommitted changes, or whose pull request is still open. A subagent never makes a worktree, so the agent that spawned it removes the worktree it made once the subagent's pull request merges.
+
 ## Stocking adventures
 
 Stocking a module — keying areas, monsters, treasure, traps, gates, triggers, and quests into an `adventure.json` against an XP budget, then playtesting it to completion through scripted osrlib sessions — is content authoring, not editor development, and has its own runbook: `.claude/skills/stock-dungeon/SKILL.md`. Use it whenever asked to stock, populate, or key a dungeon level, or to prove an authored adventure plays through without blockers.
